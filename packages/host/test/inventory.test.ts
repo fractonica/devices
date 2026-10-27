@@ -43,12 +43,12 @@ describe('readBench', () => {
     expect(DEFAULT_BENCH).toBe('lab');
     const { bench, errors } = readBench(checkout({ 'hardware/bench/lab.bench.yaml': LAB }));
     expect(errors).toEqual([]);
-    expect(bench).toMatchObject({ schema: 'fractonica/bench@1', id: 'lab', fixture: { device: 'e8f60a001048', profile: 's3k-fixture', fw_id: null } });
+    expect(bench).toMatchObject({ schema: 'fractonica/bench@1', id: 'lab', fixture: { device: 'e8f60a001048', profile: 's3k-fixture', fw_id: null, vdd_mv: 3300 } });
     expect(Object.keys(bench!.duts)).toEqual(['1cdbd40002c4', '1cdbd4000134', '58e6c5000564', '94a9900007cc']);
     const lines = Object.values(bench!.duts).flatMap((d) => Object.values(d.lines));
-    // §2.3: 12 lines wired at C1, 3 reserved; `wired` defaults to true, `rf_weak` to false.
-    expect(lines.filter((l) => l.wired)).toHaveLength(12);
-    expect(lines.filter((l) => !l.wired).map((l) => l.channel)).toEqual(['ch12', 'ch13', 'ch14']);
+    // §2.3: 12 lines wired at C1 and the two analog lines at M2-C3, EN reserved; `wired` defaults to true, `rf_weak` to false.
+    expect(lines.filter((l) => l.wired)).toHaveLength(14);
+    expect(lines.filter((l) => !l.wired).map((l) => l.channel)).toEqual(['ch14']);
     expect(Object.values(bench!.duts).map((d) => d.rf_weak)).toEqual([true, false, false, false]);
     expect(bench!.duts['94a9900007cc'].lines.en).toMatchObject({ role: 'en', dut_pin: 'EN', via: 'nfet', wired: false });
   });
