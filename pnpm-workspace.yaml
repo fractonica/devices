@@ -1,6 +1,5 @@
 packages:
   - packages/*
-  - web/*
 
 # Native addons that ship prebuilds but run an install script to select them.
 allowBuilds:
