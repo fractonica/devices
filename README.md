@@ -55,26 +55,41 @@ Checked at the merge, on the owner's Mac:
 - ESP-IDF 6.1 build of profile `c6w-scale` (debug): 1,744,992 bytes, 0 compiler warnings, 11 % of its slot free.
 - The clock: `cd clock/sim && make test` passes (140 golden images, 943 firmware-loop checks); the ESP-IDF 5.5.1
   build for the ESP32-C6 + GC9A01 is 273,344 bytes, 0 warnings.
-- Not done yet (stages 2 to 6 of the plan): the hub's port policy (today the running hub takes every ESP32 and
-  USB-UART port, so stop it before `idf.py flash`), crash handling, database pruning, the dashboard redesign, the
-  temporal core in the CLI and hub, the clock on the framework, a setup command and a getting-started guide, CI.
-- Setup from zero is not documented yet. Today: Node 24.12 or later, pnpm 11, `pnpm install`, then
-  `pnpm fr doctor --fix` (it writes the `fr` shim into `~/.local/bin`), and ESP-IDF v6.1
-  (`firmware/idf-version.lock`) for firmware builds.
+- Since the merge (stage 2 of the plan): the hub opens only the USB ports of boards it knows and leaves the others
+  to `idf.py`, esptool or a browser (`fr ports`, with lend, ignore and claim); it logs crashes and survives a failing
+  timer loop; it prunes finished jobs, keeps per-frame camera telemetry out of `hub.db`, rotates `hub.log` and
+  compacts on request (`fr hub compact`); `fr mcp` starts no hub unless asked and marks destructive tools; `fr` runs
+  from any directory through `packages/cli/bin/fr.mjs`. Setup is in [docs/GETTING-STARTED.md](docs/GETTING-STARTED.md).
+- Not done yet (stages 3 to 6 of the plan): the dashboard redesign, the temporal core in the CLI and hub, the clock
+  on the framework, a setup command with prebuilt firmware images (a first board still needs ESP-IDF 6.1 and a
+  build), CI.
 
 ## Security
 
-**A LAN lab, unauthenticated.** Node links and OTA listen on the local network without authentication; OTA checks
-an image's integrity (SHA-256), not who made it; Wi-Fi credentials are stored on the boards unencrypted. The hub's
-API is meant for the Mac it runs on. Use it on a network you trust, with boards you own.
+**A LAN lab, unauthenticated.** Use it on a network you trust, with boards you own:
+
+- Node links (TCP and UDP 7421) and OTA images (HTTP 7422) are served on the local network without authentication.
+- OTA checks an image's integrity (SHA-256), not its authenticity: there is no signature.
+- Wi-Fi credentials are stored on each board unencrypted, in NVS (the `fr_ident` partition); on the Mac in
+  `~/.fractonica/secrets.json` (mode 0600).
+- The hub's API and dashboard listen on loopback only and have no login.
 
 ## Documentation
 
+- [docs/GETTING-STARTED.md](docs/GETTING-STARTED.md): from a fresh Mac to a provisioned board, port lending,
+  troubleshooting, upgrading.
 - [docs/user-manual.md](docs/user-manual.md): task by task, every feature on the bench.
 - [docs/spec/](docs/spec/README.md): the framework specification; [docs/design/](docs/design/): decision records.
 - [AGENTS.md](AGENTS.md): for coding agents and engineers working in this repository;
   [plugin/AGENTS.md](plugin/AGENTS.md): for agents driving the devices through `fr` or MCP.
 - [clock/README.md](clock/README.md): the clock firmware.
+
+## Upgrading
+
+The operation registry changed (the port operations), so `REGISTRY_HASH` differs from a hub started from older code:
+after pulling, run `fr hub restart` and reconnect the MCP server (`/mcp` in Claude Code), and run `fr doctor --fix`
+once to point the `fr` shim at `packages/cli/bin/fr.mjs`. [GETTING-STARTED §9](docs/GETTING-STARTED.md#9-upgrading)
+lists the other changes in behaviour (the port policy, `fr mcp` no longer starting the hub, job retention).
 
 ## Licence
 

@@ -5,7 +5,7 @@
 # old: only the shim `fr doctor --fix` writes, which names its own Node.
 
 FR="$HOME/.local/bin/fr"
-FIX='from the Fractonica checkout, with Node >= 24.12: node --conditions=@fractonica/source packages/cli/src/main.ts doctor --fix'
+FIX='from the Fractonica checkout, with Node >= 24.12: pnpm install && pnpm fr doctor --fix'
 
 if [ ! -x "$FR" ]; then
   echo "Fractonica: the fr shim is missing ($FR); $FIX"

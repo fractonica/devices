@@ -14,9 +14,10 @@ read [plugin/AGENTS.md](plugin/AGENTS.md).
 ## 1. Rules
 
 1. **Never flash, open a serial port or start a hub on port 7420 without the owner's go-ahead.** A running hub
-   takes every ESP32 and USB-UART port (an exclusive lock), so `idf.py flash` fails while it runs, and starting one
-   can take a board from the owner. Tests start private hubs on random ports with their own `FR_HOME`; keep it that
-   way. To lend a port: `fr serial lease <dev> -- <cmd>`.
+   holds the ports of the boards in its registry with an exclusive lock (config.json `ports.mode` `adopted`; `all`
+   takes every ESP32 and USB-UART port), so `idf.py flash` on such a port fails while it runs, and starting a hub can
+   take a board from the owner. Tests start private hubs on random ports with their own `FR_HOME` and fake or virtual
+   ports; keep it that way. To lend a port: `fr serial lease <dev> -- <cmd>`; `fr ports` shows who holds what.
 2. **The schema is the source of truth.** Change `schema/` (or `hardware/`, `firmware/profiles/`), then run
    `pnpm fr gen`; never edit the generated directories by hand (`packages/protocol/src/gen`, `packages/sdk/src/gen`,
    `schema/vectors`, `firmware/components/fr_proto/gen`, `firmware/components/fr_caps/gen`,
@@ -42,6 +43,8 @@ pnpm fr doctor --fix     # host checks; writes the fr shim to ~/.local/bin, buil
 ```
 
 Everything TypeScript runs from source (`node --conditions=@fractonica/source`); the `dist/` exports are not built.
+`packages/cli/bin/fr.mjs` starts the CLI that way; `pnpm fr` and the shim run it. A fresh Mac's steps are in
+[docs/GETTING-STARTED.md](docs/GETTING-STARTED.md).
 `source ~/esp/v6.1/esp-idf/export.sh` fails when Python 3.10 is first on PATH: `fr` captures its own IDF
 environment (`packages/host/src/idf.ts`), or put the uv Python 3.12 first on PATH before sourcing it.
 
@@ -86,7 +89,8 @@ The clock: `cd clock/sim && make test`, and its own ESP-IDF 5.5 builds (`clock/A
 
 ## 5. Known gaps
 
-The review's findings still open after the merge (port ownership, no crash handler, unbounded `hub.db`, MCP safety
-hints, setup, dashboard design, the clock on the framework) are its stages 2 to 6. The docs under `docs/spec` and
+The review's findings still open (the dashboard design, the temporal core in the CLI and hub, the clock on the
+framework, a setup command with prebuilt images, CI) are its stages 3 to 6; stage 2 (port policy, crash handling,
+`hub.db` growth, MCP safety, `fr` from anywhere) is done. The docs under `docs/spec` and
 `docs/design` still cite `docs/research`, `docs/spikes` and `hosts/`, which are not in this repository (they stay
 in the archived `fractonica/hardware`); the docs rewrite is stage 6.

@@ -26,33 +26,43 @@ Contents:
 18. [Troubleshooting](#18-troubleshooting)
 19. [The bench](#19-the-bench)
 
-Every `fr` command below runs from the checkout of this repository (for example `~/projects/fractonica-org/devices`). Add `--json` to any of them for machine-readable output, and `--help` to see all options.
+`fr` runs from any directory once `fr doctor --fix` has written its shim (section 1); commands that build use the checkout around the current directory, or else the one the shim points at. Add `--json` to any of them for machine-readable output, and `--help` to see all options.
 
 ---
 
 ## 1. First-time setup
 
-You do this once per Mac.
+You do this once per Mac. [GETTING-STARTED.md](GETTING-STARTED.md) has the same steps with more detail, ESP-IDF, the
+first board and troubleshooting.
 
-1. **Check the toolchain.** It checks Node, ESP-IDF 6.1, the esptool sidecar and the `fr` shim, and fixes what it safely can:
+1. **Install the prerequisites:** Node 24.12 or later, pnpm 11 and uv (`brew install node@24 pnpm uv`, then
+   `uv python install 3.12`). ESP-IDF v6.1 is needed only to build firmware ([GETTING-STARTED §5](GETTING-STARTED.md#5-building-firmware)).
+
+2. **Install the checkout and the `fr` command.** `pnpm fr` runs the CLI from the checkout; `fr doctor --fix` writes
+   the `fr` shim into `~/.local/bin`, installs the esptool sidecar, builds the dashboard, and checks the rest:
 
    ```bash
-   fr doctor --fix
+   git clone https://github.com/fractonica/esp32.git devices && cd devices
+   pnpm install
+   pnpm fr doctor --fix
    ```
 
-2. **Start the hub from Terminal**, not from an editor or an agent, so macOS grants Local Network access to Terminal:
+   From then on `fr` works from any directory (put `~/.local/bin` on your `PATH` if doctor says it is not).
+
+3. **Start the hub from Terminal**, not from an editor or an agent, so macOS grants Local Network access to Terminal
+   (allow it when macOS asks):
 
    ```bash
    fr hub start
    ```
 
-3. **Check it is healthy.** You should see the version, the IDF pin `ok`, the USB ports and how many devices are online:
+4. **Check it is healthy.** You should see the version, the IDF pin, the USB ports and how many devices are online:
 
    ```bash
    fr hub status
    ```
 
-4. **Store your Wi-Fi network.** Boards join it to reach the hub. Type the password when asked; it is kept only in `~/.fractonica/secrets.json` and never printed:
+5. **Store your Wi-Fi network.** Boards join it to reach the hub. Type the password when asked; it is kept only in `~/.fractonica/secrets.json` and never printed:
 
    ```bash
    fr net set --ssid "<your network>" --password-stdin
@@ -60,7 +70,13 @@ You do this once per Mac.
 
    A second network, for example a 5 GHz one, gets its own name: `fr net set --name 5ghz --ssid "<network>" --band 5g --password-stdin`.
 
-5. **Open the dashboard** at <http://127.0.0.1:7420/>. Its pages are Devices, Live, Ports, Network, Builds and OTA, and Agents.
+6. **Open the dashboard** at <http://127.0.0.1:7420/>. Its pages are Devices, Live, Ports, Network, Builds and OTA, and Agents.
+
+7. **Know which ports the hub takes.** It opens only the USB ports of boards it knows (registered ones); the others
+   stay free for `idf.py`, esptool or a browser. `fr ports` shows each port as watched by the hub, lent, held by
+   another program, ignored, or not opened. To use a watched port from another program, lend it:
+   `fr serial lease <board> -- idf.py -p "$FR_PORT" flash monitor`. `fr ports ignore <port>` keeps the hub off a port
+   for good; `fr ports claim <port>` lets it read a board it does not know yet.
 
 ---
 
@@ -705,6 +721,8 @@ Every `fr` command is also an MCP tool, served by `fr mcp`.
 
 - **Claude Code:** run `claude --plugin-dir <checkout>/plugin`, or install it once with `/plugin marketplace add <checkout>` then `/plugin install fractonica@fractonica`. Its skills teach the agent each area: fleet-ops, build-deploy, e2e-verify, hil-rig, audio, camera and scale.
 - **Other agents:** [`plugin/AGENTS.md`](../plugin/AGENTS.md) has the same guidance with CLI equivalents.
+- **The hub:** `fr mcp` starts no hub by itself; start it from Terminal first (`fr hub start`). To let the first tool call start it, run the server as `fr mcp --autostart`, or set `FR_MCP_AUTOSTART=1`, or `"mcp": {"autostart": true}` in `~/.fractonica/config.json`.
+- **Safety:** tools that flash, provision, update over the air, reset or delete are marked destructive, so the agent's client asks you before running them. A Wi-Fi password never goes through an agent: you type it into `fr net set --password-stdin`.
 - Ask in plain words, for example "take a photo with cam-esp32 and show it to me" or "record ten seconds from mic-s3".
 
 ---
@@ -714,8 +732,10 @@ Every `fr` command is also an MCP tool, served by `fr mcp`.
 | You see | Do this |
 |---|---|
 | `fr` says no hub is running | `fr hub start` from Terminal. |
+| `idf.py` or esptool: "Could not exclusively lock port" | The hub watches that port: `fr serial lease <board> -- idf.py -p "$FR_PORT" flash monitor`, or `fr ports lend <port>`, or `fr ports ignore <port>`. |
+| A board you plugged in shows `not opened` in `fr ports` | The hub does not know it yet: provision it (section 13), or `fr ports claim <port>` if it already runs the node firmware. |
 | A board is `offline` | Check its power and `fr logs <board>`; reset it with `fr devices reset <board>` if it is on USB. |
-| `HUB_VERSION_MISMATCH` after pulling code | `fr hub restart --force` (the CLI and the running hub disagree, so a plain restart is refused). |
+| `HUB_VERSION_MISMATCH` after pulling code | `fr hub restart` (`--force` if it refuses), then reconnect the MCP server in Claude Code (`/mcp`). |
 | `fr hub restart` refuses: a job is working | Wait, or cancel it (`fr jobs ls`, `fr jobs cancel <id>`). An open CSI or camera app page keeps its stream job alive: close the page, or use `fr hub restart --force`. |
 | A flash fails to connect | Reset into download mode: `fr devices reset <port> --mode bootloader`, or hold BOOT and tap RST, then flash again. |
 | A board joined the wrong Wi-Fi | `fr net ls`, then `fr flash <board> --plan identity --network <name>`. |
