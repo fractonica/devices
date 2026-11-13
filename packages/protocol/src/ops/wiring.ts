@@ -191,7 +191,7 @@ export const WIRING_OPS = [
     kind: 'query',
     tier: 'read',
     summary:
-      'One wiring guide resolved: safety notes, the bill of materials with what is on hand and missing, the diagrams (URLs on the hub), the sections and their steps with done flags and the check to make after each, and the pin table with each row checked against the profile. Point a person at /apps/bench/ to follow it at the bench.',
+      'One wiring guide resolved: safety notes, the bill of materials with what is on hand and missing, the diagrams (URLs on the hub), the sections and their steps with done flags and the check to make after each, and the pin table with each row checked against the profile. Point a person at /#/bench (the Bench page of the dashboard) to follow it at the bench.',
     input: z.object({ guide: guideId }),
     output: WiringShowSchema,
     cli: { path: ['wiring', 'show'], positional: ['guide'] },

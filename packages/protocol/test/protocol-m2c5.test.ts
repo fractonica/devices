@@ -10,14 +10,14 @@ import { cliFlag, findOp, INPUT_GESTURES, OPS, REGISTRY_HASH, TOUCH_GESTURES } f
 
 const hashOf = (ops: readonly { name: string; input: z.ZodType }[]) =>
   createHash('sha256')
-    .update(JSON.stringify(ops.map((o) => [o.name, z.toJSONSchema(o.input)])))
+    .update(JSON.stringify(ops.map((o) => [o.name, z.toJSONSchema(o.name === 'hub_doctor' && !ops.some((x) => x.name === 'hub_doctor_fix') ? z.object({}) : o.input) /* hub_doctor had no input before the dashboard's health */])))
     .digest('hex')
     .slice(0, 12);
 
 describe('M2-C5 ops (design m2-c5-display D10)', () => {
   it('adds display_snapshot and display_render as read-tier queries, and moves REGISTRY_HASH', () => {
     // A1 adds four audio_ ops (protocol-a1.test.ts), CSI-1 network_list and two csi_ ops (protocol-csi.test.ts).
-    expect(OPS.filter((o) => !/^(audio|csi|camera|scale|battery|cell|haptic|wiring|part|storage|clock|app|time)_|^device_adopt$|^port_(lend|ignore|claim)$/.test(o.name) && o.name !== 'network_list')).toHaveLength(48);
+    expect(OPS.filter((o) => !/^(audio|csi|camera|scale|battery|cell|haptic|wiring|part|storage|clock|app|time)_|^device_adopt$|^port_(lend|ignore|claim)$|^hub_doctor_fix$/.test(o.name) && o.name !== 'network_list')).toHaveLength(48);
     for (const name of ['display_snapshot', 'display_render']) {
       const op = findOp(name)!;
       expect(op, name).toMatchObject({ kind: 'query', tier: 'read', cli: { path: ['display', name.slice('display_'.length)] } });

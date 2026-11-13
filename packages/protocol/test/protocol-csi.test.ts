@@ -29,13 +29,13 @@ import { CATALOG_HASH, ChipId, CSI_CAP, CSI_CONFIG_DEFAULTS, CsiStreamEndReason,
 
 const hashOf = (ops: readonly { name: string; input: z.ZodType }[]) =>
   createHash('sha256')
-    .update(JSON.stringify(ops.map((o) => [o.name, z.toJSONSchema(o.input)])))
+    .update(JSON.stringify(ops.map((o) => [o.name, z.toJSONSchema(o.name === 'hub_doctor' && !ops.some((x) => x.name === 'hub_doctor_fix') ? z.object({}) : o.input) /* hub_doctor had no input before the dashboard's health */])))
     .digest('hex')
     .slice(0, 12);
 
 describe('CSI-1 ops (design csi-c1 D4, D5, D13)', () => {
   it('adds network_list, csi_stream and csi_status, and moves REGISTRY_HASH once for every op change', () => {
-    expect(OPS.filter((o) => !/^(camera|scale|battery|cell|haptic|wiring|part|storage|clock|app|time)_|^device_adopt$|^port_(lend|ignore|claim)$/.test(o.name))).toHaveLength(55); // CAM-1 adds seven (protocol-camera.test.ts)
+    expect(OPS.filter((o) => !/^(camera|scale|battery|cell|haptic|wiring|part|storage|clock|app|time)_|^device_adopt$|^port_(lend|ignore|claim)$|^hub_doctor_fix$/.test(o.name))).toHaveLength(55); // CAM-1 adds seven (protocol-camera.test.ts)
     expect(findOp('network_list')).toMatchObject({ kind: 'query', tier: 'read', cli: { path: ['net', 'ls'] } });
     expect(findOp('csi_stream')).toMatchObject({ kind: 'job', tier: 'mutate', cli: { path: ['csi', 'stream'], positional: ['device'] } });
     expect(findOp('csi_status')).toMatchObject({ kind: 'query', tier: 'read', cli: { path: ['csi', 'status'], positional: ['device'] } });

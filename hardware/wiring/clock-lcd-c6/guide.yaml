@@ -3,7 +3,7 @@ id: clock-lcd-c6
 title: DS3231 clock and micro-SD on lcd-c6
 summary: >-
   The Waveshare ESP32-C6-LCD-1.47 with a micro-SD card in its slot and a DS3231 real-time clock module on I²C
-  (SDA GPIO18, SCL GPIO19). The display and the card are on the board already (LCD-1, CLOCK-1).
+  (SDA GPIO18, SCL GPIO19). The display and the card are on the board already.
 board: waveshare-esp32c6-lcd147
 profile: c6l-lcd
 device: lcd-c6

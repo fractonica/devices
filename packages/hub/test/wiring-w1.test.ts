@@ -168,6 +168,10 @@ describe('the loader and the cross-check', () => {
     expect(svgProblem('<svg><image href="https://evil.example/x.png"/></svg>')).toBe('refers to https://evil.example/x.png (only #ids inside the file)');
     expect(svgProblem('<svg><rect style="fill:url(http://x/y)"/></svg>')).toBe('refers to url(http://x/y) (only #ids inside the file)');
     expect(svgProblem('<p>no</p>')).toBe('not an SVG (no <svg> element)');
+    // an unquoted reference and a scheme written with character references are caught too
+    expect(svgProblem('<svg><image href=x /onerror=alert(1) /></svg>')).toBe('refers to x (only #ids inside the file)');
+    expect(svgProblem('<svg><a href="&#106;avascript:x"/></svg>')).toBe('holds a javascript: URL');
+    expect(svgProblem('<svg><use href=#a /></svg>')).toBeNull();
   });
 });
 

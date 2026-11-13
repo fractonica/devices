@@ -345,7 +345,7 @@ describe('the browser entry (@fractonica/protocol/browser)', () => {
 describe('REGISTRY_HASH', () => {
   const hashOf = (ops: readonly OpDef[]) =>
     createHash('sha256')
-      .update(JSON.stringify(ops.map((o) => [o.name, z.toJSONSchema(o.input)])))
+      .update(JSON.stringify(ops.map((o) => [o.name, z.toJSONSchema(o.name === 'hub_doctor' && !ops.some((x) => x.name === 'hub_doctor_fix') ? z.object({}) : o.input) /* hub_doctor had no input before the dashboard's health */])))
       .digest('hex')
       .slice(0, 12);
 

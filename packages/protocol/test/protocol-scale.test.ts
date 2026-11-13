@@ -10,7 +10,7 @@ import { findOp, JOB_KINDS, OPS, REGISTRY_HASH, SCALE_MAX_KNOWN_G, ScaleStatusSc
 
 const hashOf = (ops: readonly { name: string; input: z.ZodType }[]) =>
   createHash('sha256')
-    .update(JSON.stringify(ops.map((o) => [o.name, z.toJSONSchema(o.input)])))
+    .update(JSON.stringify(ops.map((o) => [o.name, z.toJSONSchema(o.name === 'hub_doctor' && !ops.some((x) => x.name === 'hub_doctor_fix') ? z.object({}) : o.input) /* hub_doctor had no input before the dashboard's health */])))
     .digest('hex')
     .slice(0, 12);
 
@@ -18,7 +18,7 @@ const SCALE_OP_NAMES = ['scale_status', 'scale_read', 'scale_tare', 'scale_calib
 
 describe('SCALE-1 ops (design scale-round-c1 D10)', () => {
   it('adds six scale ops on the CLI paths of D10 and moves REGISTRY_HASH once', () => {
-    const scale1 = OPS.filter((o) => !/^(battery|cell|haptic|wiring|part|storage|clock|app|time)_|^device_adopt$|^port_(lend|ignore|claim)$/.test(o.name)); // POWER-1 adds fourteen (protocol-power.test.ts)
+    const scale1 = OPS.filter((o) => !/^(battery|cell|haptic|wiring|part|storage|clock|app|time)_|^device_adopt$|^port_(lend|ignore|claim)$|^hub_doctor_fix$/.test(o.name)); // POWER-1 adds fourteen (protocol-power.test.ts)
     expect(scale1).toHaveLength(68);
     expect(scale1.slice(-6).map((o) => o.name)).toEqual(SCALE_OP_NAMES);
     expect(findOp('scale_status')).toMatchObject({ kind: 'query', tier: 'read', cli: { path: ['scale', 'status'], positional: ['device'] } });

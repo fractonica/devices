@@ -3,7 +3,7 @@ id: power-bench-c6
 title: Power bench on scale-c6
 summary: >-
   Two TP4056 chargers (the LiPo and the 90 F lithium-ion capacitor), voltage sense, charger status, a test load,
-  the coin motor and the push-pull solenoid on scale-c6 (POWER-1).
+  the coin motor and the push-pull solenoid on scale-c6.
 board: esp32c6-wroom1-n8
 profile: c6w-scale
 device: scale-c6

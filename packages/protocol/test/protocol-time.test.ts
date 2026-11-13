@@ -6,7 +6,7 @@ import { findOp, HUB_EVENT_FIELDS, HUB_EVENT_TYPES, LOCAL_TIME_OPS, OPS, REGISTR
 
 describe('time ops', () => {
   it('adds four read-only queries at the end, on `fr time …`, and moves REGISTRY_HASH', () => {
-    expect(OPS).toHaveLength(122);
+    expect(OPS.filter((o) => o.name !== 'hub_doctor_fix')).toHaveLength(122); // the dashboard's health adds one (protocol-hub-health.test.ts)
     expect(OPS.slice(-4).map((o) => o.name)).toEqual(['time_now', 'time_convert', 'time_ladder', 'time_next']);
     expect(LOCAL_TIME_OPS).toEqual(TIME_OPS.map((o) => o.name));
     for (const o of TIME_OPS) {
@@ -18,7 +18,7 @@ describe('time ops', () => {
     expect(findOp('time_convert')!.cli).toEqual({ path: ['time', 'stamp'], positional: ['at'] });
     expect(findOp('time_ladder')!.cli.path).toEqual(['time', 'ladder']);
     expect(findOp('time_next')!.cli).toEqual({ path: ['time', 'next'], positional: ['level'] });
-    expect(REGISTRY_HASH).toBe('b72ee2ac252c');
+    expect(REGISTRY_HASH).not.toBe('b72ee2ac252c'); // the dashboard's health moved it (protocol-hub-health.test.ts)
     expect(REGISTRY_HASH).not.toBe('050452ab10c2'); // before the time ops
     expect(REGISTRY_HASH).not.toBe('d7907c2ee54a'); // time_next's quarter as an enum
   });

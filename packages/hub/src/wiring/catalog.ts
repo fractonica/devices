@@ -164,9 +164,9 @@ function readYaml(file: string): { ok: true; value: unknown } | { ok: false; err
 
 /**
  * Why an SVG may not be served or inlined, or null when it may (design D2): no script, no foreignObject, no
- * javascript: URL, no external reference (href, xlink:href and url() only to `#id`), no @import. Event-handler
- * attributes (a chat diagram's onclick) are allowed in the file: it is served with script-src 'none', and web/bench
- * strips them before inlining.
+ * javascript: URL (also written with character references), no external reference (href, xlink:href and url() only to
+ * `#id`, quoted or not), no @import. Event-handler attributes (a chat diagram's onclick) are allowed in the file: it is
+ * served with script-src 'none', and the dashboard's sanitizeSvg (state/bench-view.ts) drops them before inlining.
  */
 export function svgProblem(svg: string): string | null {
   if (!/<svg[\s>]/i.test(svg)) {
@@ -178,15 +178,17 @@ export function svgProblem(svg: string): string | null {
   if (/<foreignObject[\s>/]/i.test(svg)) {
     return 'holds a <foreignObject>';
   }
-  if (/javascript:/i.test(svg)) {
+  const decoded = svg.replace(/&#x([0-9a-f]+);?/gi, (_m, h: string) => String.fromCodePoint(parseInt(h, 16))).replace(/&#(\d+);?/g, (_m, d: string) => String.fromCodePoint(Number(d)));
+  if (/j\s*a\s*v\s*a\s*s\s*c\s*r\s*i\s*p\s*t\s*:/i.test(decoded)) {
     return 'holds a javascript: URL';
   }
   if (/@import/i.test(svg)) {
     return 'holds an @import';
   }
-  for (const m of svg.matchAll(/(?:xlink:)?href\s*=\s*["']([^"']*)["']/gi)) {
-    if (!m[1].startsWith('#')) {
-      return `refers to ${m[1]} (only #ids inside the file)`;
+  for (const m of svg.matchAll(/(?:xlink:)?href\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s"'>/]+))/gi)) {
+    const ref = m[1] ?? m[2] ?? m[3] ?? '';
+    if (!ref.startsWith('#')) {
+      return `refers to ${ref} (only #ids inside the file)`;
     }
   }
   for (const m of svg.matchAll(/url\(\s*['"]?([^'")\s]*)/gi)) {

@@ -8,9 +8,9 @@ import { z } from 'zod';
 import { findOp, OPS, PORT_STATES, PortInfoSchema, PortPolicyResultSchema, REGISTRY_HASH } from '../src/index.ts';
 
 const hashOf = (ops: readonly { name: string; input: z.ZodType }[]) =>
-  createHash('sha256').update(JSON.stringify(ops.map((o) => [o.name, z.toJSONSchema(o.input)]))).digest('hex').slice(0, 12);
+  createHash('sha256').update(JSON.stringify(ops.map((o) => [o.name, z.toJSONSchema(o.name === 'hub_doctor' && !ops.some((x) => x.name === 'hub_doctor_fix') ? z.object({}) : o.input) /* hub_doctor had no input before the dashboard's health */]))).digest('hex').slice(0, 12);
 /** The registry before the time ops (protocol-time.test.ts) came after the port ops. */
-const beforeTime = OPS.filter((o) => !o.name.startsWith('time_'));
+const beforeTime = OPS.filter((o) => !o.name.startsWith('time_') && o.name !== 'hub_doctor_fix');
 
 describe('port policy ops', () => {
   it('adds three ops on `fr ports lend|ignore|claim <port>` and moves REGISTRY_HASH', () => {

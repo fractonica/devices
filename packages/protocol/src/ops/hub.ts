@@ -98,10 +98,22 @@ export const HUB_OPS = [
     kind: 'query',
     tier: 'read',
     summary:
-      "The hub's health checks, run in the hub process: fr doctor's (IDF pin, pytools, Node, firewall, LAN route, serial ports) plus its Local Network permission self-test and the _fractonica._tcp advert. Each check is ok, warn or error with a fix. `fr doctor` runs the host checks without a hub.",
-    input: z.object({}),
-    output: z.looseObject({ checks: z.array(CheckSchema) }),
+      "The hub's health checks, run in the hub process: fr doctor's (IDF pin, pytools, Node, firewall, LAN route, serial ports) plus its Local Network permission self-test and the _fractonica._tcp advert. Each check is ok, warn or error with a fix. The checks take a while (the IDF environment is read): max_age_s answers with the hub's last result when it is at most that old (checked_at says when it ran), so a page can show it at once. `fr doctor` runs the host checks without a hub.",
+    input: z.object({
+      max_age_s: z.number().int().min(0).max(86_400).optional().describe("answer with the last result when it is at most this old; 0 or absent runs the checks now"),
+    }),
+    output: z.looseObject({ checks: z.array(CheckSchema), checked_at: z.string().optional() }),
     cli: { path: ['hub', 'doctor'] },
+  }),
+  op({
+    name: 'hub_doctor_fix',
+    kind: 'command',
+    tier: 'mutate',
+    summary:
+      "Runs the fixes `fr doctor --fix` runs, in the hub process, then the checks again: installs or repairs the esptool sidecar, refreshes the IDF environment cache, rewrites the fr shim, rebuilds the dashboard when it is older than its source. A check whose fix is a step for a person (System Settings, a brew install) stays as it was. Answers the checks after the fixes (a check fixed has fixed: true).",
+    input: z.object({}),
+    output: z.looseObject({ checks: z.array(CheckSchema), checked_at: z.string().optional() }),
+    cli: { path: ['hub', 'doctor-fix'] },
   }),
 ] as const;
 

@@ -8,11 +8,11 @@ import { APP_HOST_OPS, AppManifestSchema, findOp, JOB_KINDS, OPS, REGISTRY_HASH 
 
 const hashOf = (ops: readonly { name: string; input: z.ZodType }[]) =>
   createHash('sha256')
-    .update(JSON.stringify(ops.map((o) => [o.name, z.toJSONSchema(o.input)])))
+    .update(JSON.stringify(ops.map((o) => [o.name, z.toJSONSchema(o.name === 'hub_doctor' && !ops.some((x) => x.name === 'hub_doctor_fix') ? z.object({}) : o.input) /* hub_doctor had no input before the dashboard's health */])))
     .digest('hex')
     .slice(0, 12);
 /** The port policy ops came after (protocol-ports.test.ts). */
-const beforePorts = OPS.filter((o) => !/^port_(lend|ignore|claim)$|^time_/.test(o.name));
+const beforePorts = OPS.filter((o) => !/^port_(lend|ignore|claim)$|^time_|^hub_doctor_fix$/.test(o.name));
 
 describe('app ops (design uno-q-services)', () => {
   it('adds ten ops at the end (nine app_ and device_adopt), on their CLI paths, and moves REGISTRY_HASH', () => {

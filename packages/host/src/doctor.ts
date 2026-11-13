@@ -263,7 +263,7 @@ export async function runDoctor(opts: {
   if (!checks.some((c) => c.id === 'pytools')) {
     add(
       !py.ok
-        ? { id: 'pytools', level: 'error', detail: py.installed ? `esptool ${py.esptool}, expected ${PINNED_ESPTOOL}` : 'sidecar venv missing', fix: 'fr doctor --fix' }
+        ? { id: 'pytools', level: 'error', detail: py.installed ? (py.esptool ? `esptool ${py.esptool}, expected ${PINNED_ESPTOOL}` : `esptool not installed in the sidecar, expected ${PINNED_ESPTOOL}`) : 'sidecar venv missing', fix: 'fr doctor --fix' }
         : src.stale
           ? { id: 'pytools', level: 'warn', detail: `sidecar in ${paths.pytoolsVenv()} was installed from ${src.installed_from ?? 'an editable or unknown source'}, not this checkout's tools/pytools`, fix: 'fr doctor --fix' }
           : { id: 'pytools', level: 'ok', detail: `esptool ${py.esptool} in ${paths.pytoolsVenv()}`, ...(repaired ? { fixed: true } : {}) },

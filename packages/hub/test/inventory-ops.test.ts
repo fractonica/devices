@@ -205,4 +205,31 @@ describe('hub_doctor', () => {
     ]);
     expect(out.checks[1]).toMatchObject({ detail: expect.stringContaining('Apple_Terminal'), fix: expect.stringContaining('Local Network') });
   });
+
+  it('answers its last result when asked for one no older than max_age_s, shares a run in flight, and runs the fixes on hub_doctor_fix', async () => {
+    const r = openRig();
+    const hub = { ...r.hub, lnp: undefined, advert: undefined } as unknown as HubContext;
+    const calls: boolean[] = [];
+    let t = 1_000_000;
+    const deps = {
+      now: () => t,
+      runDoctor: async (opts: { fix: boolean }) => {
+        calls.push(opts.fix);
+        await new Promise((res) => setTimeout(res, 5));
+        return [{ id: 'node', level: 'ok', detail: `run ${calls.length}` } as Check];
+      },
+    } as never;
+    const [a, b] = await Promise.all([hubDoctor(hub, deps, { max_age_s: 600 }), hubDoctor(hub, deps, { max_age_s: 600 })]);
+    expect(calls).toEqual([false]);
+    expect(a).toBe(b);
+    expect(a.checked_at).toBe(new Date(1_000_000).toISOString());
+    t += 300_000;
+    expect((await hubDoctor(hub, deps, { max_age_s: 600 })).checks[0]!.detail).toBe('run 1');
+    t += 400_000; // older than 600 s now
+    expect((await hubDoctor(hub, deps, { max_age_s: 600 })).checks[0]!.detail).toBe('run 2');
+    expect((await hubDoctor(hub, deps, {})).checks[0]!.detail).toBe('run 3');
+    expect((await hubDoctor(hub, deps, { fix: true })).checks[0]!.detail).toBe('run 4');
+    expect(calls).toEqual([false, false, false, true]);
+    expect(output('hub_doctor_fix').safeParse(a).success).toBe(true);
+  });
 });

@@ -58,7 +58,7 @@ published: false
 
 const hashOf = (ops: readonly { name: string; input: z.ZodType }[]) =>
   createHash('sha256')
-    .update(JSON.stringify(ops.map((o) => [o.name, z.toJSONSchema(o.input)])))
+    .update(JSON.stringify(ops.map((o) => [o.name, z.toJSONSchema(o.name === 'hub_doctor' && !ops.some((x) => x.name === 'hub_doctor_fix') ? z.object({}) : o.input) /* hub_doctor had no input before the dashboard's health */])))
     .digest('hex')
     .slice(0, 12);
 
@@ -66,7 +66,7 @@ describe('REGISTRY_HASH (design m2-c2 D22)', () => {
   it("moves once for M2-C2: the descriptions of deploy.expect_log and test_run.suite, and no new op", () => {
     // No new op at M2-C2; M2-C5 adds display_snapshot and display_render (protocol-m2c5.test.ts), A1 the audio_ ops,
     // CSI-1 network_list and the csi_ ops.
-    expect(OPS.filter((o) => !/^(display|audio|csi|camera|scale|battery|cell|haptic|wiring|part|storage|clock|app|time)_|^device_adopt$|^port_(lend|ignore|claim)$/.test(o.name) && o.name !== 'network_list')).toHaveLength(46);
+    expect(OPS.filter((o) => !/^(display|audio|csi|camera|scale|battery|cell|haptic|wiring|part|storage|clock|app|time)_|^device_adopt$|^port_(lend|ignore|claim)$|^hub_doctor_fix$/.test(o.name) && o.name !== 'network_list')).toHaveLength(46);
     expect(hashOf(OPS)).toBe(REGISTRY_HASH);
     expect(REGISTRY_HASH).not.toBe('94a574562aa9'); // M2-C1's
     expect(REGISTRY_HASH).not.toBe('8805351bae42'); // M1's
