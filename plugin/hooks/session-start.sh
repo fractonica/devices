@@ -21,7 +21,7 @@ case "$code" in
     exit 0
     ;;
   10)
-    echo "Fractonica hub: not running. The fractonica MCP server starts it on the first tool call; for Local Network access start it from Terminal instead: fr hub start"
+    echo "Fractonica hub: not running. Start it from Terminal (fr hub start), which gives it Local Network access; the fractonica MCP server starts it only with fr mcp --autostart, FR_MCP_AUTOSTART=1 or mcp.autostart in ~/.fractonica/config.json"
     exit 0
     ;;
 esac

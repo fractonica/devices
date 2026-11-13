@@ -113,6 +113,7 @@ export const CLOCK_OPS = [
     name: 'clock_set',
     kind: 'command',
     tier: 'mutate',
+    mcp: { idempotent: true },
     summary:
       "Set a board's real-time clock to a given time (fr.clock set, now): `iso` is an ISO 8601 time with a zone (2026-11-05T14:00:00Z, or +03:00); seconds only, a fraction is dropped. Use clock_sync to set it from the Mac's clock instead.",
     input: z.object({

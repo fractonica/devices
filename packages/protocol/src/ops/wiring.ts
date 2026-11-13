@@ -218,6 +218,8 @@ export const WIRING_OPS = [
     name: 'wiring_reset',
     kind: 'command',
     tier: 'mutate',
+    destructive: true,
+    mcp: { idempotent: true },
     summary: "Clear every step of a wiring guide (start it over). OK when none was done.",
     input: z.object({ guide: guideId }),
     output: WiringStepResultSchema,

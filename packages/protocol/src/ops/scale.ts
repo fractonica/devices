@@ -165,6 +165,7 @@ export const SCALE_OPS = [
     name: 'scale_reset_calibration',
     kind: 'command',
     tier: 'mutate',
+    destructive: true,
     summary: "Forget a board's scale calibration (fr.scale reset_calibration): offset 0 and the profile's counts_per_kg again; the kept calibration is erased.",
     input: z.object({ device: deviceSel, instance }),
     output: ScaleResetSchema,

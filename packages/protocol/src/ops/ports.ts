@@ -93,6 +93,7 @@ export const PORT_POLICY_OPS = [
     name: 'port_ignore',
     kind: 'command',
     tier: 'mutate',
+    mcp: { idempotent: true },
     summary:
       'Never open a port (config.json ports.ignore): the hub closes it now if it has it open and leaves it to other programs, also after a re-plug. `port` is a /dev path, a USB serial or MAC (follows the board to any path), or a VID:PID such as 1a86:7523 (every port of that adapter). remove: true takes the entry off the list again. A leased port stays leased until its lease ends.',
     input: z.object({
@@ -106,6 +107,7 @@ export const PORT_POLICY_OPS = [
     name: 'port_claim',
     kind: 'command',
     tier: 'mutate',
+    mcp: { idempotent: true },
     summary:
       'Let the hub watch a port it leaves alone (config.json ports.claim): takes the port off ports.ignore, records it as claimed, and opens it now, so its board says HELLO and is registered. For a board the registry does not know yet in mode adopted (the default); a provisioned board is watched without a claim. remove: true takes the claim back (the port is then watched only if its board is registered). PORT_LEASED while it is lent; PORT_BUSY_EXTERNAL when another program has it open.',
     input: z.object({

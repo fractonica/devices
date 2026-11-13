@@ -193,6 +193,7 @@ export const STORAGE_OPS = [
     name: 'storage_put',
     kind: 'job',
     tier: 'mutate',
+    destructive: true,
     summary:
       "Copy a file from the Mac to a board's card (a job: fr.storage write in chunks of up to 1,024 B, the first truncating, the directories made on the way). `file` is an absolute path on the Mac (at most 64 MB); `path` is where it goes on the card (default: /<its name>), replacing what is there. Returns bytes, the card file's size after the last write, ms and KB/s. DEVICE_BUSY while the card is busy with another command.",
     input: z.object({
@@ -209,6 +210,7 @@ export const STORAGE_OPS = [
     name: 'storage_rm',
     kind: 'command',
     tier: 'mutate',
+    destructive: true,
     summary: "Remove a file, or an empty directory, from a board's card (fr.storage remove). NOT_FOUND when it is not there; INVALID_ARGS for a directory that is not empty or the root.",
     input: z.object({ device: deviceSel, path: storagePath, instance }),
     output: StorageRmSchema,

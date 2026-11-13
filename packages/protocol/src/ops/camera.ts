@@ -288,6 +288,8 @@ export const CAMERA_OPS = [
     name: 'camera_sd_delete',
     kind: 'command',
     tier: 'mutate',
+    destructive: true,
+    mcp: { idempotent: true },
     summary: "Remove a recording from a board's micro-SD card (fr.camera sd_delete); OK when it is already gone. Nothing on the Mac is deleted.",
     input: z.object({
       device: deviceSel,

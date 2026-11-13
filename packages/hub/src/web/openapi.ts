@@ -89,6 +89,7 @@ export function openApiDocument(): Schema {
         tags: [op.kind],
         'x-fr-kind': op.kind,
         'x-fr-tier': op.tier,
+        ...(op.destructive ? { 'x-fr-destructive': true } : {}),
         'x-fr-cli': ['fr', ...op.cli.path, ...(op.cli.positional ?? []).map((p) => `<${p}>`)].join(' '),
         parameters: [
           {

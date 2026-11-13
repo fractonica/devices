@@ -90,6 +90,7 @@ export const APP_HOST_OPS = [
     name: 'app_deploy',
     kind: 'job',
     tier: 'mutate',
+    destructive: true,
     summary:
       "Install an uploaded bundle as an app and (re)start it (a job, kind app): check the bundle's SHA-256, unpack it, read fractonica.app.json, `npm ci --omit=dev` (or npm install), write the unit fr-app-<name>.service with its settings, start it and check it stays running (its last log lines on failure). The previous release is kept until this one runs. @fractonica/sdk is provided: an app imports it without listing it. INVALID_SOURCE for a bad manifest, BUILD_FAILED when npm fails.",
     input: z.object({
@@ -165,6 +166,7 @@ export const APP_HOST_OPS = [
     name: 'app_remove',
     kind: 'command',
     tier: 'mutate',
+    destructive: true,
     summary:
       "Stop an app and remove its unit and releases. Its data folder (DATA_DIR) and settings are kept unless `purge` is set, so a later deploy of the same name finds them.",
     input: z.object({ name: appName, purge: z.boolean().default(false).describe('also delete its data folder and settings') }),
@@ -175,6 +177,7 @@ export const APP_HOST_OPS = [
     name: 'device_adopt',
     kind: 'command',
     tier: 'mutate',
+    destructive: true,
     summary:
       "Provision a device that joins over the network by itself, a Linux node such as the UNO Q's qonu-node, which has no flash to write: give it an addr and an alias on a stored network in the registry, and send them over its session (MSG fr.adopt). It saves them and restarts with them; apps then see it. ESP32 boards use device_provision. DEVICE_OFFLINE without a session; ENV_MISSING when no network is stored (fr net set --ssid; the password may wait).",
     input: z.object({

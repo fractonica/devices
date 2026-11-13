@@ -240,8 +240,9 @@ export const OPS = [
     name: 'network_set',
     kind: 'command',
     tier: 'mutate',
+    mcp: { idempotent: true, hide: ['password'] },
     summary:
-      'Store a Wi-Fi network nodes join, by name (default: the one every device joins unless provisioned with --network), with its band (2g, 5g or auto; a 5g network is for 5 GHz chips only, the ESP32-C5). Every network shares the fleet\'s net_id. The password is write-only (the CLI reads it from stdin with --password-stdin) and kept per network.',
+      'Store a Wi-Fi network nodes join, by name (default: the one every device joins unless provisioned with --network), with its band (2g, 5g or auto; a 5g network is for 5 GHz chips only, the ESP32-C5). Every network shares the fleet\'s net_id. The password is write-only and kept per network: the CLI reads it with --password-stdin (a hidden prompt at a terminal); MCP never takes it, so an agent asks the person to run `fr net set --name <n> --ssid <s> --password-stdin`.',
     input: z.object({
       name: networkName.default(DEFAULT_NETWORK),
       ssid: z.string().min(1).max(32),
@@ -275,6 +276,7 @@ export const OPS = [
     name: 'build_start',
     kind: 'job',
     tier: 'mutate',
+    mcp: { openWorld: true },
     summary: 'Build firmware for a profile from source_dir (ESP-IDF, sanitized env) and ingest the artifact.',
     input: z.object({
       source_dir: sourceDir,
@@ -306,6 +308,7 @@ export const OPS = [
     name: 'flash_start',
     kind: 'job',
     tier: 'mutate',
+    destructive: true,
     summary:
       'Flash a USB-attached board over serial, named by device (a selector matching one device) or port. plan=app writes otadata + app (dev loop); full adds bootloader and partition table, plus fr_ident from the registry for a provisioned device (an unknown board boots UNASSIGNED); identity writes only fr_ident (after a rename or a new network); recover = full for a provisioned device that lost its flash.',
     input: z.object({
@@ -324,6 +327,7 @@ export const OPS = [
     name: 'device_reset',
     kind: 'job',
     tier: 'mutate',
+    destructive: true,
     summary: 'Reset a USB-attached board (hard) or put it into ROM download mode (bootloader).',
     input: z.object({
       port: portSel,

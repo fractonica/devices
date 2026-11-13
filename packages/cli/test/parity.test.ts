@@ -357,8 +357,9 @@ describe('the SessionStart hook', () => {
   it('never fails the session: no hub, no shim, a shim without its Node', () => {
     const down = hook(`echo '{"ok":false,"cursor":"","error":{"code":"HUB_UNREACHABLE","message":"the hub is not running"}}'; exit 10`);
     expect(down).toEqual({ code: 0, stdout: expect.stringContaining('not running') });
-    // What fr mcp does (mcp.ts HubGate): the first tool call starts the hub, never the server's launch.
-    expect(down.stdout).toContain('starts it on the first tool call');
+    // What fr mcp does (mcp.ts autostartWanted): it starts no hub unless asked; the person starts it from Terminal.
+    expect(down.stdout).toContain('Start it from Terminal (fr hub start)');
+    expect(down.stdout).toContain('--autostart');
     expect(hook(null)).toEqual({ code: 0, stdout: expect.stringContaining('doctor --fix') });
     expect(hook('exit 127')).toEqual({ code: 0, stdout: expect.stringContaining('doctor --fix') });
     const odd = hook('echo "not json"; exit 1');

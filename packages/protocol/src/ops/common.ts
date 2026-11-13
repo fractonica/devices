@@ -8,7 +8,7 @@ export type OpKind = 'query' | 'command' | 'job' | 'wait';
 /**
  * Safety tier (09 §9.2, design c6 D17): `read` changes nothing (MCP readOnlyHint), `mutate` acts on the
  * hub or devices. Every command and job is `mutate`, and so are diag_exec, job_cancel and network_set.
- * `destructive` comes in M2.
+ * A mutation that cannot be undone by another op carries `destructive: true` on its OpDef as well.
  */
 export type OpTier = 'read' | 'mutate';
 
@@ -16,14 +16,25 @@ export interface OpDef<I extends z.ZodObject = z.ZodObject, O extends z.ZodType 
   name: string;
   kind: OpKind;
   tier: OpTier;
-  /** MCP tool metadata: `alwaysLoad` sets `_meta["anthropic/alwaysLoad"]` (09 §9.6; hub_status, device_list). */
-  mcp?: { alwaysLoad?: boolean };
+  /**
+   * Deletes, overwrites, flashes, erases, provisions, updates over the air or reboots: what it changes cannot be put
+   * back by another op. MCP destructiveHint; a client asks a person before calling it.
+   */
+  destructive?: boolean;
+  /**
+   * MCP tool metadata: `alwaysLoad` sets `_meta["anthropic/alwaysLoad"]` (09 §9.6; hub_status, device_list);
+   * `idempotent`: calling it again with the same input changes nothing more (idempotentHint; every read op is);
+   * `openWorld`: it may reach outside the hub and its devices, such as the internet (openWorldHint);
+   * `hide`: input fields MCP never takes (a secret: the tool's schema leaves them out, and a call that sends one is
+   * refused with the CLI command that does take it).
+   */
+  mcp?: { alwaysLoad?: boolean; idempotent?: boolean; openWorld?: boolean; hide?: readonly string[] };
   /** First sentence: what and when. Kept under 1,000 characters (MCP description limits). */
   summary: string;
   input: I;
   /**
    * The `data` of an ok Result, for OpenAPI and typed clients (design c6 D17). Objects are loose, so a
-   * field a handler adds does not break a client. Neither tier, mcp nor output is in REGISTRY_HASH.
+   * field a handler adds does not break a client. Neither tier, destructive, mcp nor output is in REGISTRY_HASH.
    */
   output?: O;
   /** `variadic`: the last positional takes the remaining words, joined with single spaces. */

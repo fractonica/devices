@@ -8,7 +8,7 @@ import { fileURLToPath } from 'node:url';
 import { paths, readConfig, rotateLog, run } from '@fractonica/host';
 import type { Job, Result } from '@fractonica/protocol';
 
-import { hubCall, hubHealth } from './client.ts';
+import { hubCall, hubHealth, hubUrl } from './client.ts';
 
 const HUB_MAIN = resolve(dirname(fileURLToPath(import.meta.url)), '..', '..', 'hub', 'src', 'main.ts');
 const HUB_COMMAND_RE = /packages[\\/]hub[\\/]src[\\/]main\.ts\b/;
@@ -20,6 +20,10 @@ export interface StartInfo {
   already?: boolean;
   /** The dashboard's URL (hub_status.dashboard.url, design c6 D10), when the hub answers it. */
   dashboard?: string;
+  /** Why it was not started (FR_HUB remote, another hub on this FR_HOME, the process exited). */
+  error?: string;
+  /** Started, but something to know (not answering yet). */
+  warning?: string;
 }
 
 export interface StopInfo {
@@ -68,12 +72,44 @@ async function dashboardUrl(): Promise<{ dashboard?: string }> {
   return typeof url === 'string' ? { dashboard: url } : {};
 }
 
-export async function startHub(foreground: boolean): Promise<StartInfo> {
+/** Where FR_HUB says the hub is: its port when it is this Mac's loopback, or why this CLI cannot start it there. */
+export function hubTarget(env: NodeJS.ProcessEnv = process.env): { port?: number; remote?: string } {
+  const raw = env.FR_HUB;
+  if (!raw) {
+    return {};
+  }
+  let url: URL;
+  try {
+    url = new URL(raw);
+  } catch {
+    return { remote: `FR_HUB=${raw} is not a URL (http://127.0.0.1:<port>)` };
+  }
+  const host = url.hostname.replace(/^\[|\]$/g, '');
+  if (!['127.0.0.1', 'localhost', '::1'].includes(host) || url.protocol !== 'http:') {
+    return { remote: `FR_HUB=${raw} names a hub on another machine; start it there (fr hub start), or unset FR_HUB` };
+  }
+  return { port: url.port ? Number(url.port) : 80 };
+}
+
+export async function startHub(foreground: boolean, opts: { main?: string } = {}): Promise<StartInfo> {
   const health = await hubHealth();
   if (health) {
     return { started: false, already: true, pid: health.pid, ...(await dashboardUrl()) };
   }
-  const args = ['--conditions=@fractonica/source', HUB_MAIN];
+  // FR_HUB (a second hub, a test hub): started on its port, so the health checked below is that hub's. A remote one
+  // is refused; so is a second hub on this FR_HOME while another one runs from it (they would share hub.db and fight
+  // over the ports).
+  const target = hubTarget();
+  if (target.remote) {
+    return { started: false, error: target.remote };
+  }
+  if (target.port !== undefined) {
+    const other = readPid();
+    if (other && (await isHubProcess(other))) {
+      return { started: false, error: `hub pid ${other} already runs from ${paths.home()} on another port: set FR_HOME to another directory for a second hub, or unset FR_HUB` };
+    }
+  }
+  const args = ['--conditions=@fractonica/source', opts.main ?? HUB_MAIN, ...(target.port !== undefined ? ['--port', String(target.port)] : [])];
   if (foreground) {
     const child = spawn(process.execPath, args, { stdio: 'inherit' });
     await new Promise((r) => child.on('close', r));
@@ -87,10 +123,20 @@ export async function startHub(foreground: boolean): Promise<StartInfo> {
   const log = openSync(paths.log(), 'a');
   // detached => setsid(): the hub outlives the shell, the agent session and `fr mcp`.
   const child = spawn(process.execPath, args, { detached: true, stdio: ['ignore', log, log] });
+  let exited: number | null | undefined;
+  child.on('exit', (code) => (exited = code));
   child.unref();
-  const up = await waitFor(async () => (await hubHealth()) !== null, 10_000);
+  // Up when it answers; a child that exited did not start (already_running exits 0: another hub holds the port).
+  const up = await waitFor(async () => exited !== undefined || (await hubHealth()) !== null, 10_000);
   const h = await hubHealth();
-  return up && h ? { started: true, pid: h.pid, log: paths.log(), ...(await dashboardUrl()) } : { started: false, log: paths.log() };
+  if (up && h) {
+    return { started: true, pid: h.pid, log: paths.log(), ...(await dashboardUrl()) };
+  }
+  if (exited !== undefined) {
+    return { started: false, log: paths.log(), error: `the hub exited (code ${exited}) before answering` };
+  }
+  // Still running but not answering yet (a slow start on a loaded Mac): it was started; say so, not "did not start".
+  return { started: true, pid: child.pid, log: paths.log(), warning: `pid ${child.pid} is running but has not answered at ${hubUrl()} yet; see fr hub status` };
 }
 
 /** Stop guard (spec 08 §8.2): a failed Result while the hub has queued or working jobs, else null. */
@@ -179,7 +225,7 @@ export async function restartHub(force = false): Promise<Result<StartInfo | Stop
     return { ok: false, cursor: '', error: { code: 'TIMEOUT', message: `hub pid ${s.data.pid} is still running; it did not stop`, retryable: true } };
   }
   const r = await startHub(false);
-  return r.started ? { ok: true, data: r, cursor: '' } : { ok: false, cursor: '', error: { code: 'HUB_UNREACHABLE', message: `hub did not start; see ${r.log}`, retryable: true } };
+  return r.started ? { ok: true, data: r, cursor: '' } : { ok: false, cursor: '', error: { code: 'HUB_UNREACHABLE', message: r.error ?? `hub did not start; see ${r.log}`, retryable: true } };
 }
 
 /**

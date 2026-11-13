@@ -97,6 +97,7 @@ export const REGISTRY_OPS = [
     name: 'device_update',
     kind: 'command',
     tier: 'mutate',
+    mcp: { idempotent: true },
     summary:
       'Rename a device and/or edit its tags. A new alias (RFC 1123 label, at most 31 characters, unique) bumps alias_rev and is pushed to the device if it is online (otherwise on its next HELLO). Example: --alias pad-red-1 --tag +poc,-old.',
     input: z.object({
@@ -110,6 +111,7 @@ export const REGISTRY_OPS = [
     name: 'device_provision',
     kind: 'job',
     tier: 'mutate',
+    destructive: true,
     summary:
       'Provision a USB-attached board (first flash): probe it, register it (addr, alias, net), write the newest debug artifact of its profile plus fr_ident (Wi-Fi from network_set, hub host) in one write_flash, reset it, wait for its HELLO on serial, then report whether it joined over Wi-Fi (wifi: joined | not_joined, via: tcp, or gateway_status for a role: gateway profile, which opens no TCP and shows the AP in its GW_STATUS; off for a radio-off profile such as the HIL fixture\'s). Example: --port 1cdbd4000134 --profile c6-pad.',
     input: z.object({

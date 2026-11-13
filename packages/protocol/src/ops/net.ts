@@ -87,6 +87,7 @@ export const NET_OPS = [
     name: 'binding_clear',
     kind: 'command',
     tier: 'mutate',
+    destructive: true,
     summary: "Remove a device's binding in one slot, or all of them: the registry rows go, and fr.node.bind_clear is pushed now if the device is online, else at its next HELLO.",
     input: z.object({
       device: z.string().min(1).describe('the source device: an alias, id:<12hex> or any selector matching one device'),

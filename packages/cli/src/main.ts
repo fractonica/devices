@@ -346,7 +346,7 @@ hub
   .action(async (opts: { foreground?: boolean }) => {
     const r = await startHub(Boolean(opts.foreground));
     const ok = r.started || Boolean(r.already);
-    await emit(ok ? { ok, data: r, cursor: '' } : { ok, cursor: '', error: { code: 'HUB_UNREACHABLE', message: `hub did not start; see ${r.log}`, retryable: true } }, 'hub_start');
+    await emit(ok ? { ok, data: r, cursor: '' } : { ok, cursor: '', error: { code: 'HUB_UNREACHABLE', message: r.error ?? `hub did not start; see ${r.log}`, retryable: true } }, 'hub_start');
   });
 // Both refuse with LOCKED (exit 5) while jobs are queued or working, unless --force.
 hub

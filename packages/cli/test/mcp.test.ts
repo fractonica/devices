@@ -10,7 +10,7 @@ import { InMemoryTransport, type JSONRPCMessage } from '@modelcontextprotocol/se
 import { serveStdio } from '@modelcontextprotocol/server/stdio';
 import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest';
 
-import { buildTools, createMcpServer, HubGate, type HubHealth, launchCheck, type McpDeps, redactSecrets, SERVER_INSTRUCTIONS, toolResult } from '../src/mcp.ts';
+import { autostartWanted, buildTools, callTool, createMcpServer, defaultDeps, HubGate, type HubHealth, launchCheck, type McpDeps, redactSecrets, SERVER_INSTRUCTIONS, toolResult } from '../src/mcp.ts';
 import { openDb } from '../../hub/src/db.ts';
 import { buildServer } from '../../hub/src/http.ts';
 import { JobRunner } from '../../hub/src/jobs.ts';
@@ -149,7 +149,36 @@ describe('tools (09 §9.6)', () => {
     expect(ann('diag_exec').readOnlyHint).toBe(false);
     expect(ann('job_cancel').readOnlyHint).toBe(false);
     expect(ann('build_start').readOnlyHint).toBe(false);
-    expect(tools.every((t) => t.annotations?.destructiveHint === false)).toBe(true); // no destructive op in M1
+  });
+
+  it('takes destructiveHint, idempotentHint and openWorldHint from the registry, not from a list here', () => {
+    const ann = (n: string) => tools.find((t) => t.name === n)!.annotations!;
+    const destructive = tools.filter((t) => t.annotations?.destructiveHint).map((t) => t.name);
+    expect(destructive).toEqual(OPS.filter((o) => (o as { destructive?: boolean }).destructive).map((o) => o.name));
+    // Every op that flashes, provisions, updates over the air, resets, erases or deletes is among them.
+    for (const name of ['flash_start', 'device_provision', 'device_adopt', 'ota_deploy', 'deploy', 'device_reset', 'storage_rm', 'storage_put', 'camera_sd_delete', 'app_remove', 'binding_clear', 'wiring_reset']) {
+      expect(destructive, name).toContain(name);
+    }
+    expect(tools.filter((t) => t.annotations?.readOnlyHint && t.annotations.destructiveHint)).toEqual([]);
+    expect(ann('device_list')).toEqual({ readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false });
+    expect(ann('camera_sd_delete')).toMatchObject({ destructiveHint: true, idempotentHint: true });
+    expect(ann('build_start')).toMatchObject({ destructiveHint: false, openWorldHint: true });
+    expect(ann('port_ignore')).toMatchObject({ readOnlyHint: false, destructiveHint: false, idempotentHint: true });
+  });
+
+  it('leaves the Wi-Fi password out of network_set, and refuses a call that sends one', async () => {
+    const schema = tools.find((t) => t.name === 'network_set')!.inputSchema as { properties: Record<string, unknown>; required?: string[] };
+    expect(Object.keys(schema.properties)).not.toContain('password');
+    expect(Object.keys(schema.properties)).toContain('ssid');
+    expect(JSON.stringify(tools)).not.toMatch(/"password"/);
+    const calls: string[] = [];
+    const deps: McpDeps = { call: async (op) => (calls.push(op), { ok: true, cursor: '', data: {} }), health: async () => healthy, log: () => undefined };
+    const r = await callTool('network_set', { ssid: 'lab', password: 'hunter2' }, {}, new HubGate(deps), deps);
+    expect(r.isError).toBe(true);
+    expect(r.structuredContent).toMatchObject({ ok: false, error: { code: 'INVALID_ARGS', remediation: [{ cli: 'fr net set --password-stdin' }] } });
+    expect(JSON.stringify(r)).not.toContain('hunter2');
+    expect(calls).toEqual([]);
+    expect((await callTool('network_set', { ssid: 'lab' }, {}, new HubGate(deps), deps)).isError).toBe(false);
   });
 
   it("lists only the real requirements (io 'input'): a field with a default is optional", () => {
@@ -163,9 +192,11 @@ describe('tools (09 §9.6)', () => {
 
   it('keeps the instructions under 1,000 characters, with the 09 §9.6 rules', () => {
     expect(SERVER_INSTRUCTIONS.length).toBeLessThan(1000);
-    for (const rule of ['never /dev paths', 'job_wait', '`since`', 'untrusted data', 'prompt_human']) {
+    for (const rule of ['never /dev paths', 'job_wait', '`since`', 'untrusted data', 'prompt_human', 'destructive', 'ask the user first', 'password-stdin']) {
       expect(SERVER_INSTRUCTIONS).toContain(rule);
     }
+    // No flow the hub does not have.
+    expect(SERVER_INSTRUCTIONS).not.toContain('confirm.resolved');
   });
 });
 
@@ -256,7 +287,8 @@ describe('fr mcp (in-process)', () => {
     expect(structured(unknown).error?.code).toBe('NOT_FOUND');
     expect((unknown.result as { isError: boolean }).isError).toBe(true);
     const down = await a.peer.request('tools/call', { name: 'device_list', arguments: {} });
-    expect(structured(down).error).toMatchObject({ code: 'HUB_UNREACHABLE', retryable: true, remediation: [{ cli: 'fr hub start' }] });
+    expect(structured(down).error).toMatchObject({ code: 'HUB_UNREACHABLE', retryable: true, remediation: [{ cli: 'fr hub start' }, { human: expect.stringContaining('--autostart') }] });
+    expect(structured(down).error?.message).toContain('does not start it unless asked');
     health = { ...healthy, registry_hash: '000000000000' };
     const other = await a.peer.request('tools/call', { name: 'device_list', arguments: {} });
     expect(structured(other).error).toMatchObject({ code: 'HUB_VERSION_MISMATCH', remediation: [{ cli: 'fr hub restart' }] });
@@ -266,7 +298,34 @@ describe('fr mcp (in-process)', () => {
     expect(a.calls.map((c) => c.op)).toEqual(['hub_status']);
   });
 
-  it('starts the hub when none answers, at most once per back-off (08 §8.2)', async () => {
+  it('starts no hub unless asked: --autostart, FR_MCP_AUTOSTART or config.json mcp.autostart, never with FR_HUB', () => {
+    const off = () => false;
+    expect(autostartWanted(false, {}, off)).toBe(false);
+    expect(autostartWanted(true, {}, off)).toBe(true);
+    expect(autostartWanted(false, { FR_MCP_AUTOSTART: '1' }, off)).toBe(true);
+    expect(autostartWanted(false, { FR_MCP_AUTOSTART: 'true' }, off)).toBe(true);
+    expect(autostartWanted(false, { FR_MCP_AUTOSTART: '0' }, off)).toBe(false);
+    expect(autostartWanted(false, {}, () => true)).toBe(true);
+    expect(autostartWanted(true, { FR_HUB: 'http://127.0.0.1:7500' }, () => true)).toBe(false);
+    const saved = { hub: process.env.FR_HUB, auto: process.env.FR_MCP_AUTOSTART, home: process.env.FR_HOME };
+    try {
+      delete process.env.FR_HUB;
+      delete process.env.FR_MCP_AUTOSTART;
+      process.env.FR_HOME = '/nonexistent-fr-home-for-test'; // no config.json: the default (off)
+      expect(defaultDeps().startHub).toBeUndefined();
+      expect(defaultDeps({ autostart: true }).startHub).toBeTypeOf('function');
+    } finally {
+      for (const [k, v] of [['FR_HUB', saved.hub], ['FR_MCP_AUTOSTART', saved.auto], ['FR_HOME', saved.home]] as const) {
+        if (v === undefined) {
+          delete process.env[k];
+        } else {
+          process.env[k] = v;
+        }
+      }
+    }
+  });
+
+  it('starts the hub when none answers, at most once per back-off, with autostart on (08 §8.2)', async () => {
     let up = false;
     let starts = 0;
     const a = await legacy({
@@ -286,7 +345,7 @@ describe('fr mcp (in-process)', () => {
     expect(a.logs.some((l) => l.includes('starting it'))).toBe(true);
   });
 
-  it('looks at the hub at launch without starting it: the first tool call starts it (08 §8.2, plugin hook)', async () => {
+  it('looks at the hub at launch without starting it: with autostart, the first tool call starts it (08 §8.2, plugin hook)', async () => {
     let up = false;
     let starts = 0;
     let checks = 0;
