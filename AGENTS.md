@@ -14,7 +14,7 @@ you where everything is, how to build and test it, and what you must not break.
   is built and tested against core 0.2.0 (section 11) and
   builds for all three chips without a warning. **It has never run on a
   chip** (no board, no QEMU on the machine it was written on): section 11
-  says exactly what is and is not verified, and README.md has the bring-up
+  says exactly what is and is not verified, and docs/GUIDE.md has the bring-up
   checklist for the first board.
 - **The clock itself is not here.** All Fractonica arithmetic, tables, names
   and text live in the sibling checkout `../core` (read `../core/AGENTS.md`,
@@ -129,7 +129,8 @@ components/fractonica_ui/        PORTABLE C99 (host + ESP-IDF). The UI library.
   src/fui_font_small.c fui_font_text.c   GENERATED font tables (never edit)
   src/fui_theme.c                the palettes
   CMakeLists.txt                 ESP-IDF component, REQUIRES fractonica
-docs/                            the README's pictures: every face on its screens (`make pictures`; kept)
+docs/                            GUIDE.md (the long manual) and its pictures: every face on its screens (`make pictures`; kept);
+                                 hero.jpg, README.md's front picture (laid out by hand from three of them; `make pictures` leaves it)
 sim/                             host build (system cc only)
   Makefile                       make | test | shots | matrix | probe | pictures | golden | firmware | wakes | stats | stack | bench | info | sizes | fonts
   src/sim_main.c                 fractonica-sim: one frame of the UI library -> PNG
@@ -152,7 +153,7 @@ tools/
   contact-sheet.py               lay many pictures on one sheet for a review (needs Pillow; nothing else uses it)
   size-report.sh                 the UI library alone with the cross compilers (no ESP-IDF build)
   genfont.py  fonts/*.txt        font art (ASCII) -> C tables
-  png-compress.py                recompress the README pictures
+  png-compress.py                recompress the guide's pictures
 ```
 
 ### Where is ...?
@@ -184,7 +185,7 @@ make test            # raster, canvas, font, ui, golden, firmware, fuzz (ASan + 
 make shots           # 40 face x screen x mode PNGs at SPEC vector A + focus sweeps + states -> out/
 make matrix          # = ../tools/render-matrix.sh: 949 PNGs at vectors A, B, C, time not set, out of catalogue -> out/matrix/
 make probe           # build/probe [unix s] [utc offset s]: beads, running arc, glyph states, spans, Sun, from the core alone
-make pictures        # the README's pictures -> ../docs/ (kept in the repository)
+make pictures        # the guide's pictures -> ../docs/ (kept in the repository)
 make golden          # rewrite golden/hashes.txt (only after LOOKING at the new shots)
 make firmware        # the firmware loop for a simulated idle hour, every face: wake-ups, redraws, pixels
 make wakes           # the same hour at every focus level 0..13 on every face
@@ -306,7 +307,7 @@ for (;;) {
 
 ### Navigation map
 
-The same map as the top of `fui_ui.h` (the code), and README.md "Getting around":
+The same map as the top of `fui_ui.h` (the code), and docs/GUIDE.md "Getting around":
 
 ```
 NOW ──NEXT / PREV──▶ SCALES   focus one level finer / coarser (0..13,
@@ -534,7 +535,7 @@ recorded here because the design says otherwise):
 whatever else differs, e.g. `configs/myboard.defaults`, and build with
 `-DSDKCONFIG_DEFAULTS="sdkconfig.defaults;configs/myboard.defaults"`; add a
 PlatformIO environment with the same list in `board_build.cmake_extra_args`,
-a row to `MATRIX` in `tools/build-all.sh`, and its wiring table to README.md.
+a row to `MATRIX` in `tools/build-all.sh`, and its wiring table to docs/GUIDE.md.
 If the board is THE board of the product, change the per-chip `default` lines
 in `main/Kconfig.projbuild` instead.
 
@@ -564,12 +565,12 @@ it in `fui_i_paint` (`fui_ui.c`). Add it to `FACES` in `sim/Makefile`, look at
 **Add or change a screen**: one `paint` function (see "How a frame is made");
 add the enum value, the name, the navigation in `fui_ui_event`, the wake rule
 in `fui_i_ring_next` if it has rings or glyphs. Update the map in `fui_ui.h`,
-here and in README.md. (`screen <name>` on the console picks it up from
+here and in docs/GUIDE.md. (`screen <name>` on the console picks it up from
 `fui_screen_name`.)
 
 **Add a console command**: a `command_...` function and a branch in
 `app_console_line` (`main/app_console.c`), a line in `command_help`, a check
-in `test_console` (`sim/tests/test_firmware.c`), a row in README.md. It runs
+in `test_console` (`sim/tests/test_firmware.c`), a row in docs/GUIDE.md. It runs
 in the UI task: touch the UI freely, print with `app_printf`, never block.
 Something only the platform knows goes through a new `app_port_t` function
 (implement it in `app_main.c` AND `sim_port.c`).
@@ -615,7 +616,7 @@ pictures`, commit `sim/golden/hashes.txt` and `docs/` with the change.
 
 ## 8. Measured
 
-README.md, "Memory, size and wake-ups", has the tables and how each figure was
+docs/GUIDE.md, "Memory, size and wake-ups", has the tables and how each figure was
 obtained. The ones an agent needs at hand (stage 5, sizes, stack and card wakes re-measured in stage 6, image and flash sizes again with core 0.2.0; ESP-IDF 5.5.1, gcc 14.2.0,
 `-Os`):
 
@@ -639,7 +640,7 @@ obtained. The ones an agent needs at hand (stage 5, sizes, stack and card wakes 
 | When a wake comes | exactly at the UI's instant on the host model, with 23 ms of simulated SPI per whole frame (it came 23 ms late before stage 5) | `test_firmware` |
 
 Not measured, because it needs a chip: redraw and flush time, the stack
-high-water marks, the heap (README gives estimates from the maps: about 155 /
+high-water marks, the heap (docs/GUIDE.md gives estimates from the maps: about 155 /
 130 / 110 kB free after start-up on ESP32 / S3 / C3 with the whole frame).
 
 ## 9. Common mistakes
@@ -837,7 +838,7 @@ were not re-run in this round.
 | Two undeclared shims | real (a reporting fault): declared in section 10 with exact requests |
 | Span split across rows on the SUN card | fixed: `fui_i_str_keep` / `fui_i_add_span`; `test_ui` "words"; golden `*-sun-valley-span` |
 | LENS of ο2 names π2 | fixed; `test_ui` "words"; golden `*-lens-last-rung` |
-| Docs navigation contradicted the code | fixed: README and section 4 carry fui_ui.h's map |
+| Docs navigation contradicted the code | fixed: docs/GUIDE.md (then README.md) and section 4 carry fui_ui.h's map |
 | "no band" not shown | fixed through the declared shim `fui_shim_format_band` |
 | Words on 240 x 240 faces against DESIGN.md | recorded as deviations for the owner (section 4); behaviour kept |
 | One-bit legibility (δ ~ ε, edge, size switching, 1 px/dot cards) | δ redrawn; labels always the dot font, 2 columns from the edge and from the ring (`test_ui` "one-bit labels", golden `mono-scales-nuclide`, `mono-delta-epsilon`); 1 px/dot card text recorded as an owner decision |
@@ -883,9 +884,9 @@ executed on real silicon or in an emulator:**
 - Light sleep on the C3 / S3 with the display's pins kept: built and linked
   (the matrix checks the call), never seen on a panel. Whether the GC9A01 /
   ST7789 keep their picture through every sleep is the first thing to watch
-  on such a board (README "Bring-up checklist", step 12).
+  on such a board (docs/GUIDE.md "Bring-up checklist", step 12).
 
-**First hour with a board**: README.md, "Bring-up checklist", step by step
+**First hour with a board**: docs/GUIDE.md, "Bring-up checklist", step by step
 (expected boot log, what to change for each wrong picture, `info`, `time`,
 `shot` against the simulator, input, persistence). Then move the claims up.
 

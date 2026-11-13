@@ -4,7 +4,7 @@
 #   make shots      render every face x screen x mode (every page of each card) at SPEC vector A into out/
 #   make test       unit tests, golden images, the no-heap check, the sanitizer fuzz
 #   make golden     re-render the golden images and rewrite golden/hashes.txt
-#   make pictures   the shots README.md shows, into ../docs/ (kept in the repository)
+#   make pictures   the shots docs/GUIDE.md shows, into ../docs/ (kept in the repository)
 #   make probe      build/probe: what the core says at an instant (to check a picture against)
 #   make matrix     = ../tools/render-matrix.sh: all 916 face x screen x page x mode x vector pictures
 #   make firmware   the firmware's own loop (main/app.c) for a simulated idle hour
@@ -167,10 +167,13 @@ shots: $(SIM)
 	    $(call PAGES,out/state/$$face-lens-level29,--face $$face --screen lens --events NNNNNNNNNNNNNNNNNNNNNNN --mode earth --utc-offset $(OFFSET)); \
 	done
 
-# The pictures of README.md, in ../docs/ (the repository's documentation
+# The pictures of docs/GUIDE.md, in ../docs/ (the repository's documentation
 # folder). Unlike out/ they are kept: re-run after a drawing change, and look.
 # Every face, on its screens (every page of each card), at SPEC vector A
 # unless the name says otherwise. A picture that is no longer made is removed.
+# docs/hero.jpg, the front picture of README.md, is not made here (laid out by
+# hand from round240-now, rect240x320-now-earth and mono-now); being a JPEG it
+# is left alone.
 DOCS := ../docs
 pictures: $(SIM)
 	@mkdir -p $(DOCS)

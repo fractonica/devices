@@ -32,7 +32,7 @@ if(NOT EXISTS "${FRACTONICA_CORE_DIR}/include/fractonica.h")
     message(FATAL_ERROR
         "The Fractonica core was not found at ${FRACTONICA_CORE_DIR}.\n"
         "Check it out beside this repository (../core), add it as the submodule ./core,\n"
-        "or pass -DFRACTONICA_CORE_DIR=<path>. See README.md, \"Build\".")
+        "or pass -DFRACTONICA_CORE_DIR=<path>. See docs/GUIDE.md, \"Build, flash, watch\".")
 endif()
 # ESP-IDF reads each component's CMakeLists.txt once in a separate cmake
 # process (to learn its requirements) where cache variables are not visible:

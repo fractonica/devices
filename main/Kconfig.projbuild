@@ -1,7 +1,7 @@
 # Every hardware choice of the Fractonica clock. `idf.py menuconfig` -> "Fractonica clock".
 #
 # The owner named no hardware, so every default here is an ASSUMPTION: the
-# common development kit of each chip, wired as README.md, "Wiring" shows.
+# common development kit of each chip, wired as docs/GUIDE.md, "Wiring" shows.
 # A different board is a file of overrides (see configs/ and AGENTS.md,
 # "Add a board"); nothing in the C code holds a pin number.
 #
@@ -221,7 +221,7 @@ menu "Fractonica clock"
             whose data segment is 180 kB, in two cases: the 240 x 320 panel
             (a 153.6 kB frame would fill the segment to the last kilobyte)
             and Wi-Fi (a 115.2 kB frame plus the Wi-Fi stack's own static
-            data leaves it 16 kB of that segment). See README.md, "Memory".
+            data leaves it 16 kB of that segment). See docs/GUIDE.md, "Memory, size and wake-ups".
 
     # ------------------------------------------------------------------- input
     choice FRACTONICA_INPUT
@@ -415,7 +415,7 @@ menu "Fractonica clock"
             frame) is allowed about 1 kB more. 6,144 is twice that sum,
             because no board has confirmed it yet: `info` on the console
             prints the measured high-water mark, and once you have it,
-            high-water mark + 25 % is enough. See README.md, "Memory".
+            high-water mark + 25 % is enough. See docs/GUIDE.md, "Memory, size and wake-ups".
 
     config FRACTONICA_CONSOLE_STACK
         int "Console task stack, bytes"

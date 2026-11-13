@@ -4,7 +4,7 @@
  * the drivers use. No other file of the HAL names a CONFIG_FRACTONICA_PIN_*.
  *
  * A board is therefore a set of Kconfig values: the defaults in
- * Kconfig.projbuild are the development kit of each chip (README.md,
+ * Kconfig.projbuild are the development kit of each chip (docs/GUIDE.md,
  * "Wiring"), and a different board is a defaults file passed to the build
  * (configs/, AGENTS.md "Add a board").
  */

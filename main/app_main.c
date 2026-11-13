@@ -71,7 +71,7 @@ APP_CHECK(no_time_values_agree, FHAL_TIME_UNSET == FRC_TIME_NONE);
  *   whole frame   240 x 240 x 2 = 115,200 bytes (153,600 at 240 x 320)
  *   a band        CONFIG_FRACTONICA_FB_BAND_ROWS x 480 bytes
  *   one-bit       128 x 64 / 8 = 1,024 bytes, always whole
- * README.md, "Memory" has the measured totals per chip.
+ * docs/GUIDE.md, "Memory, size and wake-ups" has the measured totals per chip.
  */
 #if CONFIG_FRACTONICA_DISPLAY_SSD1306
 #  define FRAME_BYTES (FHAL_DISPLAY_WIDTH * FHAL_DISPLAY_HEIGHT / 8)

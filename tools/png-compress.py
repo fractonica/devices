@@ -3,7 +3,7 @@
 
 The simulator's PNG writer (sim/src/sim_png.c) is deliberately tiny and
 stores pixels uncompressed: a 480 x 480 shot is 690 kB. That is fine for
-sim/out/ (never committed); the few pictures README.md shows are kept in the
+sim/out/ (never committed); the pictures docs/GUIDE.md shows are kept in the
 repository (docs/), so `make pictures` passes them through this script (about 10 kB
 each afterwards). The pixels are untouched. Standard library only.
 

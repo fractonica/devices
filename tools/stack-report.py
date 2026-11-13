@@ -16,7 +16,7 @@ here: the platform behind app_port_t (the display flush into esp_lcd and the
 SPI / I2C driver, NVS, the queue), newlib (snprintf / vsnprintf, which
 app_printf and the console commands use), libgcc's 64-bit division helpers,
 and the interrupt frame FreeRTOS pushes on the running task's stack. The
-README adds allowances for those; the device prints the measured high-water
+docs/GUIDE.md adds allowances for those; the device prints the measured high-water
 mark with the console command `info`.
 
 THE COMPILER is the one the firmware is built with, or the figure is not the

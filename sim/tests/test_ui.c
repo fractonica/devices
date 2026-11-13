@@ -803,7 +803,7 @@ static void test_cards(void)
                     if (when[w] == T_A) {
                         CHECK(strlen(earth) > strlen(pure)); /* and with a reading it does add */
                     }
-                    /* the page count the README states, at the Helion, in EARTH */
+                    /* the page count docs/GUIDE.md states, at the Helion, in EARTH */
                     if (when[w] == T_A && screen == FUI_SCREEN_LENS && level == 6) {
                         CHECK_EQ(pages, 2);
                     }
