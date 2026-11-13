@@ -166,7 +166,7 @@ describe('Bead, Button, ErrorLine', () => {
     const { OpError } = await import('../src/api/rest.ts');
     const out = html(createElement(ui.ErrorLine, { error: new OpError({ code: 'PORT_BUSY_EXTERNAL', message: 'held by idf.py', retryable: false, hint: 'lend it' }) }));
     expect(out).toContain('data-error="PORT_BUSY_EXTERNAL"');
-    expect(out).toContain('PORT BUSY EXTERNAL');
+    expect(out).toContain('PORT HELD ELSEWHERE');
     expect(out).toContain('lend it');
     const missing = html(createElement(ui.ErrorLine, { error: new OpError({ code: 'NOT_FOUND', message: 'unknown op hub_doctor', retryable: false }), what: 'Doctor' }));
     expect(missing).toContain('data-tone="notice"');

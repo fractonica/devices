@@ -164,7 +164,7 @@ describe('dashboard live store', () => {
     expect(s.getState().toasts).toEqual([]);
     s.getState().ingest([state(2, 'j_a', 'completed')], {}, T(NOW));
     s.getState().job({ t: 'job', job_id: 'j_a', kind: 'build', status: 'completed' }, T(NOW));
-    expect(s.getState().toasts.map((t) => [t.tone, t.title, t.job_id])).toEqual([['ok', 'build c6-pad: completed', 'j_a']]);
+    expect(s.getState().toasts.map((t) => [t.tone, t.title, t.job_id])).toEqual([['ok', 'build c6-pad: done', 'j_a']]);
     s.getState().ingest([state(3, 'j_old', 'failed', at - 60_000_000)], {}, T(NOW));
     s.getState().ingest([state(4, 'j_bf', 'failed')], { backfill: true }, T(NOW));
     expect(s.getState().toasts).toHaveLength(1);

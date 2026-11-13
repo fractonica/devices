@@ -5,7 +5,8 @@
 
 import type { ReactNode } from 'react';
 
-import { OpError, opMissing, remedies } from '../api/rest.ts';
+import { OpError, opMissing, peopleRemedies } from '../api/rest.ts';
+import { errorWord } from '../state/words.ts';
 import { Bead } from './bead.tsx';
 import { Button } from './button.tsx';
 import { useHubText } from './kit.tsx';
@@ -48,7 +49,7 @@ export function ErrorLine({ error, message, what, fix, code: ownCode }: ErrorLin
     } else {
       code = e.code;
       text = `${what ? `${what}: ` : ''}${say(e.message)}`;
-      steps = remedies(e).map(say);
+      steps = peopleRemedies(e).map(say);
     }
   }
   return (
@@ -56,7 +57,7 @@ export function ErrorLine({ error, message, what, fix, code: ownCode }: ErrorLin
       <span className="ui-error-sign">
         <Bead state={notice ? 'idle' : 'fault'} label={notice ? 'notice' : 'error'} />
       </span>
-      <span className="ui-error-code caps">{engrave(code.toLowerCase().replace(/_/g, ' '))}</span>
+      <span className="ui-error-code caps">{engrave(notice ? code : errorWord(code, typeof text === 'string' ? text : ''))}</span>
       <span className="ui-error-text">{text}</span>
       {fix ? (
         <Button variant="default" onClick={fix.onClick} busy={fix.busy}>

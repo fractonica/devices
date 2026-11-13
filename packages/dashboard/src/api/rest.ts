@@ -62,6 +62,29 @@ export function remedies(err: Pick<ToolError, 'hint' | 'remediation'>): string[]
   return out;
 }
 
+/**
+ * The steps for a person on a page: the hint and each remediation's human text. A CLI command only when nothing else
+ * is said, and never an agent's tool name (the dashboard is not an MCP client).
+ */
+export function peopleRemedies(err: Pick<ToolError, 'hint' | 'remediation'>): string[] {
+  const out: string[] = [];
+  if (err.hint) {
+    out.push(err.hint);
+  }
+  for (const r of err.remediation ?? []) {
+    if (r.human && !out.includes(r.human)) {
+      out.push(r.human);
+    }
+  }
+  if (!out.length) {
+    const cli = (err.remediation ?? []).find((r) => r.cli)?.cli;
+    if (cli) {
+      out.push(`in Terminal: ${cli}`);
+    }
+  }
+  return out;
+}
+
 /** The subset of fetch the client uses. */
 export type FetchLike = (
   url: string,
@@ -74,11 +97,17 @@ export interface OpReply<T> {
   warnings: string[];
 }
 
+export interface CallOptions {
+  signal?: AbortSignal;
+  /** An op that runs long by design (the doctor's checks, a build's start): no timeout. */
+  long?: boolean;
+}
+
 export interface RestClient {
   /** The whole ok reply (data, cursor, warnings); throws OpError on a failed one. */
-  call<N extends OpName>(name: N, input: OpInput<N>, opts?: { signal?: AbortSignal }): Promise<OpReply<OpOutput<N>>>;
+  call<N extends OpName>(name: N, input: OpInput<N>, opts?: CallOptions): Promise<OpReply<OpOutput<N>>>;
   /** Just the data. */
-  op<N extends OpName>(name: N, input: OpInput<N>, opts?: { signal?: AbortSignal }): Promise<OpOutput<N>>;
+  op<N extends OpName>(name: N, input: OpInput<N>, opts?: CallOptions): Promise<OpOutput<N>>;
 }
 
 export interface RestOptions {
@@ -86,6 +115,11 @@ export interface RestOptions {
   base?: string;
   fetch?: FetchLike;
   client?: JobOrigin;
+  /**
+   * ms an op may take before it counts as HUB_UNREACHABLE (none by default). Ops that run long by design (a doctor's
+   * checks) pass their own signal to wait longer.
+   */
+  timeoutMs?: number;
 }
 
 function isObject(v: unknown): v is Record<string, unknown> {
@@ -97,15 +131,25 @@ export function createRest(opts: RestOptions = {}): RestClient {
   const doFetch: FetchLike = opts.fetch ?? ((url, init) => globalThis.fetch(url, init));
   const headers = { 'content-type': 'application/json', [CLIENT_HEADER]: opts.client ?? 'dashboard' };
 
-  async function call<N extends OpName>(name: N, input: OpInput<N>, o: { signal?: AbortSignal } = {}): Promise<OpReply<OpOutput<N>>> {
+  async function call<N extends OpName>(name: N, input: OpInput<N>, o: CallOptions = {}): Promise<OpReply<OpOutput<N>>> {
     let res: Awaited<ReturnType<FetchLike>>;
+    const timeout = opts.timeoutMs && !o.long ? new AbortController() : null;
+    const timer = timeout ? setTimeout(() => timeout.abort(), opts.timeoutMs) : null;
+    const signal = timeout ? (o.signal ? AbortSignal.any([o.signal, timeout.signal]) : timeout.signal) : o.signal;
     try {
-      res = await doFetch(`${base}/api/v1/op/${name}`, { method: 'POST', headers, body: JSON.stringify(input ?? {}), signal: o.signal });
+      res = await doFetch(`${base}/api/v1/op/${name}`, { method: 'POST', headers, body: JSON.stringify(input ?? {}), signal });
     } catch (e) {
       if (o.signal?.aborted) {
         throw e;
       }
+      if (timeout?.signal.aborted) {
+        throw new OpError({ code: 'HUB_UNREACHABLE', message: 'the hub did not answer in time', retryable: false });
+      }
       throw new OpError({ code: 'HUB_UNREACHABLE', message: `the hub does not answer (${(e as Error).message})`, retryable: true });
+    } finally {
+      if (timer) {
+        clearTimeout(timer);
+      }
     }
     let body: unknown;
     try {

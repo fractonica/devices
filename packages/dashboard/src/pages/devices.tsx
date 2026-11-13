@@ -14,6 +14,7 @@ import type { DeviceView } from '@fractonica/protocol/client';
 
 import { OpError } from '../api/rest.ts';
 import { useLive, useOp } from '../hooks.ts';
+import { usePresence } from '../shell/link.ts';
 import { eventWords, presenceWord } from '../state/words.ts';
 import { byPresenceThenAlias, filterDevices, fleetCountOf, hardwareLine, liveOf, shortId } from '../state/device-link.ts';
 import { Bead, Caps, EmptyState, engrave, ErrorLine, FTime, Page, Pending, presenceBead, Section, TextField } from '../ui/index.ts';
@@ -39,13 +40,14 @@ function LastEvent({ deviceId }: { deviceId: string }) {
 
 function DeviceRow({ device }: { device: DeviceView }) {
   const flashing = useFlash(device.device_id);
+  const said = usePresence();
   const live = liveOf(device);
   const fw = shortId(device.fw_id ?? live?.fw_id_prefix);
   const hw = hardwareLine(device);
   return (
     <li className="devs-row" data-device={device.alias} data-device-id={device.device_id} data-presence={device.presence} data-flash={flashing ? '' : undefined}>
       <span className="devs-bead">
-        <Bead state={presenceBead(device.presence)} label={presenceWord(device.presence)} />
+        <Bead state={presenceBead(said(device.presence))} label={presenceWord(said(device.presence))} />
       </span>
       <span className="devs-name">
         <Link to="/devices/$id" params={{ id: device.alias }} className="devs-link" title={device.alias}>

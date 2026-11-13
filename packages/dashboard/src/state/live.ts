@@ -48,6 +48,10 @@ export interface Toast {
   at: number;
   until: number;
   job_id?: string;
+  /** The error's code (shown only as the toast's tooltip). */
+  code?: string;
+  /** The devices it names (ids, said by their aliases where the page knows them). */
+  targets?: readonly string[];
 }
 
 export interface JobLive {
@@ -101,7 +105,7 @@ export interface LiveActions {
   job(frame: WsJob, now: Now): void;
   /** hub_status.prompts is the hub's own list: it replaces the store's, except what events said lately. */
   reconcilePrompts(list: readonly Prompt[], now: Now): void;
-  toast(t: { tone: Tone; title: string; body?: string; job_id?: string; ttlMs?: number }, now: Now): void;
+  toast(t: { tone: Tone; title: string; body?: string; job_id?: string; code?: string; ttlMs?: number }, now: Now): void;
   dismiss(id: string): void;
   /** Drops ended flashes, toasts and expired prompts. */
   prune(now: Now): void;
@@ -143,10 +147,21 @@ function same(s: LiveState, patch: Partial<LiveData>): Partial<LiveState> {
   return Object.keys(patch).length ? patch : s;
 }
 
+const JOB_KIND_WORDS: Record<string, string> = { ota: 'update', provision: 'provisioning', deploy: 'deploy', msg: 'message' };
+const JOB_END_WORDS: Record<string, string> = { completed: 'done', failed: 'failed', cancelled: 'stopped' };
+
 function jobToast(j: JobLive, now: number): Toast {
   const tone: Tone = j.status === 'completed' ? 'ok' : j.status === 'failed' ? 'bad' : 'warn';
   const targets = j.targets?.length ? ` ${j.targets.join(', ')}` : '';
-  return { id: `t${++toastSeq}`, tone, title: `${j.kind}${targets}: ${j.status}`, body: j.job_id, at: now, until: now + TOAST_MS[tone], job_id: j.job_id };
+  return {
+    id: `t${++toastSeq}`,
+    tone,
+    title: `${JOB_KIND_WORDS[j.kind] ?? j.kind}${targets}: ${JOB_END_WORDS[j.status] ?? j.status}`,
+    at: now,
+    until: now + TOAST_MS[tone],
+    job_id: j.job_id,
+    ...(j.targets?.length ? { targets: j.targets } : {}),
+  };
 }
 
 /** The data part of a store after `events` (pure; the store's ingest). Events are aged by hub time. */
@@ -298,7 +313,7 @@ export function createLiveStore(): LiveStore {
       set((s) => ({
         toasts: [
           ...s.toasts,
-          { id: `t${++toastSeq}`, tone: t.tone, title: t.title, ...(t.body ? { body: t.body } : {}), ...(t.job_id ? { job_id: t.job_id } : {}), at: hub, until: hub + (t.ttlMs ?? TOAST_MS[t.tone]) },
+          { id: `t${++toastSeq}`, tone: t.tone, title: t.title, ...(t.body ? { body: t.body } : {}), ...(t.job_id ? { job_id: t.job_id } : {}), ...(t.code ? { code: t.code } : {}), at: hub, until: hub + (t.ttlMs ?? TOAST_MS[t.tone]) },
         ],
       })),
     dismiss: (id) => set((s) => ({ toasts: s.toasts.filter((t) => t.id !== id) })),

@@ -4,7 +4,7 @@
 
 import { describe, expect, it } from 'vitest';
 
-import { createRest, OpError, opMissing, remedies, type FetchLike } from '../src/api/rest.ts';
+import { createRest, OpError, opMissing, peopleRemedies, remedies, type FetchLike } from '../src/api/rest.ts';
 import type { OpInput, OpOutput } from '../src/api/types.ts';
 
 function fakeFetch(reply: (url: string, body: unknown) => { status?: number; body: unknown } | Error) {
@@ -54,6 +54,9 @@ describe('dashboard REST client', () => {
     const e = err as OpError;
     expect([e.code, e.retryable, e.cursor, e.message]).toEqual(['PORT_BUSY_EXTERNAL', true, 'c:3.41', '/dev/cu.usbmodem1 is held by Google Chrome (pid 715)']);
     expect(remedies(e)).toEqual(['a Web Serial page holds it', 'close the tab', 'run `fr ports ls`', 'use port_list']);
+    // a page says the human steps, never an agent's tool name, and a command only when nothing else is said
+    expect(peopleRemedies(e)).toEqual(['a Web Serial page holds it', 'close the tab']);
+    expect(peopleRemedies({ remediation: [{ cli: 'fr ports ls', tool: 'port_list' }] })).toEqual(['in Terminal: fr ports ls']);
     expect(e.toToolError()).toMatchObject({ code: 'PORT_BUSY_EXTERNAL', retryable: true });
     expect(f.calls[0]!.url).toBe('/api/v1/op/device_provision');
     // A hub of another version that lacks an op answers NOT_FOUND "unknown op <name>": shown as not there yet.
@@ -69,6 +72,18 @@ describe('dashboard REST client', () => {
     await expect(html.op('hub_status', {})).rejects.toMatchObject({ code: 'INTERNAL', message: 'hub_status: HTTP 502 without a Result envelope' });
     const failed = createRest({ fetch: fakeFetch(() => ({ status: 421, body: { ok: false, cursor: 'c:1.1' } })).fetch });
     await expect(failed.op('hub_status', {})).rejects.toMatchObject({ code: 'INTERNAL', message: 'hub_status failed (HTTP 421)' });
+  });
+
+  it('calls a hub that does not answer in time unreachable, except for an op that runs long', async () => {
+    const hang: FetchLike = (_url, init) =>
+      new Promise((_resolve, reject) => init.signal?.addEventListener('abort', () => reject(new DOMException('aborted', 'AbortError'))));
+    const rest = createRest({ fetch: hang, timeoutMs: 20 });
+    await expect(rest.op('hub_status', {})).rejects.toMatchObject({ code: 'HUB_UNREACHABLE', message: 'the hub did not answer in time' });
+    let settled = false;
+    const long = rest.op('hub_doctor', {}, { long: true }).finally(() => (settled = true));
+    await new Promise((r) => setTimeout(r, 60));
+    expect(settled).toBe(false);
+    void long.catch(() => {});
   });
 
   it('types inputs and outputs by op', () => {

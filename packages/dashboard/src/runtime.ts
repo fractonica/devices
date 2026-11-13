@@ -18,13 +18,17 @@ import { TERMINAL_JOB_STATUSES } from './api/types.ts';
 import { HubClock } from './state/clock.ts';
 import { invalidationsFor, jobInvalidations } from './state/invalidate.ts';
 import { createLiveStore } from './state/live.ts';
+import { linkStatus } from './shell/link.ts';
 
 /** Seed size: the newest events the store starts with. */
 const SEED_EVENTS = 200;
 const EVENT_BATCH_MS = 50;
 const INVALIDATE_MS = 300;
 
-export const rest = createRest();
+/** An op that has not answered in this long is the hub not answering (HUB_UNREACHABLE), not a page that waits. */
+export const OP_TIMEOUT_MS = 10_000;
+
+export const rest = createRest({ timeoutMs: OP_TIMEOUT_MS });
 export const store = createLiveStore();
 export const hubClock = new HubClock();
 
@@ -84,7 +88,10 @@ export async function startLive(): Promise<void> {
   }
   started = true;
   live.listen({
-    status: (s) => store.getState().setConn(s),
+    status: (s) => {
+      linkStatus(s);
+      store.getState().setConn(s);
+    },
     hello: (_h, info) => {
       if (!info.first) {
         void queryClient.invalidateQueries(); // whatever changed while the socket was down

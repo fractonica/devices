@@ -36,19 +36,17 @@ export function HubPage() {
   return (
     <Page title="Hub">
       <Banner />
-      {/* two columns on a wide screen (the instrument with the hub's own health under it; the reading and the fleet),
-          one on a phone in reading order: instrument, reading, fleet, health (CSS display: contents and order) */}
+      {/* in reading order: the instrument, the reading and the fleet, the hub's health; on a wide screen the health sits
+          under the instrument (grid areas: what is drawn and what is read keep one order) */}
       <div className="hub-grid">
-        <div className="hub-col hub-col-left">
-          <TheInstrument />
-          <div className="hub-health">
-            <Health />
-            <Thresholds />
-          </div>
-        </div>
-        <div className="hub-col hub-col-right">
+        <TheInstrument />
+        <div className="hub-col-right">
           <Present />
           <Fleet />
+        </div>
+        <div className="hub-health">
+          <Health />
+          <Thresholds />
         </div>
       </div>
     </Page>

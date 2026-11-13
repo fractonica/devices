@@ -102,12 +102,12 @@ export function DataColumn({ detail, fetchedAt }: { detail: DeviceDetail; fetche
           <>
             <Row label="Links" value={r.links.length ? linksText(r.links, r.gw) : <span className="ash">none open</span>} extra={r.udp_blocked ? 'UDP is blocked on this network: it talks over TCP only' : undefined} />
             <Row label="Signal" value={<Signal rssi={hb?.rssi_ap} />} />
-            <Row label="Last heard" value={heardAt !== null ? <FTime at={heardAt} form="relative" /> : '—'} />
+            <Row label="Last word" value={heardAt !== null ? <FTime at={heardAt} form="relative" /> : '—'} extra="any frame from it, this run" />
           </>
         ) : (
           <Row label="This run" value={<span className="ash">no greeting from it since the hub started</span>} />
         )}
-        <Row label="Last seen" value={detail.last_seen ? <FTime at={detail.last_seen} form="relative" /> : <span className="ash">never</span>} />
+        <Row label="Last greeting" value={detail.last_seen ? <FTime at={detail.last_seen} form="relative" /> : <span className="ash">never</span>} extra={detail.last_seen ? 'its last HELLO to the hub, kept across runs' : undefined} />
       </Section>
       {r ? (
         <Section title="Time">

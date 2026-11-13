@@ -26,7 +26,7 @@ import {
   settledKey,
 } from '../src/state/hub-instrument.ts';
 import { checkName, healthLine } from '../src/state/checks.ts';
-import { bannerItems, fleetSummary, latestThresholds, portName } from '../src/state/hub-home.ts';
+import { bannerItems, fleetSummary, latestThresholds, needsPerson, portName } from '../src/state/hub-home.ts';
 import { pureSafe } from '../src/state/pure-text.ts';
 import { eventWords, fleetCount } from '../src/state/words.ts';
 
@@ -184,12 +184,17 @@ describe('the fleet', () => {
   it('gives each device its last word: the newest live event, else when the registry last heard it', () => {
     const s = fleetSummary(devices, { a1: { type: 'button.down', t_hub_us: 1_791_460_799_000_000 }, a4: { type: 'device.suspect', t_hub_us: 5 } });
     const by = Object.fromEntries(s.rows.map((r) => [r.alias, r.last]));
-    expect(by['porch-analog']).toEqual({ what: 'button.down', at: 1_791_460_799_000_000 });
+    expect(by['porch-analog']).toEqual({ what: 'button down', at: 1_791_460_799_000_000 });
     expect(by['hall-pad']).toEqual({ what: 'went quiet', at: 5 });
     expect(by['bench-analog']).toEqual({ what: 'last heard', at: '2026-10-08T10:00:00Z' });
     expect(by['attic-pad']).toBeNull();
     expect(eventWords({ type: 'device.online' })).toBe('came online');
-    expect(eventWords({ type: 'status.color' })).toBe('status.color');
+    expect(eventWords({ type: 'status.color' })).toBe('color changed');
+    // the hub's own bookkeeping is not a device's last word: when it was last heard instead
+    const internal = fleetSummary(devices, { a5: { type: 'op.called', t_hub_us: 9 } });
+    expect(internal.rows.find((r) => r.alias === 'bench-analog')!.last).toEqual({ what: 'last heard', at: '2026-10-08T10:00:00Z' });
+    // the list puts what needs a look first; the carrier stays lit first
+    expect(s.listRows.map((r) => r.bead)).toEqual([...s.rows.map((r) => r.bead)].sort((a, b) => ['waiting', 'offline', 'idle', 'online'].indexOf(a) - ['waiting', 'offline', 'idle', 'online'].indexOf(b)));
   });
 
   it('counts in words, never a percentage', () => {
@@ -257,8 +262,11 @@ describe('the banner', () => {
     expect(items[1]).toMatchObject({ who: 'desk-pad' });
     expect(items[2]).toMatchObject({ kind: 'lease', port: 'hall-pad', who: 'pid 4242', byJob: false });
     expect(items[3]).toMatchObject({ kind: 'lease', port: 'cu.usbmodem-test-2', who: 'a job', byJob: true });
-    expect(items[4]).toMatchObject({ kind: 'job', title: 'provision desk-pad', stage: 'flash', provision: true });
-    expect(items[5]).toMatchObject({ kind: 'job', title: 'ota', stage: 'queued', provision: false });
+    expect(items[4]).toMatchObject({ kind: 'job', title: 'provisioning desk-pad', stage: 'flash', provision: true });
+    expect(items[5]).toMatchObject({ kind: 'job', title: 'updating', stage: 'queued', provision: false });
+    expect(items.map(needsPerson)).toEqual([true, true, true, false, false, false]);
+    // a job's device by its name, and a sidecar step as the ring's stage
+    expect(bannerItems([], [], [{ job_id: 'j', kind: 'provision', status: 'working', stage: 'write', targets: ['02f200000018'] }], () => 'porch-light')[0]).toMatchObject({ title: 'provisioning porch-light', stage: 'flash' });
     expect(bannerItems([], [{ path: '/dev/x' }], [{ job_id: 'j', kind: 'build', status: 'failed' }])).toEqual([]);
     expect(portName('/dev/cu.usbmodem-test-1')).toBe('cu.usbmodem-test-1');
   });

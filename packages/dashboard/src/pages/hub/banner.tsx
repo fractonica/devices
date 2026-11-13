@@ -1,9 +1,9 @@
-// What waits on a person, at the top of the Hub page: an agent's prompts (a real action at the bench, with the time
-// left), ports lent away from the hub (with Release, which asks in place; never for a port a job holds) and running
-// jobs (a provisioning opens its page). Nothing at all when nothing waits.
+// At the top of the Hub page, what needs a person: an agent's prompts (a real action at the bench, with the time
+// left) and ports lent away from the hub (with Release, which asks in place); then, quietly, what is running: jobs by
+// their device's name and the ring's stage word (each opens its page), and ports a job holds. Nothing at all when nothing waits.
 
 import { useLive, useAct, useOp } from '../../hooks.ts';
-import { bannerItems, type BannerJob } from '../../state/hub-home.ts';
+import { bannerItems, type BannerJob, needsPerson } from '../../state/hub-home.ts';
 import { Button, Caps, engrave, FTime, Row, Section } from '../../ui/index.ts';
 
 export function Banner() {
@@ -11,14 +11,15 @@ export function Banner() {
   const jobs = useLive((s) => s.jobs);
   const ports = useOp('port_list', {});
   const release = useAct('serial_release', { done: (d) => `${d.port} is the hub's again`, refresh: ['port_list'] });
-  const items = bannerItems(Object.values(prompts), ports.data?.ports ?? [], Object.values(jobs) as BannerJob[]);
+  const devices = useOp('device_list', {});
+  const aliasOf = (id: string) => devices.data?.devices.find((d) => d.device_id === id)?.alias ?? id;
+  const items = bannerItems(Object.values(prompts), ports.data?.ports ?? [], Object.values(jobs) as BannerJob[], aliasOf);
   if (!items.length) {
     return null;
   }
-  return (
-    <div className="hub-banner">
-      <Section title="Waiting on you" aside={<Caps>{String(items.length)}</Caps>}>
-        {items.map((item) => {
+  const needs = items.filter(needsPerson);
+  const running = items.filter((i) => !needsPerson(i));
+  const row = (item: (typeof items)[number]) => {
           if (item.kind === 'prompt') {
             return (
               <Row
@@ -64,12 +65,24 @@ export function Banner() {
               bead="waiting"
               beadLabel="running"
               name={<span className="hub-ask">{item.title}</span>}
-              {...(item.provision ? { to: '/provision/$job', params: { job: item.job_id } } : {})}
-              value={<span className="caps lumen-word">{engrave(item.stage)}</span>}
+              to="/provision/$job"
+              params={{ job: item.job_id }}
+              value={<span className="caps ash">{engrave(item.stage)}</span>}
             />
           );
-        })}
-      </Section>
+  };
+  return (
+    <div className="hub-banner">
+      {needs.length ? (
+        <Section title="Needs you" aside={<Caps>{String(needs.length)}</Caps>}>
+          {needs.map(row)}
+        </Section>
+      ) : null}
+      {running.length ? (
+        <Section title="Running" aside={<Caps tone="ash">{String(running.length)}</Caps>}>
+          {running.map(row)}
+        </Section>
+      ) : null}
     </div>
   );
 }

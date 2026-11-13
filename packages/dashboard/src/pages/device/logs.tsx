@@ -62,8 +62,8 @@ export function followLog(t: TermHandle, deviceId: string): () => void {
   };
 }
 
-export function DeviceLog({ deviceId, alias, usb }: { deviceId: string; alias: string; usb: boolean }) {
-  const [open, setOpen] = useState(false);
+export function DeviceLog({ deviceId, alias, usb, openAtFirst = false }: { deviceId: string; alias: string; usb: boolean; openAtFirst?: boolean }) {
+  const [open, setOpen] = useState(openAtFirst);
   return (
     <Section
       title="Log"

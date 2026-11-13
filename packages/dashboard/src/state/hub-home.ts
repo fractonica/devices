@@ -7,6 +7,7 @@
 import type { HubEvent, Prompt } from '@fractonica/protocol/client';
 
 import { type BeadState, presenceBead } from '../ui/bead.tsx';
+import { ringStageWord } from './provision.ts';
 import { eventWords, presenceWord } from './words.ts';
 
 /** The registry row fields the Hub page reads (device_list's DeviceView). */
@@ -34,7 +35,10 @@ export interface FleetRow {
 }
 
 export interface FleetSummary {
+  /** The carrier's order: lit first, as a sibling counter reads. */
   rows: FleetRow[];
+  /** The list's order: what needs a look first (suspect, offline, never heard), then the online ones; by alias within. */
+  listRows: FleetRow[];
   total: number;
   online: number;
   /** Suspect: seen lately, not answering now. */
@@ -48,7 +52,9 @@ export function fleetSummary(devices: readonly FleetDevice[], lastByDevice: Read
     .filter((d) => d.role !== 'fixture')
     .map((d): FleetRow => {
       const e = lastByDevice[d.device_id];
-      const last = e ? { what: eventWords(e), at: e.t_hub_us } : d.last_seen ? { what: 'last heard', at: d.last_seen } : null;
+      // the hub's own bookkeeping about a device (an op called, a registry change, its port) is not its last word
+      const own = e && !hubInternal(e.type) ? e : undefined;
+      const last = own ? { what: eventWords(own), at: own.t_hub_us } : d.last_seen ? { what: 'last heard', at: d.last_seen } : null;
       return {
         device_id: d.device_id,
         alias: d.alias,
@@ -61,6 +67,7 @@ export function fleetSummary(devices: readonly FleetDevice[], lastByDevice: Read
     .sort((a, b) => order(a) - order(b) || a.alias.localeCompare(b.alias));
   return {
     rows,
+    listRows: [...rows].sort((a, b) => attention(a) - attention(b) || a.alias.localeCompare(b.alias)),
     total: rows.length,
     online: rows.filter((r) => r.bead === 'online').length,
     waiting: rows.filter((r) => r.bead === 'waiting').length,
@@ -68,7 +75,17 @@ export function fleetSummary(devices: readonly FleetDevice[], lastByDevice: Read
   };
 }
 
-/** Order on the carrier and in the list: online first, then suspect, offline, never heard; by alias within. */
+/** Event types the hub writes about a device that are not the device's own word. */
+export function hubInternal(type: string): boolean {
+  return /^(op|registry|port|job|hub)\./.test(type);
+}
+
+/** The list's order: suspect first, then offline, never heard, and the online ones last. */
+function attention(r: FleetRow): number {
+  return r.bead === 'waiting' ? 0 : r.bead === 'offline' ? 1 : r.bead === 'idle' ? 2 : 3;
+}
+
+/** Order on the carrier: online first, then suspect, offline, never heard; by alias within. */
 function order(r: FleetRow): number {
   return r.bead === 'online' ? 0 : r.bead === 'waiting' ? 1 : r.bead === 'offline' ? 2 : 3;
 }
@@ -98,6 +115,12 @@ export type BannerItem =
   | { kind: 'job'; key: string; job_id: string; title: string; stage: string; provision: boolean };
 
 const RUNNING = new Set(['queued', 'working', 'running', 'waiting']);
+const JOB_TITLE: Record<string, string> = { provision: 'provisioning', device_provision: 'provisioning', ota: 'updating', build: 'building', flash: 'flashing', deploy: 'deploying' };
+
+/** Whether a banner item waits on a person (a prompt, a port lent to a program) rather than runs by itself (a job). */
+export function needsPerson(item: BannerItem): boolean {
+  return item.kind === 'prompt' || (item.kind === 'lease' && !item.byJob);
+}
 
 /** The last part of a port path ("/dev/cu.usbmodem1101" → "cu.usbmodem1101"). */
 export function portName(path: string): string {
@@ -109,7 +132,7 @@ export function portName(path: string): string {
  * from the hub (its devices are not heard over USB meanwhile), then running jobs. Expired prompts are dropped by the
  * live store; leases that have ended are not in port_list.
  */
-export function bannerItems(prompts: readonly Prompt[], ports: readonly BannerPort[], jobs: readonly BannerJob[] = []): BannerItem[] {
+export function bannerItems(prompts: readonly Prompt[], ports: readonly BannerPort[], jobs: readonly BannerJob[] = [], aliasOf: (id: string) => string = (id) => id): BannerItem[] {
   const items: BannerItem[] = [];
   for (const p of [...prompts].sort((a, b) => a.expires_at.localeCompare(b.expires_at))) {
     items.push({ kind: 'prompt', key: p.prompt_id, text: p.text, who: p.selector ?? '', until: p.expires_at });
@@ -122,8 +145,15 @@ export function bannerItems(prompts: readonly Prompt[], ports: readonly BannerPo
   }
   for (const j of jobs) {
     if (RUNNING.has(j.status)) {
-      const target = j.targets?.length ? ` ${j.targets.join(', ')}` : '';
-      items.push({ kind: 'job', key: j.job_id, job_id: j.job_id, title: `${j.kind.replace(/_/g, ' ')}${target}`, stage: j.stage ?? j.status, provision: j.kind === 'provision' || j.kind === 'device_provision' });
+      const target = j.targets?.length ? ` ${j.targets.map(aliasOf).join(', ')}` : '';
+      items.push({
+        kind: 'job',
+        key: j.job_id,
+        job_id: j.job_id,
+        title: `${JOB_TITLE[j.kind] ?? j.kind.replace(/_/g, ' ')}${target}`,
+        stage: j.stage ? ringStageWord(j.stage) : j.status === 'queued' ? 'queued' : 'running',
+        provision: j.kind === 'provision' || j.kind === 'device_provision',
+      });
     }
   }
   return items;

@@ -1,19 +1,21 @@
 // The fleet beside the instrument: every device as a bead on one carrier (lit first, as a sibling counter reads),
-// then one row per device in the same order: its bead, its name, its last word (the newest live event, or when the
+// then a row per device, what needs a look first (suspect, offline, never heard), at most MAX_ROWS (all on Devices): its bead, its name, its last word (the newest live event, or when the
 // registry last heard it) as a span from now, and what it is. A row opens the device. No devices yet: an invitation
 // to provision, the page's one primary action.
 
 import { useNavigate } from '@tanstack/react-router';
+import type { CSSProperties } from 'react';
 
 import { useLive, useOp } from '../../hooks.ts';
 import { type FleetRow, fleetSummary } from '../../state/hub-home.ts';
 import { fleetCount } from '../../state/words.ts';
+import { usePresence } from '../../shell/link.ts';
 import { Bead, Button, Caps, EmptyState, ErrorLine, FTime, Pending, Row, Section } from '../../ui/index.ts';
 
 /** The fleet on a carrier: one bead per device on a hairline, in the list's order. */
 export function FleetCarrier({ rows, label }: { rows: readonly FleetRow[]; label: string }) {
   return (
-    <div className="hub-carrier" role="img" aria-label={label}>
+    <div className="hub-carrier" role="img" aria-label={label} style={{ '--n': rows.length } as CSSProperties}>
       {rows.map((r) => (
         <span key={r.device_id} className="hub-carrier-bead" data-state={r.bead}>
           <Bead state={r.bead} size={9} label={`${r.alias}: ${r.presence}`} />
@@ -34,10 +36,14 @@ function LastWord({ row }: { row: FleetRow }) {
   );
 }
 
+/** Rows the Hub page lists (the rest are on Devices). */
+const MAX_ROWS = 10;
+
 export function Fleet() {
   const navigate = useNavigate();
   const devices = useOp('device_list', { selector: 'all' });
   const lastByDevice = useLive((s) => s.lastByDevice);
+  const presence = usePresence();
   if (devices.isPending) {
     return (
       <Section title="Fleet">
@@ -52,7 +58,10 @@ export function Fleet() {
       </Section>
     );
   }
-  const s = fleetSummary(devices.data.devices, lastByDevice);
+  const s = fleetSummary(
+    devices.data.devices.map((d) => ({ ...d, presence: presence(d.presence) ?? d.presence })),
+    lastByDevice,
+  );
   if (s.total === 0) {
     return (
       <Section title="Fleet">
@@ -70,11 +79,13 @@ export function Fleet() {
     );
   }
   const count = fleetCount(s);
+  // the page is a summary: what needs a look first, then the rest up to MAX_ROWS; all of them are a link away
+  const shown = s.listRows.slice(0, MAX_ROWS);
   return (
     <Section title="Fleet" aside={<Caps tone={s.online === s.total ? 'lumen' : 'ash'}>{count}</Caps>}>
       <FleetCarrier rows={s.rows} label={`Fleet: ${count}`} />
       <div className="hub-fleet-rows">
-        {s.rows.map((r) => (
+        {shown.map((r) => (
           <Row
             key={r.device_id}
             id={`device-${r.alias}`}
@@ -91,6 +102,7 @@ export function Fleet() {
             value={<LastWord row={r} />}
           />
         ))}
+        {s.total > shown.length ? <Row id="all-devices" label={`all ${s.total} on Devices`} to="/devices" value={<span className="ash">{`${s.total - shown.length} more`}</span>} /> : null}
       </div>
     </Section>
   );

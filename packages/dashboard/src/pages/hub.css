@@ -13,13 +13,10 @@
   gap: var(--sp-5);
 }
 
-/* one column: the two columns' parts in reading order (instrument, reading, fleet, health) */
-.hub-col {
-  display: contents;
-}
-
+/* The parts in reading order in the source (instrument, reading and fleet, health), so keyboard and screen reader
+   follow what is drawn: one column on a phone; on a wide screen the instrument with the health under it on the left,
+   the reading and the fleet on the right (grid areas, no reordering). */
 .hub-instrument {
-  order: 1;
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -29,16 +26,14 @@
   margin: 0 auto;
 }
 
-.hub-present {
-  order: 2;
-}
-
-.hub-col-right > .ui-section {
-  order: 3;
+.hub-col-right {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-5);
+  min-width: 0;
 }
 
 .hub-health {
-  order: 4;
   display: flex;
   flex-direction: column;
   gap: var(--sp-4);
@@ -49,20 +44,27 @@
   .hub-grid {
     display: grid;
     grid-template-columns: minmax(340px, 440px) minmax(0, 1fr);
-    gap: var(--sp-6);
+    grid-template-rows: auto 1fr;
+    grid-template-areas:
+      'instrument right'
+      'health right';
+    column-gap: var(--sp-6);
+    row-gap: var(--sp-5);
     align-items: start;
   }
 
-  .hub-col {
-    display: flex;
-    flex-direction: column;
-    gap: var(--sp-5);
-    min-width: 0;
-  }
-
   .hub-instrument {
+    grid-area: instrument;
     max-width: 440px;
     margin: 0;
+  }
+
+  .hub-col-right {
+    grid-area: right;
+  }
+
+  .hub-health {
+    grid-area: health;
   }
 }
 
@@ -283,9 +285,11 @@
 /* -------------------------------------------------------------- the fleet */
 
 /* the carrier: one hairline through the beads, joined bead to bead (it wraps with them on a long fleet) */
+/* one hairline whatever the count: the beads close up to fit (never a second line) */
 .hub-carrier {
+  container-type: inline-size;
   display: flex;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
   align-items: center;
   row-gap: var(--sp-3);
   padding: var(--sp-4) 0 var(--sp-3);
@@ -294,7 +298,8 @@
 .hub-carrier-bead {
   position: relative;
   display: inline-flex;
-  padding: 0 7px;
+  flex: 0 1 auto;
+  padding: 0 max(0.5px, min(7px, calc((100cqw / var(--n, 1) - 9px) / 2)));
 }
 
 .hub-carrier-bead::before {
@@ -343,17 +348,17 @@
   vertical-align: middle;
 }
 
-.hub-check-name {
-  color: var(--c-bone);
-}
 
 .hub-check-detail {
   color: var(--c-ash);
 }
 
 .hub-fix {
-  font-family: var(--mono);
   color: var(--c-bone);
+}
+
+.hub-fix .ui-code {
+  font-size: var(--fs-earth);
 }
 
 .hub-thresholds {

@@ -10,6 +10,7 @@
 // - The events the instance can raise, and its last one as a Fractonica time; its row lights on an input.
 // - fr.display keeps its snapshot, tap and layout preview (display.tsx).
 
+import { Link } from '@tanstack/react-router';
 import { useMemo, useState } from 'react';
 
 import { CATALOG, type CatalogCapability, type CatalogCommand, type CatalogProperty } from '@fractonica/protocol/gen';
@@ -378,9 +379,22 @@ export function Capabilities({ detail }: { detail: DeviceDetail }) {
       {q.error && !opMissing(q.error) ? <ErrorLine error={q.error} what="The capability list" /> : null}
       {!rows.length ? (
         <Section title="Capabilities">
-          <EmptyState title="No capabilities known yet">
-            The device says what it has when it greets the hub. {detail.presence === 'online' ? 'It has not said yet this run.' : 'Power it and it will.'}
-          </EmptyState>
+          {detail.provision && detail.presence !== 'online' && !detail.last_seen ? (
+            <EmptyState
+              title="Provisioned, not on Wi-Fi yet"
+              action={
+                <Link to="/provision" className="ui-button" data-variant="default">
+                  <span className="ui-button-text">{engrave('Provision it again')}</span>
+                </Link>
+              }
+            >
+              It answered over USB when it was flashed but has not greeted the hub over Wi-Fi. Check its network in Settings › Networks (the name and the password), or provision it again.
+            </EmptyState>
+          ) : (
+            <EmptyState title="No capabilities known yet">
+              The device says what it has when it greets the hub. {detail.presence === 'online' ? 'It has not said yet this run.' : 'Once it is powered and on the network, it will.'}
+            </EmptyState>
+          )}
         </Section>
       ) : null}
       {rows.map(({ inst, cap }) => (

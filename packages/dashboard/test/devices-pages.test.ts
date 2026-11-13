@@ -28,6 +28,7 @@ vi.mock('@tanstack/react-router', async () => {
       react.createElement('a', { href: `#${to.replace('$id', params?.id ?? '')}`, className }, children),
     useParams: () => ({ id: h.id }),
     useNavigate: () => () => {},
+    useSearch: () => ({}),
   };
 });
 // CSS imports are nothing in node
@@ -156,7 +157,7 @@ describe('the Device page', () => {
     const html = render(createElement(device.DevicePage));
     expect(html).toContain('data-device-page="desk-pad"');
     // fr.led: on is a switch, brightness a slider, color a colour well, all sending `set`; set's own form is hidden
-    expect(html).toMatch(/role="switch" aria-checked="true" aria-label="status on"/);
+    expect(html).toMatch(/role="switch" aria-checked="true" aria-label="status state"/);
     expect(html).toMatch(/type="range"[^>]*aria-label="status brightness"/);
     expect(html).toMatch(/type="color"[^>]*value="#ff8800"/);
     expect(html).not.toContain('data-command="status.set"');

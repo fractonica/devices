@@ -1,25 +1,28 @@
 // Settings › Health: the hub's checks (hub_doctor, run in the hub: toolchain, ESP-IDF, the sidecar, firewall, LAN,
 // serial ports, Local Network, the advert, the event loop), each a bead with its fix; the hub's warnings
-// (hub_status); and the hub itself (version, started, jobs, the sleep guard). The hub runs no fix itself: a command fix
-// is copied to run in Terminal, a port fix opens Ports, a System Settings fix is said as steps. In pure mode the
+// (hub_status); and the hub itself (version, started, jobs, the sleep guard). `fr doctor --fix` the hub runs itself
+// (Run fix: hub_doctor_fix); another command is copied to run in Terminal, a port fix opens Ports, a System Settings fix
+// is said as steps. In pure mode the
 // hub's texts are said with useHubText (state/pure-text.ts): durations as spans, other Earth measures left out.
 
 import { Link } from '@tanstack/react-router';
 
 import { useOp } from '../../hooks.ts';
+import { useDoctor } from '../shared/doctor.ts';
 import { checkBead, checkFix, checkName, healthLine, sortChecks } from '../../state/checks.ts';
 import { Bead, Button, Caps, Code, CopyButton, ErrorLine, FTime, Line, Pending, Row, Section, useHubText, useMode, useSpanOf } from '../../ui/index.ts';
 
 function Checks() {
-  const q = useOp('hub_doctor', {});
+  const d = useDoctor();
+  const q = d.q;
   const say = useHubText();
   const checks = q.data ? sortChecks(q.data.checks) : [];
   const line = q.data ? healthLine(checks) : null;
   const aside = (
     <>
       {line ? <Bead state={line.bead} label={line.word} /> : null}
-      <Caps tone={line?.bead === 'online' ? 'lumen' : 'ash'}>{line ? line.word : q.isFetching ? 'checking' : ''}</Caps>
-      <Button variant="quiet" busy={q.isFetching} onClick={() => void q.refetch()} data-action="recheck">
+      <Caps tone={line?.bead === 'online' ? 'lumen' : 'ash'}>{line ? line.word : d.checking ? 'checking' : ''}</Caps>
+      <Button variant="quiet" busy={d.checking} onClick={d.checkAgain} data-action="recheck">
         Check again
       </Button>
     </>
@@ -28,6 +31,20 @@ function Checks() {
     <Section title="Checks" aside={aside} id="checks">
       {q.error ? <ErrorLine error={q.error} what="Checks" fix={{ label: 'Try again', onClick: () => void q.refetch() }} /> : null}
       {!q.data && !q.error ? <Pending word="running" what="the checks" /> : null}
+      {q.data?.checked_at ? (
+        <Row
+          id="checked"
+          label="Checked"
+          value={<FTime at={q.data.checked_at} form="relative" />}
+          actions={
+            d.fixable.length ? (
+              <Button variant="primary" busy={d.fixing} onClick={d.runFixes} data-action="run-fixes">
+                {d.fixable.length === 1 ? 'Run the fix' : `Run ${d.fixable.length} fixes`}
+              </Button>
+            ) : undefined
+          }
+        />
+      ) : null}
       {checks.map((c) => {
         const fix = c.level === 'ok' ? null : checkFix(c);
         return (
@@ -45,6 +62,11 @@ function Checks() {
                   <span className="set-fix">
                     <Caps>fix</Caps> {fix.kind === 'command' ? <Code>{fix.command}</Code> : say(fix.text)}
                   </span>
+                  {fix.kind === 'hub' ? (
+                    <Button busy={d.fixing} onClick={d.runFixes} data-action="run-fix" aria-label={`Run the fix: ${checkName(c.id)}`}>
+                      Run fix
+                    </Button>
+                  ) : null}
                   {fix.kind === 'command' ? <CopyButton text={fix.command} label="Copy command" what={checkName(c.id)} /> : null}
                   {fix.kind === 'page' ? (
                     <Link to={fix.to as never} params={fix.params as never} className="ui-button" data-variant="default">
@@ -58,7 +80,7 @@ function Checks() {
         );
       })}
       {checks.some((c) => checkFix(c)?.kind === 'command' && c.level !== 'ok') ? (
-        <p className="set-note">The hub runs no fix by itself: copy a command and run it in Terminal on this Mac, then check again.</p>
+        <p className="set-note">A command the hub cannot run for you: copy it, run it in Terminal on this Mac, then check again.</p>
       ) : null}
     </Section>
   );
