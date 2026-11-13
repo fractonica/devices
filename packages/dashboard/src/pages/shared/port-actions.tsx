@@ -10,6 +10,7 @@ import type { PortInfo } from '@fractonica/protocol/client';
 import { useAct } from '../../hooks.ts';
 import { lendChoices, PORT_ACTION_LABEL, type PortAction, portView } from '../../state/ports.ts';
 import { Button, ErrorLine, useFractonica, useMode } from '../../ui/index.ts';
+import { useInPlace } from '../../ui/in-place.ts';
 
 /** The lend choices, from the core (null while it loads). */
 function useLendChoices() {
@@ -21,23 +22,20 @@ function useLendChoices() {
   return lendChoices(frc as never, cat.intervalAt(frc.now()));
 }
 
-function civil(s: number): string {
-  const m = Math.floor(s / 60);
-  const r = s % 60;
-  return m ? (r ? `${m} min ${r} s` : `${m} min`) : `${r} s`;
-}
-
 function LendChoice({ port, onDone }: { port: PortInfo; onDone: () => void }) {
   const choices = useLendChoices();
+  const core = useFractonica();
   const { earth } = useMode();
   const name = portView(port).name;
+  const box = useInPlace<HTMLSpanElement>(`lend:${port.path}`, onDone);
   const lend = useAct('port_lend', { done: () => `${name} lent`, refresh: ['port_list'] });
   return (
-    <span className="ui-lend" role="group" aria-label={`Lend ${name} for`}>
+    <span className="ui-lend" role="group" aria-label={`Lend ${name} for`} ref={box}>
+      <span className="ui-lend-why">The hub lets go of the port so another program (a serial monitor, a browser) can open it, and takes it back after.</span>
       <span className="ui-lend-q">Lend for</span>
       {(choices ?? []).map((c) => (
         <Button key={c.ttl_s} busy={lend.isPending} data-action="lend" data-ttl={c.ttl_s} onClick={() => lend.mutate({ port: port.path, ttl_s: c.ttl_s }, { onSuccess: onDone })}>
-          {earth ? `${c.label} ⊕ ${civil(c.ttl_s)}` : c.label}
+          {earth && core ? `${c.label} ⊕ ${core.frc.formatDuration(BigInt(c.ttl_s) * 1_000_000n, 2)}` : c.label}
         </Button>
       ))}
       <Button variant="quiet" onClick={onDone}>
@@ -73,7 +71,16 @@ export function PortActions({ port, only }: { port: PortInfo; only?: readonly Po
       {v.actions
         .filter((a) => !only || only.includes(a))
         .map((a) => (
-          <Button key={a} variant={a === 'release' ? 'default' : 'quiet'} busy={busy} onClick={run[a]} data-action={a} aria-label={`${PORT_ACTION_LABEL[a]} ${v.name}`}>
+          <Button
+            key={a}
+            variant={a === 'release' ? 'default' : 'quiet'}
+            busy={busy}
+            onClick={run[a]}
+            data-action={a}
+            data-opens={a === 'lend' ? `lend:${port.path}` : undefined}
+            aria-label={`${PORT_ACTION_LABEL[a]} ${v.name}`}
+            {...(a === 'release' ? { confirm: `Take ${v.name} back${port.lease?.holder_pid ? ` from process ${port.lease.holder_pid}` : ''}? Its program loses the port.`, confirmLabel: 'Release' } : {})}
+          >
             {PORT_ACTION_LABEL[a]}
           </Button>
         ))}

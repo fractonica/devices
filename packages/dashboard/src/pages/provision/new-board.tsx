@@ -8,7 +8,7 @@
 //   job frames with job_get as the fallback (store.ts), its page `/provision/<job>` so a reload resumes it;
 // - device.online events and device_get for the board's first HELLO; job_cancel; node.identify.
 
-import { Link, useNavigate } from '@tanstack/react-router';
+import { Link, useNavigate, useRouterState } from '@tanstack/react-router';
 import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
 
 import type { PortInfo } from '@fractonica/protocol/client';
@@ -21,6 +21,7 @@ import { pendingPrompts } from '../../state/live.ts';
 import {
   aliasTaken,
   chainSearch,
+  choiceSearch,
   chipFromError,
   defaultAlias,
   errorFixKind,
@@ -31,7 +32,6 @@ import {
   provisionDial,
   stageWord,
 } from '../../state/provision.ts';
-import { earthless } from '../../state/pure-text.ts';
 import { suggestPort } from '../../state/ports.ts';
 import {
   buildReady,
@@ -45,7 +45,7 @@ import {
   wizardDeviceId,
   type WizardKnown,
 } from '../../state/wizard.ts';
-import { Bead, Button, ButtonRow, engrave, ErrorLine, FTime, Row, TextField, useMode } from '../../ui/index.ts';
+import { Bead, Button, ButtonRow, engrave, ErrorLine, FTime, Row, TextField, useHubText } from '../../ui/index.ts';
 import { ChoiceRow, Choices } from './choice.tsx';
 import { Dial, type DialCentre } from './dial.tsx';
 import { JobOutput } from './job-output.tsx';
@@ -69,15 +69,46 @@ export function usePhone(): boolean {
   );
 }
 
-function Step({ n, status, title, summary, onChange, children }: { n: number; status: PageStepStatus; title: string; summary?: React.ReactNode; onChange?: () => void; children?: React.ReactNode }) {
+function Step({
+  n,
+  status,
+  title,
+  summary,
+  onChange,
+  children,
+  here = false,
+}: {
+  n: number;
+  status: PageStepStatus;
+  title: string;
+  summary?: React.ReactNode;
+  onChange?: () => void;
+  children?: React.ReactNode;
+  /** The one step the person is on (aria-current, and focus moves to its title when it becomes so). */
+  here?: boolean;
+}) {
   const open = status === 'current' || status === 'failed';
+  const head = useRef<HTMLHeadingElement>(null);
+  const was = useRef<boolean | null>(null);
+  useEffect(() => {
+    // a step change after a press (Continue, Provision, Change): focus follows to the step now open. On the page's
+    // first draw only when focus was dropped (the job's page opened by Provision, a later step): never the first step.
+    const first = was.current === null;
+    const lost = !document.activeElement || document.activeElement === document.body;
+    if (here && (first ? lost && n > 1 : !was.current) && !head.current?.closest('section')?.contains(document.activeElement)) {
+      head.current?.focus({ preventScroll: first });
+    }
+    was.current = here;
+  }, [here]);
   return (
-    <section className="prov-step" data-status={status} aria-current={open ? 'step' : undefined} aria-label={title}>
+    <section className="prov-step" data-status={status} aria-current={here ? 'step' : undefined} aria-label={title}>
       <header className="prov-step-head">
         <span className="prov-step-n" aria-hidden="true">
           {n}
         </span>
-        <h2 className="prov-step-title caps">{engrave(title)}</h2>
+        <h2 className="prov-step-title caps" ref={head} tabIndex={-1}>
+          {engrave(title)}
+        </h2>
         {status === 'done' && summary ? <span className="prov-step-summary">{summary}</span> : null}
         {status === 'done' && onChange ? (
           <Button variant="quiet" onClick={onChange} aria-label={`Change the ${title.toLowerCase()}`}>
@@ -90,19 +121,25 @@ function Step({ n, status, title, summary, onChange, children }: { n: number; st
   );
 }
 
-/** A WizardError as an OpError for ErrorLine; a CLI line is dropped when the page offers the fix itself. */
-function asOpError(e: WizardError, hasFix: boolean, earth: boolean): OpError {
-  const pure = (x: string) => (earth ? x : earthless(x));
-  const human = hasFix ? e.human.filter((h) => !h.startsWith('run `')) : e.human;
-  return new OpError({ code: e.code as never, message: pure(e.message), retryable: false, remediation: human.map((h) => ({ human: pure(h) })) });
+/** A WizardError as an OpError for ErrorLine (which says it in the mode's units); a CLI line is dropped when the page offers the fix itself. */
+function asOpError(e: WizardError, hasFix: boolean): OpError {
+  const human = hasFix ? e.human.filter((h) => !h.startsWith('run `')) : e.human.map((h) => h.replace(/^run `([^`]+)`$/, 'in Terminal: $1'));
+  return new OpError({ code: e.code as never, message: e.message, retryable: false, remediation: human.map((h) => ({ human: h })) });
 }
 
 export function NewBoard() {
   const s = useWizard();
   const navigate = useNavigate();
   const phone = usePhone();
-  const { earth } = useMode();
   const choosing = s.step === 'closed' || s.step === 'detect';
+  const path = useRouterState({ select: (r) => r.location.pathname });
+  // back to an earlier step; on a job's page the steps go on at /provision (the job's URL would resume the job)
+  const gotoStep = ({ step }: { step: 'detect' | 'network' | 'profile' }) => {
+    dispatch({ type: 'goto', step });
+    if (path !== '/provision') {
+      void navigate({ to: '/provision' });
+    }
+  };
   const ports = useOp('port_list', {}, { refetchInterval: choosing ? 2000 : false });
   const devices = useOp('device_list', {});
   const networks = useOp('network_list', {});
@@ -234,7 +271,8 @@ export function NewBoard() {
       (j) => {
         dispatch({ type: 'job', job: j, full: true });
         recordTimes(j);
-        void navigate({ to: '/provision/$job', params: { job: j.job_id }, replace: getWizard().build !== null });
+        const w = getWizard();
+        void navigate({ to: '/provision/$job', params: { job: j.job_id }, replace: w.build !== null, search: choiceSearch(w) as never });
       },
       (e: unknown) => dispatch({ type: 'failed', error: e instanceof OpError ? e.toToolError() : { code: 'INTERNAL', message: String(e), retryable: false } }),
     );
@@ -265,7 +303,7 @@ export function NewBoard() {
     }
   });
 
-  const cancel = useAct('job_cancel', { done: () => 'Cancelling', refresh: ['job_list'] });
+  const cancel = useAct('job_cancel', { refresh: ['job_list'] });
   const identify = useAct('command_send', {
     done: (r) => (r.results[0]?.status === 'ok' ? 'The board shows itself' : { tone: 'warn', title: `Identify: ${r.results[0]?.status ?? 'no answer'}` }),
   });
@@ -294,6 +332,8 @@ export function NewBoard() {
   const prompt = Object.values(prompts).find((p) => promptForWizard(s, p) && pendingPrompts({ prompts }, hubClock.now()).includes(p));
 
   const dial = provisionDial(s);
+  // the one step the person is on (board and name are one: the board's step carries it)
+  const here = s.step === 'closed' || s.step === 'detect' ? 0 : s.step === 'network' ? 1 : s.step === 'profile' ? 2 : s.step === 'flash' ? 4 : 5;
   const resultOf = (k: string) => (s.result as unknown as Record<string, unknown> | null)?.[k] as string | undefined;
   // A job opened from its URL: its times come from job_get once (the follow is over).
   const timesOf = s.job && !times[s.job.job_id] ? s.job.job_id : '';
@@ -318,21 +358,40 @@ export function NewBoard() {
       ? { word: s.result.wifi === 'not_joined' ? 'flashed' : 'done', sub: s.result.wifi === 'not_joined' ? 'not on wi-fi' : `${dial.stages.length} of ${dial.stages.length}`, ...(elapsed ? { reading: elapsed } : {}) }
       : {
           word: dial.word ?? (dial.current >= dial.stages.length ? 'done' : stageWord(dial.stages[Math.min(dial.current, dial.stages.length - 1)]!)),
-          sub: dial.failed ? 'stopped' : `${Math.min(dial.current + 1, dial.stages.length)} of ${dial.stages.length}`,
+          sub: dial.failed || dial.stopped ? `at ${stageWord(dial.stages[Math.min(dial.current, dial.stages.length - 1)]!)}` : `${Math.min(dial.current + 1, dial.stages.length)} of ${dial.stages.length}`,
           ...(elapsed ? { reading: elapsed } : {}),
         };
+
+  // what a screen reader hears: each stage as it starts, and how it ended (never a fraction)
+  const stageAt = stageWord(dial.stages[Math.min(dial.current, dial.stages.length - 1)]!);
+  const announce = idle
+    ? ''
+    : s.step === 'done' && s.result
+      ? s.result.wifi === 'not_joined'
+        ? `Flashed ${s.result.alias}, but it did not join the Wi-Fi`
+        : `Provisioned ${s.result.alias}`
+      : s.error
+        ? `Stopped at ${stageAt}: ${s.error.message}`
+        : dial.stopped
+          ? `Stopped at ${stageAt}`
+          : s.job || s.build
+            ? `${stageAt}, stage ${Math.min(dial.current + 1, dial.stages.length)} of ${dial.stages.length}`
+            : 'Starting';
 
   const errorFix = (() => {
     const e = s.error;
     const kind = e ? errorFixKind(e) : null;
     if (kind === 'port') {
-      return { label: 'Back to the port', onClick: () => dispatch({ type: 'goto', step: 'detect' }) };
+      return { label: 'Back to the port', onClick: () => gotoStep({ step: 'detect' }) };
     }
     if (kind === 'network') {
-      return { label: 'Choose the network', onClick: () => dispatch({ type: 'goto', step: 'network' }) };
+      return { label: 'Choose the network', onClick: () => gotoStep({ step: 'network' }) };
     }
     if (kind === 'profile') {
-      return { label: 'Choose the profile', onClick: () => dispatch({ type: 'goto', step: 'profile' }) };
+      return { label: 'Choose the profile', onClick: () => gotoStep({ step: 'profile' }) };
+    }
+    if (kind === 'name') {
+      return { label: 'Choose another name', onClick: () => gotoStep({ step: 'profile' }) };
     }
     if (kind === 'retry') {
       return { label: 'Try again', onClick: () => (s.build && s.build.status !== 'completed' ? startBuild() : startProvision()) };
@@ -343,25 +402,29 @@ export function NewBoard() {
   return (
     <div className="prov-board" data-step={s.step}>
       <aside className="prov-instrument">
-        {phone && idle ? null : <Dial view={dial} idle={idle} size={phone ? 232 : 320} centre={centre} label={portName ? `Provisioning on ${portName}` : 'Provisioning'} />}
+        <Dial view={dial} idle={idle} size={phone ? (idle ? 168 : 232) : 320} centre={centre} label={portName ? `Provisioning on ${portName}` : 'Provisioning'} />
         {s.step === 'flash' && runningJob && !s.error ? (
           <ButtonRow>
             <Button
               variant="destructive"
               confirm="Stop provisioning? The board may be left half written."
               confirmLabel="Stop"
+              cancelLabel="Keep going"
               busy={cancel.isPending}
               onClick={() => cancel.mutate({ job_id: runningJob.job_id })}
               data-action="cancel"
             >
-              Cancel
+              Stop
             </Button>
           </ButtonRow>
         ) : null}
+        <p className="sr-only" role="status" aria-live="polite">
+          {announce}
+        </p>
       </aside>
 
       <div className="prov-steps">
-        <Step n={1} status={statusOf(0)} title="Plug in" summary={<>{s.known?.alias ?? s.result?.alias ?? 'New board'} <span className="mono ash">{portName}</span></>} onChange={jobRunning(s) ? undefined : () => dispatch({ type: 'goto', step: 'detect' })}>
+        <Step n={1} here={here === 0} status={statusOf(0)} title="Plug in" summary={<>{s.known?.alias ?? s.result?.alias ?? (s.resumed ? '' : 'New board')} <span className="mono ash">{portName}</span></>} onChange={jobRunning(s) ? undefined : () => gotoStep({ step: 'detect' })}>
           <PortsStep
             ports={ports.data?.ports}
             error={ports.error}
@@ -381,7 +444,7 @@ export function NewBoard() {
           />
         </Step>
 
-        <Step n={2} status={statusOf(1)} title="Network" summary={net?.ssid ?? resultOf('ssid')} onChange={jobRunning(s) ? undefined : () => dispatch({ type: 'goto', step: 'network' })}>
+        <Step n={2} here={here === 1} status={statusOf(1)} title="Network" summary={net?.ssid ?? resultOf('ssid') ?? (s.resumed ? '—' : undefined)} onChange={jobRunning(s) ? undefined : () => gotoStep({ step: 'network' })}>
           <NetworkStep
             s={s}
             error={networks.error}
@@ -394,7 +457,7 @@ export function NewBoard() {
           />
         </Step>
 
-        <Step n={3} status={statusOf(2)} title="Board" summary={s.result?.profile ?? (s.profile || 'automatic')} onChange={jobRunning(s) ? undefined : () => dispatch({ type: 'goto', step: 'profile' })}>
+        <Step n={3} here={here === 2} status={statusOf(2)} title="Board" summary={s.result?.profile ?? (s.profile || (s.resumed ? '—' : 'automatic'))} onChange={jobRunning(s) ? undefined : () => gotoStep({ step: 'profile' })}>
           <div className="prov-step-body">
             <p className="prov-lede">
               {s.chip
@@ -440,7 +503,7 @@ export function NewBoard() {
           </div>
         </Step>
 
-        <Step n={4} status={statusOf(3)} title="Name" summary={s.result?.alias ?? (s.alias || fallbackAlias || 'the hub’s default')} onChange={jobRunning(s) ? undefined : () => dispatch({ type: 'goto', step: 'profile' })}>
+        <Step n={4} status={statusOf(3)} title="Name" summary={s.result?.alias ?? (s.alias || (s.resumed ? '—' : fallbackAlias || 'the hub’s default'))} onChange={jobRunning(s) ? undefined : () => gotoStep({ step: 'profile' })}>
           <div className="prov-step-body">
             <TextField
               label="Alias"
@@ -469,7 +532,7 @@ export function NewBoard() {
           </div>
         </Step>
 
-        <Step n={5} status={statusOf(4)} title="Flash" summary={s.job?.status === 'completed' ? `${dial.stages.length} stages` : undefined}>
+        <Step n={5} here={here === 4} status={statusOf(4)} title="Flash" summary={s.job?.status === 'completed' ? `${dial.stages.length} stages` : undefined}>
           <div className="prov-step-body">
             {s.job || s.build ? (
               <Row
@@ -488,12 +551,21 @@ export function NewBoard() {
             {s.error ? (
               <>
                 {s.job?.status === 'cancelled' || s.build?.status === 'cancelled' ? (
-                  <ErrorLine
-                    error={new OpError({ code: 'CANCELLED' as never, message: `Stopped at ${stageWord(dial.stages[Math.min(dial.current, dial.stages.length - 1)]!)}. The board may be half written: provision it again before using it.`, retryable: true })}
-                    fix={errorFix}
+                  <Row
+                    id="stopped"
+                    bead="offline"
+                    beadLabel="stopped"
+                    label="Stopped"
+                    value={`at ${stageWord(dial.stages[Math.min(dial.current, dial.stages.length - 1)]!)}`}
+                    extra="The board may be half written: provision it again before using it."
+                    actions={
+                      <Button onClick={() => (s.build && s.build.status !== 'completed' ? startBuild() : startProvision())} data-action="again">
+                        Provision again
+                      </Button>
+                    }
                   />
                 ) : (
-                  <ErrorLine error={asOpError(s.error, errorFix !== undefined, earth)} what={s.build && s.build.status !== 'completed' ? 'Build' : 'Provision'} fix={errorFix} />
+                  <ErrorLine error={asOpError(s.error, errorFix !== undefined)} what={s.build && s.build.status !== 'completed' ? 'Build' : 'Provision'} fix={errorFix} />
                 )}
                 {s.error.candidates.length ? (
                   <ButtonRow>
@@ -511,8 +583,8 @@ export function NewBoard() {
           </div>
         </Step>
 
-        <Step n={6} status={s.step === 'done' ? 'current' : statusOf(5)} title="Done">
-          {s.step === 'done' ? <Done s={s} identify={() => s.result && identify.mutate({ selector: `id:${s.result.device_id}`, command: 'node.identify', args: { ms: 3000 } })} identifying={identify.isPending} /> : null}
+        <Step n={6} here={here === 5} status={s.step === 'done' ? 'current' : statusOf(5)} title="Done">
+          {s.step === 'done' ? <Done s={s} onNetwork={() => gotoStep({ step: 'network' })} identify={() => s.result && identify.mutate({ selector: `id:${s.result.device_id}`, command: 'node.identify', args: { ms: 3000 } })} identifying={identify.isPending} /> : null}
         </Step>
       </div>
     </div>
@@ -529,9 +601,9 @@ function ProfileBuilt({ profile, data }: { profile: string; data: { profiles: { 
   );
 }
 
-function Done({ s, identify, identifying }: { s: ReturnType<typeof useWizard>; identify: () => void; identifying: boolean }) {
+function Done({ s, identify, identifying, onNetwork }: { s: ReturnType<typeof useWizard>; identify: () => void; identifying: boolean; onNetwork: () => void }) {
   const navigate = useNavigate();
-  const { earth } = useMode();
+  const say = useHubText();
   const r = s.result;
   if (!r) {
     return (
@@ -553,13 +625,21 @@ function Done({ s, identify, identifying }: { s: ReturnType<typeof useWizard>; i
       <Row label="Wi-Fi" value={<Bead state={r.wifi === 'joined' ? 'online' : r.wifi === 'off' ? 'idle' : 'waiting'} label={r.wifi === 'joined' ? 'joined' : r.wifi === 'off' ? 'radio off' : 'not joined'} showLabel />} />
       <Row label="On the hub" value={<Bead state={s.online ? 'online' : 'waiting'} label={s.online ? 'online' : 'waiting for it'} showLabel />} />
       {!joined ? (
-        <ErrorLine
-          error={new OpError({ code: 'NOT_JOINED' as never, message: `${r.alias} answered over USB but did not reach the hub over Wi-Fi. Check the network's name and password, then look at its log on its page.`, retryable: true })}
-        />
+        <>
+          <ErrorLine
+            error={new OpError({ code: 'NOT_JOINED' as never, message: `${r.alias} answered over USB but did not reach the hub over Wi-Fi: the network's name or password may be wrong, or the board out of its reach. Its password can be typed again in Settings › Networks.`, retryable: true })}
+            fix={{ label: 'Change the network and provision again', onClick: onNetwork }}
+          />
+          <ButtonRow>
+            <Link to="/devices/$id" params={{ id: r.alias }} search={{ log: 1 } as never} className="ui-button" data-variant="quiet" data-action="open-log">
+              <span className="ui-button-text">{engrave('Open its log')}</span>
+            </Link>
+          </ButtonRow>
+        </>
       ) : null}
       {r.warnings?.filter((w) => joined || !w.includes('over Wi-Fi')).map((w) => (
         <p key={w} className="prov-note">
-          {earth ? w : earthless(w)}
+          {say(w)}
         </p>
       ))}
       <ButtonRow>

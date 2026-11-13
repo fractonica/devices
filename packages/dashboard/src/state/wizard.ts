@@ -114,6 +114,11 @@ export interface WizardState {
   /** device.online seen for the board after the job started. */
   online: boolean;
   error: WizardError | null;
+  /**
+   * Opened from a job's URL (a reload): the choices are what the URL kept (alias, network, profile, port), and a step
+   * whose choice it did not keep says nothing rather than a guess.
+   */
+  resumed?: boolean;
 }
 
 export type WizardAction =
@@ -139,9 +144,17 @@ export type WizardAction =
   /** A frame (or with `full` the whole job) of that build job. */
   | { type: 'build'; job: JobFrame; full?: boolean }
   /** Open on a job the hub runs already (a reload of `/provision/<job>`): what the job knows. */
-  | { type: 'resume'; job: JobFrame & { targets?: string[] } }
+  | { type: 'resume'; job: JobFrame & { targets?: string[] }; choices?: ResumeChoices }
   /** Back to an earlier step from a later one (the page's "Change"), when no job runs. */
   | { type: 'goto'; step: 'detect' | 'network' | 'profile' };
+
+/** The choices a provisioning job was started with, as its page's URL keeps them. */
+export interface ResumeChoices {
+  alias?: string;
+  network?: string;
+  profile?: string;
+  port?: string;
+}
 
 /** A job as a `/ws` job frame or job_get gives it (what the reducer reads of one). */
 export type JobFrame = { job_id: string; status: JobStatus; stage?: string; progress?: { pct?: number; message?: string }; result?: unknown; error?: unknown };
@@ -380,8 +393,21 @@ export function wizardReducer(s: WizardState, a: WizardAction): WizardState {
       return { ...s, step: a.step, job: null, build: null, result: null, online: false, error: null };
     }
     case 'resume': {
-      const target = a.job.targets?.[0];
-      const base: WizardState = { ...WIZARD_CLOSED, step: 'flash', networks: s.networks, profiles: s.profiles, port: target ? { path: target, state: 'open' } : null };
+      const target = a.choices?.port ?? a.job.targets?.[0];
+      const c = a.choices ?? {};
+      const n = c.network ? (s.networks ?? []).find((x) => x.name === c.network) : undefined;
+      const base: WizardState = {
+        ...WIZARD_CLOSED,
+        step: 'flash',
+        networks: s.networks,
+        profiles: s.profiles,
+        port: target ? { path: target, state: 'open' } : null,
+        alias: c.alias ?? '',
+        profile: c.profile ?? '',
+        networkName: c.network ?? '',
+        ...(n ? { network: { state: 'set' as const, ssid: n.ssid } } : {}),
+        resumed: true,
+      };
       return wizardReducer(base, { type: 'job', job: a.job, full: true });
     }
   }

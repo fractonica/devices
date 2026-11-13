@@ -394,3 +394,36 @@
 .prov-stage-word[data-failed] {
   color: var(--c-fault);
 }
+
+/* a port's policy and actions, opened from its row's quiet "Port…": a line of their own under the row */
+.prov-choice:has(.prov-port-more) {
+  flex-wrap: wrap;
+}
+
+.prov-choice-actions:has(.prov-port-more) {
+  flex-basis: 100%;
+  justify-content: flex-start;
+  padding: 0 0 var(--sp-2) calc(13px + var(--sp-3));
+}
+
+.prov-port-more {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--sp-2) var(--sp-3);
+}
+
+.prov-port-more > .prov-note {
+  flex-basis: 100%;
+  margin: 0;
+}
+
+/* a step's title takes focus when the step opens (for a screen reader and the keyboard); it is not a control */
+.prov-step-title:focus {
+  outline: none;
+}
+
+.prov-port-more > .ui-lend {
+  display: flex;
+  flex-basis: 100%;
+}

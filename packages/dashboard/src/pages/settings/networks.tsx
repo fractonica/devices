@@ -20,7 +20,7 @@ function Networks() {
   const [editing, setEditing] = useState<string | null>(null); // a name, or '+' for a new one
   const nets = q.data?.networks ?? [];
   const add = (
-    <Button variant="quiet" onClick={() => setEditing('+')} data-action="add-network" disabled={editing === '+'}>
+    <Button variant="quiet" onClick={() => setEditing('+')} data-action="add-network" data-opens="network:+" disabled={editing === '+'}>
       Add network
     </Button>
   );
@@ -31,7 +31,7 @@ function Networks() {
         <EmptyState
           title="No network yet"
           action={
-            <Button variant="primary" onClick={() => setEditing('+')} data-action="add-network">
+            <Button variant="primary" onClick={() => setEditing('+')} data-action="add-network" data-opens="network:+">
               Add network
             </Button>
           }
@@ -57,7 +57,7 @@ function Networks() {
               .filter(Boolean)
               .join(' · ')}
             actions={
-              <Button variant="quiet" onClick={() => setEditing(n.name)} data-action="change-network">
+              <Button variant="quiet" onClick={() => setEditing(n.name)} data-action="change-network" data-opens={`network:${n.name}`}>
                 Change
               </Button>
             }

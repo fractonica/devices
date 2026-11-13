@@ -6,11 +6,13 @@ import { type ReactNode, useEffect, useId, useState } from 'react';
 
 import type { DeviceView } from '@fractonica/protocol/client';
 
-import { useAct, useLive } from '../../hooks.ts';
+import { useAct, useLive, useOp } from '../../hooks.ts';
 import { hubClock } from '../../runtime.ts';
 import { colourHex, hexColour } from '../../state/device-controls.ts';
 import { signalOf, valueText } from '../../state/device-units.ts';
+import { aliasTaken } from '../../state/provision.ts';
 import { aliasError } from '../../state/wizard.ts';
+import { useInPlace } from '../../ui/in-place.ts';
 import { Button, Earth, engrave, Reading, TextField, useFractonica } from '../../ui/index.ts';
 
 /** Whether a device's row flashes now (an input came, live store `flashUntil`); re-renders when it ends. */
@@ -55,28 +57,38 @@ export function IdentifyButton({ device, variant = 'default' }: { device: Pick<D
 /** Rename in place: the alias checked as it is typed (the registry's rules, 31 characters). */
 export function RenameForm({ device, onDone, onRenamed }: { device: Pick<DeviceView, 'device_id' | 'alias'>; onDone: () => void; onRenamed?: (alias: string) => void }) {
   const [alias, setAlias] = useState(device.alias);
-  const act = useAct('device_update', { done: (d) => `renamed to ${d.alias}`, refresh: ['device_list', 'device_get'] });
+  // a clash is said on the field, never as a toast: the registry as the page knows it, then the hub's own refusal
+  const [refused, setRefused] = useState<{ alias: string; why: string } | null>(null);
+  const act = useAct('device_update', { done: (d) => `renamed to ${d.alias}`, refresh: ['device_list', 'device_get'], quiet: (e) => e.code === 'INVALID_ARGS' && /\btaken\b/.test(e.message) });
+  const devices = useOp('device_list', {});
+  const box = useInPlace<HTMLFormElement>(`rename:${device.device_id}`, onDone);
   const next = alias.trim().toLowerCase();
-  const problem = next === '' ? 'a name is needed' : aliasError(alias);
+  const taken = aliasTaken(next, devices.data?.devices ?? [], device.device_id);
+  const problem = next === '' ? 'a name is needed' : (aliasError(alias) ?? taken ?? (refused?.alias === next ? refused.why : null));
   const same = next === device.alias;
   return (
     <form
+      ref={box}
       className="dev-rename"
       data-form="rename"
       onSubmit={(e) => {
         e.preventDefault();
         if (!problem && !same) {
-          act.mutate({ device: `id:${device.device_id}`, alias: next }, { onSuccess: (d) => (onRenamed?.(d.alias), onDone()) });
+          act.mutate(
+            { device: `id:${device.device_id}`, alias: next },
+            {
+              onSuccess: (d) => (onRenamed?.(d.alias), onDone()),
+              onError: (e) => /\btaken\b/.test(e.message) && setRefused({ alias: next, why: `${next} is taken by another device` }),
+            },
+          );
         }
       }}
-      onKeyDown={(e) => e.key === 'Escape' && onDone()}
     >
       <TextField
         label="New name"
         value={alias}
         onChange={setAlias}
         maxLength={31}
-        autoFocus
         error={!same ? problem : null}
         note="Lowercase letters, digits and hyphens; 31 at most. The device learns it at once if it is online."
       />

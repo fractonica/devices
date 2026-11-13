@@ -25,6 +25,9 @@ function bandWords(n: NetworkOption): string {
 export function NetworkStep({ s, error, onChoose, onContinue, onRecheck }: NetworkStepProps) {
   const list = s.networks ?? [];
   const chosen = chosenNetwork(s);
+  // a 5g-only network suits only the ESP32-C5: for a board known to be another chip it is shown, muted, and not taken
+  const chip = s.chip ?? s.known?.chip ?? null;
+  const unfit = (n: NetworkOption) => n.band === '5g' && chip !== null && chip !== 'esp32c5';
   const [adding, setAdding] = useState<boolean | null>(null);
   const open = adding ?? list.length === 0;
   return (
@@ -39,10 +42,12 @@ export function NetworkStep({ s, error, onChoose, onContinue, onRecheck }: Netwo
               chosen={chosen?.name === n.name}
               tabbable={!chosen && i === 0}
               onChoose={() => onChoose(n.name)}
+              muted={unfit(n)}
               name={n.ssid}
               extra={
                 <>
                   <span className="mono">{n.name}</span> · {bandWords(n)} · {n.password_set ? 'password stored' : 'open network'}
+                  {unfit(n) ? ` · not for an ${chip}: 5g only` : ''}
                 </>
               }
               value={n.devices ? `${n.devices} ${n.devices === 1 ? 'device' : 'devices'}` : 'no devices yet'}
@@ -52,7 +57,7 @@ export function NetworkStep({ s, error, onChoose, onContinue, onRecheck }: Netwo
       ) : s.networks !== null ? (
         <p className="prov-lede">The hub keeps no Wi-Fi network yet. Store the one your boards should join; every board you provision joins it.</p>
       ) : null}
-      <Disclosure title={list.length ? 'Add a network' : 'The network'} open={open} onOpenChange={setAdding}>
+      <Disclosure title={list.length ? 'Add a network' : 'The network'} open={open} onOpenChange={setAdding} opens="network:+">
         <NetworkForm
           current={null}
           firstEver={!list.length}
@@ -66,7 +71,7 @@ export function NetworkStep({ s, error, onChoose, onContinue, onRecheck }: Netwo
         />
       </Disclosure>
       <ButtonRow>
-        <Button variant="primary" onClick={onContinue} disabled={!chosen} data-action="continue">
+        <Button variant="primary" onClick={onContinue} disabled={!chosen || unfit(chosen)} data-action="continue">
           Continue
         </Button>
       </ButtonRow>

@@ -9,9 +9,8 @@ import { useState } from 'react';
 
 import { useAct, useOp } from '../../hooks.ts';
 import type { OtaRow } from '../../api/types.ts';
-import { deployTargets, otaDial, otaEnded, planDevices, planLine, planUpdates, stageWord } from '../../state/provision.ts';
-import { earthless } from '../../state/pure-text.ts';
-import { Bead, Button, ButtonRow, EmptyState, ErrorLine, FTime, Row, Section, Select, useMode } from '../../ui/index.ts';
+import { deployTargets, otaDial, otaEnded, planDevices, planLine, planNote, planUpdates, stageWord } from '../../state/provision.ts';
+import { Bead, Button, ButtonRow, EmptyState, ErrorLine, FTime, Row, Section, Select, useHubText } from '../../ui/index.ts';
 import { Dial } from './dial.tsx';
 
 const VIA = [
@@ -22,10 +21,10 @@ const VIA = [
 
 /** One device's update: its small ring, its state in words, when it last changed. */
 export function OtaLine({ row }: { row: OtaRow }) {
-  const { earth } = useMode();
+  const say = useHubText();
   const v = otaDial(row);
   const said = row.message ?? row.reason ?? (row.code ? row.code.replace(/_/g, ' ') : '');
-  const note = earth ? said : earthless(said);
+  const note = said ? say(said) : '';
   const word = v.word ?? stageWord(row.state);
   return (
     <Row
@@ -68,8 +67,8 @@ function Deploy() {
   const current = preview?.key === key;
   const n = planUpdates(plan);
   const built = (profiles.data?.profiles ?? []).filter((p) => p.newest_debug);
-  const { earth } = useMode();
-  const pure = (t: string | undefined) => (t === undefined ? undefined : earth ? t : earthless(t));
+  const say = useHubText();
+  const pure = (t: string | undefined) => (t === undefined ? undefined : say(t));
   return (
     <Section title="Update" body="loose">
       <p className="prov-lede">Choose the devices and the firmware, preview what each device would do, then deploy. Nothing is sent before you deploy.</p>
@@ -133,11 +132,11 @@ function Deploy() {
                 value={l.text}
                 extra={
                   d.action === 'skip' ? (
-                    pure(d.message)
+                    pure(d.message && planNote(d.message))
                   ) : (
                     <>
                       <span className="mono">{d.build_id}</span>
-                      {d.warnings?.length ? ` · ${d.warnings.map((w) => pure(w)).join(' · ')}` : ''}
+                      {d.warnings?.length ? ` · ${d.warnings.map((w) => pure(planNote(w))).join(' · ')}` : ''}
                     </>
                   )
                 }

@@ -23,6 +23,10 @@ const plainWord = (s: string) => s.replace(/_/g, ' ').toLowerCase();
 const pt = (r: number, a: number) => [r * Math.cos(a), r * Math.sin(a)] as const;
 const f2 = (n: number) => n.toFixed(2);
 
+/** The hub's type scale (styles/base.css --fs-*), in px: a ring's text takes the largest size that fits. */
+const SCALE = [7.5, 9, 11.5, 13, 15, 20] as const;
+const onScale = (px: number) => [...SCALE].reverse().find((s) => s <= px) ?? SCALE[0];
+
 /** SVG arc of radius r from a0 to a1 (radians, 0 = 3 o'clock, clockwise); `back` draws it from a1 to a0. */
 function arc(r: number, a0: number, a1: number, back = false): string {
   if (a1 - a0 <= 1e-6) {
@@ -61,6 +65,8 @@ export interface StageRingProps {
   fraction?: number;
   /** The running stage failed: its arc and word turn fault. */
   failed?: boolean;
+  /** Stopped by a person where it was (a cancel): not an error, so the running arc stays engraved and nothing is fault. */
+  stopped?: boolean;
   /** Replaces the word in the middle ("cancelled", "updated"). */
   word?: string;
   /** Arcs that each go their own way, in place of one running stage; `current` is then the count done. */
@@ -94,7 +100,7 @@ function readingSpans(text: string): ReactNode[] {
   );
 }
 
-export function StageRing({ stages, current, fraction, failed = false, word, arcs: own, size = 168, centre, bare = false, bezel, idle = false, stageWord = plainWord, label = 'Progress' }: StageRingProps) {
+export function StageRing({ stages, current, fraction, failed = false, stopped = false, word, arcs: own, size = 168, centre, bare = false, bezel, idle = false, stageWord = plainWord, label = 'Progress' }: StageRingProps) {
   const uid = useId().replace(/[^a-zA-Z0-9_-]/g, '');
   // the words fit along the bezel from about 200 px; a smaller ring says only its middle
   const withWords = bezel ?? size >= 200;
@@ -108,8 +114,8 @@ export function StageRing({ stages, current, fraction, failed = false, word, arc
   const frac = idle || fraction === undefined || !Number.isFinite(fraction) ? undefined : Math.max(0, Math.min(1, fraction));
   const rBand = r - Math.max(11, d * 0.042); // the bezel words' band
   const rCarrier = r * 0.7;
-  const wordFs = Math.max(6.2, Math.min(8.5, d * 0.026));
-  const state = idle ? 'idle' : failed ? 'failed' : done ? 'done' : 'running';
+  const wordFs = onScale(Math.min(9, d * 0.026));
+  const state = idle ? 'idle' : failed ? 'failed' : stopped ? 'stopped' : done ? 'done' : 'running';
 
   const arcs: ReactNode[] = [];
   const words: ReactNode[] = [];
@@ -125,7 +131,7 @@ export function StageRing({ stages, current, fraction, failed = false, word, arc
       status = idle ? 'todo' : (own[i]?.status ?? 'todo');
       f = own[i]?.fraction;
     } else if (!idle) {
-      status = done || i < current ? 'done' : i === current ? (failed ? 'failed' : 'current') : 'todo';
+      status = done || i < current ? 'done' : i === current ? (failed ? 'failed' : stopped ? 'todo' : 'current') : 'todo';
     }
     if (status === 'current') {
       arcs.push(<path key={`b${i}`} className="ui-ring-arc base" d={arc(r, a0, a1)} />);
@@ -153,7 +159,7 @@ export function StageRing({ stages, current, fraction, failed = false, word, arc
     const bottom = Math.sin(mid) > 0.05;
     const text = engrave(stageWord(stages[i]!));
     const len = (a1 - a0) * rBand;
-    const fs = Math.max(6.2, Math.min(wordFs, (len * 0.92) / (text.length * 0.9)));
+    const fs = onScale(Math.min(wordFs, (len * 0.92) / (text.length * 0.9)));
     const cap = fs * 0.7;
     const rb = bottom ? rBand + cap / 2 : rBand - cap / 2;
     const id = `ui-ring-w-${uid}-${i}`;
@@ -169,14 +175,16 @@ export function StageRing({ stages, current, fraction, failed = false, word, arc
 
   const shown = centre ?? (own ? { word: word ?? '', sub: `${current} of ${n}` } : undefined) ?? {
     word: idle ? 'ready' : (word ?? (done ? 'done' : stageWord(stages[running] ?? ''))),
-    sub: idle ? `${n} stages` : done ? `${n} of ${n}` : failed ? `at ${stageWord(stages[running] ?? '')}` : `${running + 1} of ${n}`,
+    sub: idle ? `${n} stages` : done ? `${n} of ${n}` : failed || stopped ? `at ${stageWord(stages[running] ?? '')}` : `${running + 1} of ${n}`,
   };
   const step = done ? n : running + 1;
   const aria = own
     ? `${label}: ${idle ? 'not started' : `${current} of ${n} done${word ? `, ${word}` : ''}`}`
-    : `${label}: ${idle ? 'not started' : failed ? `${word ?? 'failed'} at ${stageWord(stages[running] ?? '')}` : done ? (word ?? 'done') : `${stageWord(stages[running] ?? '')}, stage ${step} of ${n}`}`;
-  const big = Math.max(11, Math.round(d * 0.062));
-  const small = Math.max(6.5, d * 0.026);
+    : stopped
+      ? `${label}: ${word ?? 'stopped'} at ${stageWord(stages[running] ?? '')}`
+      : `${label}: ${idle ? 'not started' : failed ? `${word ?? 'failed'} at ${stageWord(stages[running] ?? '')}` : done ? (word ?? 'done') : `${stageWord(stages[running] ?? '')}, stage ${step} of ${n}`}`;
+  const big = onScale(Math.max(11.5, d * 0.062));
+  const small = onScale(Math.max(7.5, d * 0.026));
 
   return (
     <figure className={`ui-ring${bare ? ' ui-ring-bare' : ''}`} data-state={state} data-stage={done ? 'done' : stages[running]} role="img" aria-label={aria} style={{ width: d, height: d }}>
@@ -213,7 +221,7 @@ export function StageRing({ stages, current, fraction, failed = false, word, arc
               </g>
             ) : null}
             {shown.reading ? (
-              <text className="ui-ring-centre-reading" y={big * 1.55} fontSize={Math.max(11, d * 0.044)}>
+              <text className="ui-ring-centre-reading" y={big * 1.55} fontSize={onScale(Math.max(11.5, d * 0.044))}>
                 {readingSpans(shown.reading)}
               </text>
             ) : null}

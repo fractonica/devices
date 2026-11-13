@@ -11,9 +11,8 @@ import type { Job } from '@fractonica/protocol/client';
 import { OpError } from '../../api/rest.ts';
 import { TERMINAL_JOB_STATUSES } from '../../api/types.ts';
 import { useAct, useOp } from '../../hooks.ts';
-import { chainState, jobBead, jobDial, kindWord, otaDial, otaFleetDial, readChain, stageWord } from '../../state/provision.ts';
-import { earthless } from '../../state/pure-text.ts';
-import { Bead, Button, ButtonRow, Caps, engrave, ErrorLine, FTime, PROVISION_STAGES, Row, Section, useMode } from '../../ui/index.ts';
+import { chainState, readChoices, jobBead, jobDial, kindWord, otaDial, otaFleetDial, readChain, stageWord } from '../../state/provision.ts';
+import { Bead, Button, ButtonRow, Caps, engrave, ErrorLine, FTime, PROVISION_STAGES, Row, Section, useHubText } from '../../ui/index.ts';
 import { Dial } from './dial.tsx';
 import { JobOutput } from './job-output.tsx';
 import { NewBoard, usePhone } from './new-board.tsx';
@@ -21,20 +20,13 @@ import { OtaLine } from './ota.tsx';
 import { dispatch, getWizard, replace, useFollowJob, useWizard } from './store.ts';
 import { useSpan } from './time.ts';
 
-/** A job's error for ErrorLine; in pure mode without the hub's Earth measures (earthless). */
-function asOpError(e: unknown, earth: boolean): OpError | null {
+/** A job's error for ErrorLine (which says the hub's texts in the mode's units). */
+function asOpError(e: unknown): OpError | null {
   const t = e as { code?: unknown; message?: unknown; hint?: unknown; remediation?: { human?: string }[] } | undefined;
   if (typeof t?.code !== 'string' || typeof t.message !== 'string') {
     return null;
   }
-  const pure = (x: string) => (earth ? x : earthless(x));
-  const err = e as never as { message: string; hint?: string; remediation?: { human?: string }[] };
-  return new OpError({
-    ...(e as object),
-    message: pure(err.message),
-    ...(err.hint ? { hint: pure(err.hint) } : {}),
-    ...(err.remediation ? { remediation: err.remediation.map((r) => (r.human ? { ...r, human: pure(r.human) } : r)) } : {}),
-  } as never);
+  return new OpError(e as never);
 }
 
 /** An update's per-device rows (ota_status for the job), read every 1.5 s while it runs (and on ota.job.state events). */
@@ -82,19 +74,19 @@ export function JobView({ job: first }: { job: Job }) {
       setSeen((s) => (s.at(-1) === f.stage ? s : [...s, f.stage!]));
     }
   });
-  const cancel = useAct('job_cancel', { done: () => 'Cancelling', refresh: ['job_list'] });
+  const cancel = useAct('job_cancel', { refresh: ['job_list'] });
   const ota = useOtaRows(job.job_id, job.kind === 'ota', running);
   const devices = useOp('device_list', {});
   const aliasOf = new Map((devices.data?.devices ?? []).map((d) => [d.device_id, d.alias]));
   const otaRows = ota.data?.devices ?? [];
   const view = job.kind === 'ota' && otaRows.length ? otaFleetDial(otaRows) : jobDial({ ...job, stages: seen }, seen);
   const span = useSpan(job.started_at ?? job.created_at, job.ended_at);
-  const { earth } = useMode();
-  const err = asOpError(job.error, earth);
+  const say = useHubText();
+  const err = asOpError(job.error);
   const result = (job.result ?? {}) as Record<string, unknown>;
   const str = (k: string) => (typeof result[k] === 'string' ? (result[k] as string) : undefined);
   const word = view.word ?? (view.current >= view.stages.length ? 'done' : stageWord(view.stages[Math.min(view.current, view.stages.length - 1)]!));
-  const sub = view.arcs ? `${view.current} of ${view.stages.length} updated` : view.failed ? 'stopped' : `${Math.min(view.current + 1, view.stages.length)} of ${view.stages.length}`;
+  const sub = view.arcs ? `${view.current} of ${view.stages.length} updated` : view.failed || view.stopped ? `at ${stageWord(view.stages[Math.min(view.current, view.stages.length - 1)]!)}` : `${Math.min(view.current + 1, view.stages.length)} of ${view.stages.length}`;
   return (
     <div className="prov-board" data-job={job.job_id} data-kind={job.kind} data-status={job.status}>
       <aside className="prov-instrument">
@@ -106,8 +98,8 @@ export function JobView({ job: first }: { job: Job }) {
         />
         {running ? (
           <ButtonRow>
-            <Button variant="destructive" confirm={`Stop this ${kindWord(job.kind)}?`} confirmLabel="Stop" busy={cancel.isPending} onClick={() => cancel.mutate({ job_id: job.job_id })} data-action="cancel">
-              Cancel
+            <Button variant="destructive" confirm={`Stop this ${kindWord(job.kind)}?`} confirmLabel="Stop" cancelLabel="Keep going" busy={cancel.isPending} onClick={() => cancel.mutate({ job_id: job.job_id })} data-action="cancel">
+              Stop
             </Button>
           </ButtonRow>
         ) : null}
@@ -117,12 +109,18 @@ export function JobView({ job: first }: { job: Job }) {
           <Row label="For" value={job.targets.map((t) => aliasOf.get(t) ?? t).join(', ') || '—'} />
           <Row label="Started" value={<FTime at={job.started_at ?? job.created_at} form="relative" />} />
           {job.ended_at ? <Row label="Took" value={span ?? '—'} /> : null}
-          {job.progress?.message && running ? <Row label="Now" value={earth ? job.progress.message : earthless(job.progress.message)} /> : null}
+          {job.progress?.message && running ? <Row label="Now" value={say(job.progress.message)} /> : null}
           {job.blocked_by ? <Row label="Waits for" value={<Link to="/provision/$job" params={{ job: job.blocked_by.holder_job }}>{`job ${job.blocked_by.holder_job}`}</Link>} /> : null}
           {str('build_id') ? <Row label="Build" value={<span className="mono">{str('build_id')}</span>} extra={str('fw_id') ? <span className="mono">{str('fw_id')!.slice(0, 12)}</span> : undefined} /> : null}
           {job.origin ? <Row label="Started by" value={job.origin === 'mcp' ? 'an agent' : job.origin} /> : null}
         </Section>
-        {err ? <ErrorLine error={err} what={engrave(kindWord(job.kind)).toLowerCase()} /> : !running && job.status !== 'completed' ? <ErrorLine message={job.status === 'failed' ? `The ${kindWord(job.kind)} failed.` : `The ${kindWord(job.kind)} was ${job.status}.`} /> : null}
+        {job.status === 'cancelled' ? (
+          <Row id="stopped" bead="offline" beadLabel="stopped" label="Stopped" value={`at ${word === 'stopped' ? stageWord(view.stages[Math.min(view.current, view.stages.length - 1)]!) : word}`} extra="Stopped on request; nothing more runs." />
+        ) : err ? (
+          <ErrorLine error={err} what={engrave(kindWord(job.kind)).toLowerCase()} />
+        ) : !running && job.status !== 'completed' ? (
+          <ErrorLine message={`The ${kindWord(job.kind)} failed.`} />
+        ) : null}
         {job.kind === 'ota' ? <OtaRings jobId={job.job_id} running={running} /> : null}
         {job.kind === 'build' && job.status === 'completed' ? (
           <ButtonRow>
@@ -153,7 +151,7 @@ export function JobRoute({ jobId, search }: { jobId: string; search: Record<stri
       return;
     }
     if (job.kind === 'provision') {
-      dispatch({ type: 'resume', job });
+      dispatch({ type: 'resume', job, choices: readChoices(search) });
     } else if (job.kind === 'build' && chain) {
       replace(chainState(chain, getWizard()));
       dispatch({ type: 'build', job, full: true });
@@ -163,11 +161,15 @@ export function JobRoute({ jobId, search }: { jobId: string; search: Record<stri
     return <NewBoard />;
   }
   if (q.error) {
+    const gone = q.error.code === 'NOT_FOUND';
     return (
       <div className="prov-views">
-        <ErrorLine error={q.error} what={`Job ${jobId}`} />
+        {gone ? <ErrorLine code="NOT_FOUND" message="The hub knows no such job: it may be from an earlier run of the hub, or the link is mistyped. Its recent jobs are under Firmware." /> : <ErrorLine error={q.error} what="The job" />}
         <ButtonRow>
-          <Link to="/provision" className="ui-button" data-variant="primary">
+          <Link to="/provision" search={{ view: 'firmware' } as never} className="ui-button" data-variant="primary">
+            <span className="ui-button-text">{engrave('The recent jobs')}</span>
+          </Link>
+          <Link to="/provision" className="ui-button" data-variant="default">
             <span className="ui-button-text">{engrave('Provision a board')}</span>
           </Link>
         </ButtonRow>

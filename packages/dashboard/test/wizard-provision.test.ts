@@ -117,4 +117,15 @@ describe('dashboard provision wizard, stage 4', () => {
     const ended = wizardReducer(WIZARD_CLOSED, { type: 'resume', job: { job_id: 'j_x', status: 'failed', error: { code: 'TIMEOUT', message: 'm', retryable: true } } });
     expect(ended.error?.code).toBe('TIMEOUT');
   });
+
+  it('resumes with the choices the job page kept in its URL, and marks what it does not know', () => {
+    const base = { ...WIZARD_CLOSED, networks: [{ name: 'lab', ssid: 'Lab' }] };
+    const s = wizardReducer(base, {
+      type: 'resume',
+      job: { job_id: 'j_p', status: 'working', stage: 'flash', targets: ['02f200000007'] },
+      choices: { alias: 'porch-light', network: 'lab', port: '/dev/cu.usbmodem9' },
+    });
+    expect(s).toMatchObject({ resumed: true, alias: 'porch-light', networkName: 'lab', network: { state: 'set', ssid: 'Lab' }, port: { path: '/dev/cu.usbmodem9' }, profile: '' });
+    expect(wizardReducer(WIZARD_CLOSED, { type: 'resume', job: { job_id: 'j_p', status: 'working' } })).toMatchObject({ resumed: true, alias: '' });
+  });
 });

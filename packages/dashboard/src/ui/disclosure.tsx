@@ -12,10 +12,12 @@ export interface DisclosureProps {
   /** Controlled: open state and its setter. */
   open?: boolean;
   onOpenChange?: (open: boolean) => void;
+  /** The key of the in-place form it opens (ui/in-place.ts): focus comes back to the title when that form closes. */
+  opens?: string;
   children: ReactNode;
 }
 
-export function Disclosure({ title, aside, defaultOpen = false, open, onOpenChange, children }: DisclosureProps) {
+export function Disclosure({ title, aside, defaultOpen = false, open, onOpenChange, opens, children }: DisclosureProps) {
   const [own, setOwn] = useState(defaultOpen);
   const isOpen = open ?? own;
   const id = useId();
@@ -25,7 +27,7 @@ export function Disclosure({ title, aside, defaultOpen = false, open, onOpenChan
   };
   return (
     <div className="ui-disclosure">
-      <button type="button" className="ui-disclosure-toggle" aria-expanded={isOpen} aria-controls={id} onClick={() => set(!isOpen)}>
+      <button type="button" className="ui-disclosure-toggle" aria-expanded={isOpen} aria-controls={id} data-opens={opens} onClick={() => set(!isOpen)}>
         <svg className="mark" width="9" height="9" viewBox="-4.5 -4.5 9 9" aria-hidden="true">
           <path d="M-4 0H4" stroke="currentColor" strokeWidth="1" strokeLinecap="round" />
           <path className="bar" d="M0 -4V4" stroke="currentColor" strokeWidth="1" strokeLinecap="round" />

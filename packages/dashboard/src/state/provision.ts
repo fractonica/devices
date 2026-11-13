@@ -46,14 +46,29 @@ export function pageSteps(s: Pick<WizardState, 'step' | 'job' | 'build' | 'error
 // ---- board and name ----
 
 const CHIP_RE = /\b(esp32(?:c2|c3|c5|c6|c61|h2|p4|s2|s3)?)\b/gi;
+const SUBJECT_CHIP_RE = /\b(?:is|for) an? (esp32(?:c2|c3|c5|c6|c61|h2|p4|s2|s3)?)\b/i;
 
-/** The chip a hub error names (a probe ran): "no debug artifact is built for an esp32c6 board", "… is an esp32c6". */
-export function chipFromError(err: { code: string; message: string } | null | undefined): string | null {
+/**
+ * The chip of the board a hub error is about (a probe ran): the error's own `details.chip`, else the chip the message
+ * says the board is ("… for an esp32c6 board", "porch-light is an esp32c6"), else the one chip it names. A network's
+ * refusal names other chips ("only esp32c5 has"), never the board's: none is read from it.
+ */
+export function chipFromError(err: { code: string; message: string; details?: Record<string, unknown> } | null | undefined): string | null {
   if (!err || !['NOT_FOUND', 'INVALID_ARGS', 'TARGET_MISMATCH', 'INCOMPATIBLE_PROFILE'].includes(err.code)) {
     return null;
   }
-  const all = [...err.message.matchAll(CHIP_RE)].map((m) => m[1]!.toLowerCase());
-  return all.at(-1) ?? null;
+  if (typeof err.details?.chip === 'string') {
+    return err.details.chip.toLowerCase();
+  }
+  const subject = SUBJECT_CHIP_RE.exec(err.message);
+  if (subject) {
+    return subject[1]!.toLowerCase();
+  }
+  if (/\bnetwork\b/.test(err.message)) {
+    return null;
+  }
+  const all = new Set([...err.message.matchAll(CHIP_RE)].map((m) => m[1]!.toLowerCase()));
+  return all.size === 1 ? [...all][0]! : null;
 }
 
 export interface ProfileChoice extends ProfileOption {
@@ -112,7 +127,9 @@ export interface DialView {
   /** 0..1 of the running stage, when the hub measures it; undefined otherwise (the arc stays engraved). */
   fraction?: number;
   failed: boolean;
-  /** The centre word instead of the stage's ("cancelled", "rolled back"). */
+  /** Stopped by a person (a cancel): the ring stops where it was, engraved, and nothing is drawn in fault. */
+  stopped?: boolean;
+  /** The centre word instead of the stage's ("stopped", "rolled back"). */
   word?: string;
   /**
    * Arcs that each go their own way (an update's devices side by side): each arc's own status and fraction, in place
@@ -130,6 +147,11 @@ type JobLike = Pick<WizardJob, 'status' | 'stage' | 'progress'> & { stages?: rea
  * the probe, its write, erase and verify part of the flash.
  */
 const SUBSTAGES: Record<string, string> = { connect: 'probe', write: 'flash', erase: 'flash', verify: 'flash' };
+
+/** A job's stage as the ring says it: a sidecar step as its hub stage ("write" → "flash"), in words. */
+export function ringStageWord(stage: string): string {
+  return stageWord(SUBSTAGES[stage] ?? stage);
+}
 
 /** The index of the job's stage in `stages`: its newest stage the ring knows (a sub-stage counts as its stage); -1 for none. */
 export function stageIndex(stages: readonly string[], job: Pick<JobLike, 'stage' | 'stages'>): number {
@@ -154,19 +176,29 @@ export function jobPosition(stages: readonly string[], job: JobLike | null): Omi
   const current = Math.max(0, stageIndex(stages, job));
   const pct = job.progress?.pct;
   const fraction = job.status === 'working' && MEASURED.has(stages[current] ?? '') && typeof pct === 'number' ? Math.max(0, Math.min(1, pct / 100)) : undefined;
-  const failed = job.status === 'failed' || job.status === 'cancelled';
-  return { current, failed, ...(fraction !== undefined ? { fraction } : {}), ...(job.status === 'cancelled' ? { word: 'cancelled' } : {}) };
+  if (job.status === 'cancelled') {
+    return { current, failed: false, stopped: true, word: 'stopped' };
+  }
+  return { current, failed: job.status === 'failed', ...(fraction !== undefined ? { fraction } : {}) };
 }
 
-/** The provisioning dial: nine arcs, or thirteen with the build of "Build and provision" in front. */
-export function provisionDial(s: Pick<WizardState, 'job' | 'build' | 'error'>): DialView {
+/**
+ * The provisioning dial: nine arcs, or thirteen with the build of "Build and provision" in front. A board flashed that
+ * did not join Wi-Fi is not drawn as joined: every arc lit but JOIN, which is in fault (light means done).
+ */
+export function provisionDial(s: Pick<WizardState, 'job' | 'build' | 'error'> & Partial<Pick<WizardState, 'result'>>): DialView {
+  const notJoined = s.job?.status === 'completed' && s.result?.wifi === 'not_joined';
+  const stages: readonly string[] = s.build ? [...BUILD_STAGES, ...PROVISION_STAGES] : PROVISION_STAGES;
+  if (notJoined) {
+    const join = stages.length - 1;
+    return { stages, current: join, failed: true, word: 'flashed', arcs: stages.map((_, i): ArcState => ({ status: i < join ? 'done' : 'failed' })) };
+  }
   if (!s.build) {
     const p = jobPosition(PROVISION_STAGES, s.job);
     // refused before the job had a frame (device_provision answered an error): the first arc in fault
     const refused = s.error !== null && s.job === null;
     return { stages: PROVISION_STAGES, ...p, failed: p.failed || refused, ...(refused ? { word: 'refused' } : {}) };
   }
-  const stages = [...BUILD_STAGES, ...PROVISION_STAGES];
   if (s.build.status !== 'completed') {
     return { stages, ...jobPosition(BUILD_STAGES, s.build) };
   }
@@ -226,12 +258,15 @@ export function otaFleetDial(rows: readonly Pick<OtaRow, 'alias' | 'state' | 'by
   return { stages: rows.map((r) => r.alias), current: done, failed: ended && failed, arcs, word: ended ? (failed ? 'ended' : 'updated') : 'updating' };
 }
 
-export type ErrorFixKind = 'port' | 'network' | 'profile' | 'retry';
+export type ErrorFixKind = 'port' | 'network' | 'profile' | 'name' | 'retry';
 
-/** What the page offers to fix a provisioning error in place: back to the port, the network, the profile, or a retry. */
-export function errorFixKind(err: { code: string; message: string; candidates?: readonly string[] }): ErrorFixKind | null {
+/** What the page offers to fix a provisioning error in place: back to the port, the network, the profile, the name, or a retry. */
+export function errorFixKind(err: { code: string; message: string; candidates?: readonly string[]; details?: Record<string, unknown> }): ErrorFixKind | null {
   if (err.candidates?.length) {
     return null; // the candidate profiles are the fix
+  }
+  if (err.details?.field === 'alias' || /\balias\b.*\bis taken\b/.test(err.message)) {
+    return 'name';
   }
   if (['PORT_BUSY_EXTERNAL', 'PORT_LEASED', 'PORT_NOT_FOUND', 'LOCKED'].includes(err.code)) {
     return 'port';
@@ -328,6 +363,9 @@ export function planDevices(plan: unknown): PlanDevice[] {
 /** A plan device in words and a bead: what the deploy will do to it. */
 export function planLine(d: PlanDevice): { bead: BeadState; text: string } {
   if (d.action === 'ota') {
+    if (d.via !== 'serial' && d.presence && d.presence !== 'online') {
+      return { bead: 'waiting', text: d.presence === 'unknown' ? 'not heard yet: offered when it comes online' : 'offered when it is back online' };
+    }
     return { bead: d.warnings?.length ? 'waiting' : 'online', text: d.via === 'serial' ? 'update over USB' : 'update over Wi-Fi' };
   }
   if (d.action === 'already_current') {
@@ -337,9 +375,35 @@ export function planLine(d: PlanDevice): { bead: BeadState; text: string } {
   return { bead: 'offline', text: `skipped: ${(d.code ?? 'cannot update').replace(/_/g, ' ')}` };
 }
 
+/** A plan's note in plain words: the protocol's "OFFER" is the hub offering the update. */
+export function planNote(text: string): string {
+  return text.replace(/\bthe OFFER is retried\b/g, 'it is offered again').replace(/\bOFFER\b/g, 'offer');
+}
+
 /** How many devices the deploy updates. */
 export function planUpdates(plan: readonly PlanDevice[]): number {
   return plan.filter((d) => d.action === 'ota').length;
+}
+
+// ---- a provisioning's choices across a reload ----
+
+/** The choices of a provisioning as its job page's search (`/provision/<job>?alias=…`), so a reload says them. */
+export function choiceSearch(s: Pick<WizardState, 'alias' | 'networkName' | 'profile' | 'port'>): Record<string, string> {
+  const alias = s.alias.trim().toLowerCase();
+  const port = s.port?.path ?? '';
+  return { ...(alias ? { alias } : {}), ...(s.networkName ? { network: s.networkName } : {}), ...(s.profile ? { profile: s.profile } : {}), ...(port ? { port } : {}) };
+}
+
+/** The choices read back from a job page's search. */
+export function readChoices(search: Record<string, unknown> | null | undefined): { alias?: string; network?: string; profile?: string; port?: string } {
+  const out: Record<string, string> = {};
+  for (const k of ['alias', 'network', 'profile', 'port']) {
+    const v = search?.[k];
+    if (typeof v === 'string' && v) {
+      out[k] = v;
+    }
+  }
+  return out;
 }
 
 // ---- "Build and provision" across a reload ----

@@ -44,6 +44,7 @@ export function sortChecks<T extends Pick<Check, 'level'>>(checks: readonly T[])
 
 /** What a check's fix is, so the page can offer it: a command to copy, a page of the dashboard, or steps to read. */
 export type CheckFix =
+  | { kind: 'hub'; command: string; text: string }
   | { kind: 'command'; command: string; text: string }
   | { kind: 'page'; to: string; params?: Record<string, string>; label: string; text: string }
   | { kind: 'steps'; text: string };
@@ -52,8 +53,8 @@ export type CheckFix =
 const COMMANDS = /^(fr|pnpm|brew|uv|nvm|git|xcode-select|idf\.py|sudo|export|add|dns-sd)\b/;
 
 /**
- * The fix of a check: `fr doctor --fix`, `brew install ccache` (a command to copy and run in Terminal: the hub runs no
- * fix itself), a port held by another program (the Ports section, where it can be lent or ignored), or System
+ * The fix of a check: `fr doctor --fix` (the hub runs it: hub_doctor_fix), `brew install ccache` (a command to copy and
+ * run in Terminal), a port held by another program (the Ports section, where it can be lent or ignored), or System
  * Settings steps (text). A command inside backticks in a longer text is taken out of it.
  */
 export function checkFix(check: Pick<Check, 'id' | 'fix'>): CheckFix | null {
@@ -63,6 +64,9 @@ export function checkFix(check: Pick<Check, 'id' | 'fix'>): CheckFix | null {
   }
   if (check.id === 'serial') {
     return { kind: 'page', to: '/settings/$section', params: { section: 'ports' }, label: 'Open ports', text: fix };
+  }
+  if (/^fr doctor --fix$/.test(fix)) {
+    return { kind: 'hub', command: fix, text: 'the hub can run this fix' };
   }
   const quoted = /`([^`]+)`/.exec(fix);
   if (quoted && COMMANDS.test(quoted[1]!.trim())) {
@@ -119,4 +123,9 @@ export function healthLine(checks: readonly DoctorCheck[]): HealthLine {
     word: checks.length === 0 ? 'no checks' : words.length ? words.join(' · ') : 'all well',
     bead: error ? 'fault' : warn ? 'waiting' : checks.length ? 'online' : 'idle',
   };
+}
+
+/** The checks the hub can fix itself (their fix is `fr doctor --fix`: hub_doctor_fix runs it), not ok. */
+export function hubFixes<T extends Pick<Check, 'level' | 'fix'>>(checks: readonly T[]): T[] {
+  return checks.filter((c) => c.level !== 'ok' && /\bfr doctor --fix\b/.test(c.fix ?? ''));
 }

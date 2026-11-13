@@ -10,6 +10,7 @@ import type { Network } from '@fractonica/protocol/client';
 import { useAct } from '../../hooks.ts';
 import { type NetworkDraft, networkErrors, networkSetInput } from '../../state/settings-view.ts';
 import { Button, ButtonRow, Disclosure, ErrorLine, Select, TextField, Toggle, useMode } from '../../ui/index.ts';
+import { useInPlace } from '../../ui/in-place.ts';
 
 function bands(earth: boolean) {
   return [
@@ -17,6 +18,15 @@ function bands(earth: boolean) {
     { value: '2g', label: `2g only${earth ? ' ⊕ 2.4 GHz' : ''}` },
     { value: '5g', label: `5g only, for the ESP32-C5${earth ? ' ⊕ 5 GHz' : ''}` },
   ];
+}
+
+/** A network name from an SSID: lower case, letters, digits and hyphens, 31 at most ("Lab 5G" → "lab-5g"). */
+function slug(ssid: string): string {
+  return ssid
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+    .slice(0, 31);
 }
 
 export const BAND_WORD: Record<string, string> = { auto: 'auto band', '2g': '2g band', '5g': '5g band' };
@@ -43,9 +53,12 @@ export function NetworkForm({ current, firstEver, onDone, primary = true }: { cu
   const set = <K extends keyof NetworkDraft>(k: K, v: NetworkDraft[K]) => setD((x) => ({ ...x, [k]: v }));
   const editing = current !== null;
   const { earth } = useMode();
+  const box = useInPlace<HTMLFormElement>(`network:${current?.name ?? '+'}`, () => onDone());
   return (
     <form
-      className="ui-form" data-form="network"
+      ref={box}
+      className="ui-form"
+      data-form="network"
       autoComplete="off"
       onSubmit={(e) => {
         e.preventDefault();
@@ -62,7 +75,7 @@ export function NetworkForm({ current, firstEver, onDone, primary = true }: { cu
       }}
     >
       <TextField label="Name" value={d.name} onChange={(v) => set('name', v.toLowerCase())} maxLength={31} disabled={editing} error={show('name')} note={editing ? 'a network keeps its name' : 'how devices refer to it; the first is default'} mono />
-      <TextField label="SSID" value={d.ssid} onChange={(v) => set('ssid', v)} maxLength={32} error={show('ssid')} note="the network name the router broadcasts" />
+      <TextField label="SSID" value={d.ssid} onChange={(v) => setD((x) => ({ ...x, ssid: v, ...(!editing && !firstEver && x.name === slug(x.ssid) ? { name: slug(v) } : {}) }))} maxLength={32} error={show('ssid')} note="the network name the router broadcasts" />
       <Toggle label="Open network" checked={d.open} onChange={(v) => set('open', v)} states={['no', 'yes']} />
       {!d.open ? (
         <TextField

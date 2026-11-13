@@ -4,6 +4,7 @@
 // Ignore and Stop ignoring, Claim and Unclaim), what stops provisioning on it with the fix the page runs in place, the
 // policy mode in words, and the lend times offered as Fractonica spans. Pure, so the tests run in node.
 
+import { Unit } from '@fractonica/time/browser';
 import type { PortInfo } from '@fractonica/protocol/client';
 
 import type { BeadState } from '../ui/bead.tsx';
@@ -54,7 +55,8 @@ export function holders(p: Pick<PortInfo, 'external' | 'holder'>): string {
 /** A port's state as words, a bead and the actions the port policy allows on it; `registered`: its board is known. */
 export function portView(p: PortInfo, registered = false): PortView {
   const name = p.path.split('/').pop() ?? p.path;
-  const isNew = !registered && !p.alias && !p.device_id;
+  // a native-USB board has a device id from its USB serial before it is registered: new is what the registry says
+  const isNew = !registered && !p.alias;
   const why = p.policy ? (POLICY_WHY[p.policy] ?? p.policy) : '';
   const view = (bead: BeadState, word: string, detail: string, actions: PortAction[]): PortView => ({ bead, word, detail, actions, isNew, name });
   if (p.lease || p.state === 'leased') {
@@ -151,9 +153,8 @@ export function modeWords(mode: string | undefined): { word: string; detail: str
 
 // ------------------------------------------------------------------ spans
 
-/** The Preon's unit index (Unit.PREON) and the Flavon's, as the core numbers them. */
-const PREON = 6;
-const FLAVON = 7;
+const PREON = Unit.PREON;
+const FLAVON = Unit.FLAVON;
 
 /** What the lend choices need of the core: a unit's level and its period now, in seconds. */
 export interface SpanCore {

@@ -4,11 +4,13 @@
 // lit and chosen. What would stop provisioning (another program holds the port, it is lent, ignored) is said before
 // anything starts, with the fix the page can run. The dashboard never opens a port itself; the hub does.
 
+import { useState } from 'react';
+
 import type { PortInfo } from '@fractonica/protocol/client';
 
 import { useAct } from '../../hooks.ts';
 import { portBlock, portView, sortPorts } from '../../state/ports.ts';
-import { Bead, Button, ButtonRow, ErrorLine, FTime } from '../../ui/index.ts';
+import { Bead, Button, ButtonRow, ErrorLine, FTime, Pending } from '../../ui/index.ts';
 import { PortActions } from '../shared/port-actions.tsx';
 import { ChoiceRow, Choices } from './choice.tsx';
 
@@ -27,6 +29,27 @@ export interface PortsStepProps {
   continueDisabled: boolean;
   /** A line about the chosen board (what the registry knows of it). */
   note?: string;
+}
+
+/** The port's policy and its actions, behind one quiet word: provisioning needs none of them. */
+function PortMore({ port, detail }: { port: PortInfo; detail: string }) {
+  const [open, setOpen] = useState(false);
+  if (!open) {
+    return (
+      <Button variant="quiet" onClick={() => setOpen(true)} aria-expanded={false} data-action="port-more">
+        Port…
+      </Button>
+    );
+  }
+  return (
+    <span className="prov-port-more">
+      {detail ? <span className="prov-note">{detail}</span> : null}
+      <PortActions port={port} />
+      <Button variant="quiet" onClick={() => setOpen(false)} aria-expanded>
+        Hide
+      </Button>
+    </span>
+  );
 }
 
 export function PortsStep({ ports, error, loading, known, chosen, fresh, onChoose, onContinue, onRecheck, continueDisabled, note }: PortsStepProps) {
@@ -52,6 +75,7 @@ export function PortsStep({ ports, error, loading, known, chosen, fresh, onChoos
   return (
     <div className="prov-step-body">
       <ErrorLine error={error} what="Ports" fix={{ label: 'Try again', onClick: onRecheck }} />
+      {loading && !list.length ? <Pending what="the USB ports" /> : null}
       {!error && !loading && !list.length ? (
         <div className="prov-listening" data-empty="ports">
           <Bead state="waiting" label="listening" showLabel />
@@ -80,12 +104,24 @@ export function PortsStep({ ports, error, loading, known, chosen, fresh, onChoos
                   </>
                 }
                 value={
-                  <span className="prov-port-state">
-                    <Bead state={v.bead} label={v.word} showLabel={false} /> {v.word}
-                  </span>
+                  v.isNew && (p.state === 'unwatched' || p.state === 'open' || p.state === 'closed') ? (
+                    <span className="prov-port-state">
+                      <Bead state="waiting" label="new board" showLabel={false} /> ready to provision
+                    </span>
+                  ) : (
+                    <span className="prov-port-state">
+                      <Bead state={v.bead} label={v.word} showLabel={false} /> {v.word}
+                    </span>
+                  )
                 }
-                valueExtra={p.lease ? <FTime at={p.lease.expires_at} form="relative" /> : undefined}
-                actions={<PortActions port={p} />}
+                valueExtra={
+                  p.lease ? (
+                    <>
+                      back <FTime at={p.lease.expires_at} form="relative" />
+                    </>
+                  ) : undefined
+                }
+                actions={<PortMore port={p} detail={v.detail} />}
               />
             );
           })}

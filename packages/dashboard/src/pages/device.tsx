@@ -8,11 +8,12 @@
 //
 // device_get is refetched every 10 s and on its events (runtime.ts); properties update live from the store.
 
-import { Link, useNavigate, useParams } from '@tanstack/react-router';
+import { Link, useNavigate, useParams, useSearch } from '@tanstack/react-router';
 import { useState } from 'react';
 
 import { OpError } from '../api/rest.ts';
 import { useOp } from '../hooks.ts';
+import { usePresence } from '../shell/link.ts';
 import type { InstanceView } from '../state/caps.ts';
 import { hardwareLine, shortId } from '../state/device-link.ts';
 import { presenceWord } from '../state/words.ts';
@@ -43,6 +44,9 @@ export function DevicePage() {
   const d = q.data;
   const flashing = useFlash(d?.device_id ?? '');
   const [renaming, setRenaming] = useState(false);
+  const said = usePresence();
+  // ?log=1 (Provision's "Open its log"): the log open from the start
+  const logAsked = (useSearch({ strict: false }) as Record<string, unknown>).log !== undefined;
 
   if (!d) {
     const notFound = q.error instanceof OpError && q.error.code === 'NOT_FOUND';
@@ -77,7 +81,7 @@ export function DevicePage() {
       title={d.alias}
       sub={
         <span className="dev-sub" data-flash={flashing ? '' : undefined}>
-          <Bead state={presenceBead(d.presence)} label={presenceWord(d.presence)} showLabel />
+          <Bead state={presenceBead(said(d.presence))} label={presenceWord(said(d.presence))} showLabel />
           {hw ? <span>{engrave(hw)}</span> : null}
           {fw ? <span className="dev-sub-fw">{engrave('firmware ')}<span className="mono">{fw}</span></span> : null}
         </span>
@@ -86,7 +90,7 @@ export function DevicePage() {
         renaming ? null : (
           <>
             <IdentifyButton device={d} variant="primary" />
-            <Button onClick={() => setRenaming(true)} data-action="rename">
+            <Button onClick={() => setRenaming(true)} data-action="rename" data-opens={`rename:${d.device_id}`}>
               Rename
             </Button>
           </>
@@ -110,7 +114,7 @@ export function DevicePage() {
             <FaceMirror instances={instances} deviceId={d.device_id} />
             <Capabilities detail={d} />
             <RecentEvents deviceId={d.device_id} />
-            <DeviceLog deviceId={d.device_id} alias={d.alias} usb={!!d.port} />
+            <DeviceLog deviceId={d.device_id} alias={d.alias} usb={!!d.port} openAtFirst={logAsked} />
           </div>
           <aside className="dev-side" aria-label={`${d.alias} facts`}>
             <DataColumn detail={d} fetchedAt={q.dataUpdatedAt} />

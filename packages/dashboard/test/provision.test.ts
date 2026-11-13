@@ -54,6 +54,12 @@ describe('board and name', () => {
     expect(chipFromError({ code: 'INVALID_ARGS', message: 'artifacts for several esp32c3 profiles exist (c3o-pad, c3o-analog)' })).toBe('esp32c3');
     expect(chipFromError({ code: 'TARGET_MISMATCH', message: 'b is for esp32c3, but the board on /dev/x is an esp32s3' })).toBe('esp32s3');
     expect(chipFromError({ code: 'PORT_BUSY_EXTERNAL', message: 'an esp32c6 is held' })).toBeNull();
+    // a network's refusal names the chip that would fit; the board's chip is the one it says the board is
+    expect(
+      chipFromError({ code: 'INCOMPATIBLE_PROFILE', message: 'network lab-5g is 5 GHz only (band 5g), but porch-light is an esp32c6, which has no 5 GHz radio (only esp32c5 has)' }),
+    ).toBe('esp32c6');
+    expect(chipFromError({ code: 'INCOMPATIBLE_PROFILE', message: 'network lab-5g is 5g only; only esp32c5 has the radio' })).toBeNull();
+    expect(chipFromError({ code: 'INVALID_ARGS', message: 'x', details: { chip: 'ESP32C6' } })).toBe('esp32c6');
   });
 
   it('put the profiles for the chip first, built before unbuilt', () => {
@@ -94,7 +100,8 @@ describe('the dial', () => {
     // a stale pct of the flash says nothing about the join
     expect(jobPosition(PROVISION_STAGES, job({ stage: 'join', progress: { pct: 100 } }))).toEqual({ current: 8, failed: false });
     expect(jobPosition(PROVISION_STAGES, job({ status: 'completed', stage: 'join' })).current).toBe(9);
-    expect(jobPosition(PROVISION_STAGES, job({ status: 'cancelled', stage: 'flash' }))).toMatchObject({ current: 5, failed: true, word: 'cancelled' });
+    // a cancel is a person's choice, not an error: the ring stops where it was, nothing in fault
+    expect(jobPosition(PROVISION_STAGES, job({ status: 'cancelled', stage: 'flash' }))).toMatchObject({ current: 5, failed: false, stopped: true, word: 'stopped' });
     expect(jobPosition(PROVISION_STAGES, null)).toEqual({ current: 0, failed: false });
   });
 
@@ -106,6 +113,12 @@ describe('the dial', () => {
     expect(provisionDial({ job: null, build: job({ status: 'completed' }), error: null }).current).toBe(4);
     expect(provisionDial({ job: job({ stage: 'probe' }), build: job({ status: 'completed' }), error: null }).current).toBe(5);
     expect(provisionDial({ job: null, build: job({ status: 'failed', stage: 'idf_env' }), error: null })).toMatchObject({ current: 1, failed: true });
+    // flashed but not on Wi-Fi: every arc lit but JOIN, which is in fault (light means done)
+    const notJoined = provisionDial({ job: job({ status: 'completed' }), build: null, error: null, result: { wifi: 'not_joined' } as never });
+    expect(notJoined).toMatchObject({ current: 8, failed: true, word: 'flashed' });
+    expect(notJoined.arcs?.map((a) => a.status)).toEqual([...Array(8).fill('done'), 'failed']);
+    expect(provisionDial({ job: job({ status: 'completed' }), build: null, error: null, result: { wifi: 'joined' } as never })).toMatchObject({ current: 9, failed: false });
+    expect(provisionDial({ job: job({ status: 'completed' }), build: null, error: null, result: { wifi: 'joined' } as never }).arcs).toBeUndefined();
     // device_provision refused before a job existed
     expect(provisionDial({ job: null, build: null, error: { code: 'LOCKED', message: 'x', human: [], candidates: [] } }).failed).toBe(true);
     expect(stageWord('idf_env')).toBe('toolchain');
@@ -187,13 +200,15 @@ describe('the chain and the texts', () => {
   it("takes the hub's Earth measures out of its texts for pure mode, keeping the sentence", () => {
     expect(earthless('attic-pad is unknown: the OFFER is retried after 5, 15 and 45 s')).toBe('attic-pad is unknown: the OFFER is retried');
     expect(earthless('porch-lamp was flashed and registered, but sent no HELLO on serial within 10 s')).toBe('porch-lamp was flashed and registered, but sent no HELLO on serial');
-    expect(earthless('lab is 5 GHz only (band 5g), but it is an esp32c6')).toBe('lab is 5g band only (band 5g), but it is an esp32c6');
+    expect(earthless('lab is 5 GHz only (band 5g), but it is an esp32c6')).toBe('lab is 5g only, but it is an esp32c6');
     expect(earthless('the image is 1.2 MB')).not.toMatch(/MB/);
     expect(earthless('plain words')).toBe('plain words');
   });
 
   it('picks the fix the page offers for a provisioning error', () => {
     expect(errorFixKind({ code: 'PORT_BUSY_EXTERNAL', message: '' })).toBe('port');
+    // a name another device has: back to the name, not a retry of the same request
+    expect(errorFixKind({ code: 'INVALID_ARGS', message: 'alias hall-pad is taken by device 02f200000002' })).toBe('name');
     expect(errorFixKind({ code: 'INCOMPATIBLE_PROFILE', message: 'network lab is 5 GHz only' })).toBe('network');
     expect(errorFixKind({ code: 'NOT_FOUND', message: 'no debug artifact is built for an esp32c6 board' })).toBe('profile');
     expect(errorFixKind({ code: 'INVALID_ARGS', message: 'several', candidates: ['a', 'b'] })).toBeNull();

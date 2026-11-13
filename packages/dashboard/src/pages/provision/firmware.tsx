@@ -26,7 +26,7 @@ function Profiles() {
           id={p.profile}
           lead={<Bead state={p.newest_debug ? 'online' : 'idle'} label={p.newest_debug ? 'built' : 'not built'} />}
           name={p.profile}
-          sub={`${p.board} · ${p.chip} · ${Object.keys(p.instances).length} capabilities`}
+          sub={`${p.board} · ${p.chip} · ${Object.keys(p.instances).length} ${Object.keys(p.instances).length === 1 ? 'capability' : 'capabilities'}`}
           value={p.newest_debug ? <FTime at={p.newest_debug.built_at} form="relative" /> : <span className="ash">not built</span>}
           extra={p.newest_debug ? <span className="mono">{p.newest_debug.fw_id.slice(0, 12)}</span> : undefined}
           actions={

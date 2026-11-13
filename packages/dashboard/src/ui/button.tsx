@@ -2,7 +2,7 @@
 // `destructive` is drawn in fault and, with `confirm`, asks in place before it acts (a second press confirms; Escape,
 // a click elsewhere or CANCEL disarms); `quiet` is an underlined word for secondary actions in rows.
 
-import { type ButtonHTMLAttributes, type ReactNode, useEffect, useRef, useState } from 'react';
+import { type ButtonHTMLAttributes, type ReactNode, type Ref, useEffect, useRef, useState } from 'react';
 
 import { engrave } from './text.tsx';
 
@@ -15,13 +15,29 @@ export interface ButtonProps extends Omit<ButtonHTMLAttributes<HTMLButtonElement
   /** Asks this in place before onClick runs ("Forget desk-pad?"); the confirming button says `confirmLabel`. */
   confirm?: string;
   confirmLabel?: string;
+  /** The word that keeps things as they are when asked (default "Cancel"; "Keep going" where Cancel would mislead). */
+  cancelLabel?: string;
   /** Running: disabled, with aria-busy (no spinner: nothing spins). */
   busy?: boolean;
+  ref?: Ref<HTMLButtonElement>;
 }
 
-export function Button({ variant = 'default', children, confirm, confirmLabel = 'Confirm', busy = false, onClick, disabled, type = 'button', ...rest }: ButtonProps) {
+export function Button({ variant = 'default', children, confirm, confirmLabel = 'Confirm', cancelLabel = 'Cancel', busy = false, onClick, disabled, type = 'button', ref, ...rest }: ButtonProps) {
   const [armed, setArmed] = useState(false);
   const box = useRef<HTMLSpanElement>(null);
+  const self = useRef<HTMLButtonElement | null>(null);
+  // disarmed by Escape or its cancel word: focus goes back to the button that asked
+  const refocus = useRef(false);
+  useEffect(() => {
+    if (!armed && refocus.current) {
+      refocus.current = false;
+      self.current?.focus();
+    }
+  }, [armed]);
+  const disarm = () => {
+    refocus.current = true;
+    setArmed(false);
+  };
   useEffect(() => {
     if (!armed) {
       return;
@@ -31,7 +47,12 @@ export function Button({ variant = 'default', children, confirm, confirmLabel = 
         setArmed(false);
       }
     };
-    const esc = (e: KeyboardEvent) => e.key === 'Escape' && setArmed(false);
+    const esc = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        e.preventDefault();
+        disarm();
+      }
+    };
     document.addEventListener('pointerdown', away);
     document.addEventListener('keydown', esc);
     return () => {
@@ -58,14 +79,27 @@ export function Button({ variant = 'default', children, confirm, confirmLabel = 
         >
           <span className="ui-button-text">{engrave(confirmLabel)}</span>
         </button>
-        <button type="button" className="ui-button" data-variant="quiet" onClick={() => setArmed(false)}>
-          <span className="ui-button-text">{engrave('Cancel')}</span>
+        <button type="button" className="ui-button" data-variant="quiet" onClick={disarm}>
+          <span className="ui-button-text">{engrave(cancelLabel)}</span>
         </button>
       </span>
     );
   }
   return (
-    <button {...common} className="ui-button" data-variant={variant} onClick={confirm ? () => setArmed(true) : onClick}>
+    <button
+      {...common}
+      ref={(el) => {
+        self.current = el;
+        if (typeof ref === 'function') {
+          ref(el);
+        } else if (ref) {
+          ref.current = el;
+        }
+      }}
+      className="ui-button"
+      data-variant={variant}
+      onClick={confirm ? () => setArmed(true) : onClick}
+    >
       {text}
     </button>
   );

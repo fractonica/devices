@@ -13,7 +13,7 @@ import {
   networkSetInput,
   sizeText,
 } from '../src/state/settings-view.ts';
-import { checkBead, checkFix, checkName, sortChecks, worstLevel } from '../src/state/checks.ts';
+import { checkBead, checkFix, checkName, hubFixes, sortChecks, worstLevel } from '../src/state/checks.ts';
 import { pureDurations } from '../src/state/pure-text.ts';
 
 let core: Core;
@@ -37,7 +37,8 @@ describe('doctor checks', () => {
   });
 
   it('offers a command to copy, the Ports section, or steps to read', () => {
-    expect(checkFix({ id: 'pytools', fix: 'fr doctor --fix' })).toEqual({ kind: 'command', command: 'fr doctor --fix', text: 'fr doctor --fix' });
+    expect(checkFix({ id: 'pytools', fix: 'fr doctor --fix' })).toEqual({ kind: 'hub', command: 'fr doctor --fix', text: 'the hub can run this fix' });
+    expect(hubFixes([{ level: 'error', fix: 'fr doctor --fix' }, { level: 'warn', fix: 'brew install ccache' }, { level: 'ok', fix: 'fr doctor --fix' }])).toHaveLength(1);
     expect(checkFix({ id: 'ccache', fix: 'brew install ccache' })).toMatchObject({ kind: 'command', command: 'brew install ccache' });
     expect(checkFix({ id: 'shim_path', fix: `add 'export PATH="$HOME/.local/bin:$PATH"' to ~/.zshrc` })).toMatchObject({ kind: 'command', command: 'export PATH="$HOME/.local/bin:$PATH"' });
     expect(checkFix({ id: 'x', fix: 'run `fr hub restart` after that' })).toMatchObject({ kind: 'command', command: 'fr hub restart' });
