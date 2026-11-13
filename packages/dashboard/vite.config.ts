@@ -7,7 +7,6 @@ import { builtinModules } from 'node:module';
 import { join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-import tailwindcss from '@tailwindcss/vite';
 import react from '@vitejs/plugin-react';
 import { defaultClientConditions, defineConfig, type Plugin } from 'vite';
 
@@ -27,11 +26,24 @@ const isBuiltin = (id: string) => id.startsWith('node:') || BUILTINS.has(id.spli
 // at runtime, so any import of one (say, the protocol root, which hashes the registry with node:crypto at
 // load) fails the build instead. A bare name such as `events` passes when an installed package of that
 // name resolves it. After bundling, no chunk may still import a builtin (an external that slipped by).
+//
+// One exception: the temporal core's binding (packages/time/vendor/lib/fractonica.js, vendored byte for byte) reads
+// a file: URL in Node through a dynamic `import('node:fs/promises')`. The dashboard always passes it an http URL, so
+// that branch never runs in a browser; the import resolves to a stub that throws, and nothing else may use it.
+const NODE_STUB = '\0fractonica:node-unavailable';
+const BINDING = /[\\/]packages[\\/]time[\\/]vendor[\\/]lib[\\/]fractonica\.js$/;
+
 function noNodeBuiltins(): Plugin {
   return {
     name: 'fractonica:no-node-builtins',
     enforce: 'pre',
+    load(id) {
+      return id === NODE_STUB ? "export function readFile() { throw new Error('no file system in a browser'); }\n" : null;
+    },
     async resolveId(id, importer, options) {
+      if (id === 'node:fs/promises' && importer && BINDING.test(importer)) {
+        return NODE_STUB;
+      }
       if (!id.startsWith('node:')) {
         if (!BUILTINS.has(id.split('/')[0]!)) {
           return null;
@@ -82,7 +94,7 @@ function sourceHashFile(): Plugin {
 
 export default defineConfig({
   base: '/',
-  plugins: [noNodeBuiltins(), react(), tailwindcss(), sourceHashFile()],
+  plugins: [noNodeBuiltins(), react(), sourceHashFile()],
   resolve: { conditions: ['@fractonica/source', ...defaultClientConditions] },
   define: { __FR_REGISTRY_HASH__: JSON.stringify(REGISTRY_HASH) },
   // Served from loopback by the hub, so size costs no download time; xterm is a chunk of its own.

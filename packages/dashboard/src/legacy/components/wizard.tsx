@@ -6,14 +6,14 @@
 
 import { useEffect, useReducer, useState } from 'react';
 
-import type { PortInfo } from '@fractonica/protocol/browser';
+import type { PortInfo } from '@fractonica/protocol/client';
 
-import { OpError } from '../api/rest.ts';
-import type { NetworkView } from '../api/types.ts';
-import { useAct, useLive } from '../hooks.ts';
-import { hubClock, live, rest } from '../runtime.ts';
-import { portHolder } from '../state/format.ts';
-import { pendingPrompts } from '../state/live.ts';
+import { OpError } from '../../api/rest.ts';
+import type { NetworkView } from '../../api/types.ts';
+import { useAct, useLive } from '../../hooks.ts';
+import { hubClock, live, rest } from '../../runtime.ts';
+import { portHolder } from '../../state/format.ts';
+import { pendingPrompts } from '../../state/live.ts';
 import {
   canSubmit,
   networkInput,
@@ -28,7 +28,7 @@ import {
   type ProfileOption,
   type WizardKnown,
   type WizardState,
-} from '../state/wizard.ts';
+} from '../../state/wizard.ts';
 import { Badge, Button, Field, Input, KV, Mono, Progress, Select } from './ui.tsx';
 
 const JOB_POLL_MS = 1500;
@@ -40,7 +40,6 @@ export function NetworkForm({ current, onSaved }: { current?: NetworkView | null
   const problem = networkProblem(f);
   return (
     <form
-      className="grid max-w-md gap-3"
       data-form="network"
       onSubmit={(e) => {
         e.preventDefault();
@@ -60,7 +59,7 @@ export function NetworkForm({ current, onSaved }: { current?: NetworkView | null
       <Field label="Password" hint={current?.password_set ? 'a password is stored; leave empty to keep it' : 'empty for an open network'}>
         <Input type="password" value={f.password} onChange={(e) => setF({ ...f, password: e.target.value })} maxLength={64} autoComplete="new-password" />
       </Field>
-      <div className="grid grid-cols-2 gap-3">
+      <div>
         <Field label="Country" hint="2 letters, optional">
           <Input value={f.country} onChange={(e) => setF({ ...f, country: e.target.value })} maxLength={2} />
         </Field>
@@ -68,7 +67,7 @@ export function NetworkForm({ current, onSaved }: { current?: NetworkView | null
           <Input value={f.bssid} onChange={(e) => setF({ ...f, bssid: e.target.value })} placeholder="aa:bb:cc:dd:ee:ff" />
         </Field>
       </div>
-      {problem && f.ssid ? <p className="text-xs text-bad">{problem}</p> : null}
+      {problem && f.ssid ? <p>{problem}</p> : null}
       <div>
         <Button type="submit" tone="primary" disabled={!!problem || act.isPending}>
           Save network
@@ -94,9 +93,9 @@ function Stages({ s }: { s: WizardState }) {
   const icon = { done: '✓', current: '•', failed: '✕', pending: '·' } as const;
   const tone = { done: 'text-ok', current: 'text-accent font-semibold', failed: 'text-bad font-semibold', pending: 'text-muted' } as const;
   return (
-    <ol className="flex flex-wrap gap-x-4 gap-y-1 text-sm" data-stages>
+    <ol data-stages>
       {stageView(s).map((x) => (
-        <li key={x.stage} className={tone[x.status]} data-stage={x.stage} data-stage-status={x.status}>
+        <li key={x.stage} data-stage={x.stage} data-stage-status={x.status}>
           {icon[x.status]} {x.stage}
         </li>
       ))}
@@ -197,11 +196,11 @@ export function ProvisionWizard({ port, known, onClose }: { port: PortInfo; know
   const prompt = Object.values(prompts).find((p) => promptForWizard(s, p) && pendingPrompts({ prompts }, hubClock.now()).includes(p));
   const title = known ? `Provision ${known.alias}` : 'Provision a new board';
   return (
-    <section className="rounded-lg border-2 border-accent/50 bg-panel p-4" data-wizard data-step={s.step}>
-      <header className="mb-3 flex items-center justify-between gap-2">
-        <h2 className="font-semibold">{title}</h2>
-        <div className="flex items-center gap-2">
-          <span className="text-xs text-muted">{['detect', 'network', 'profile', 'flash', 'done'].map((x) => (x === s.step ? `[${x}]` : x)).join(' → ')}</span>
+    <section data-wizard data-step={s.step}>
+      <header>
+        <h2>{title}</h2>
+        <div>
+          <span>{['detect', 'network', 'profile', 'flash', 'done'].map((x) => (x === s.step ? `[${x}]` : x)).join(' → ')}</span>
           <Button tone="ghost" onClick={onClose} aria-label="close">
             ×
           </Button>
@@ -209,7 +208,7 @@ export function ProvisionWizard({ port, known, onClose }: { port: PortInfo; know
       </header>
 
       {s.step === 'detect' ? (
-        <div className="flex flex-col gap-3">
+        <div>
           <KV
             items={[
               ['port', <Mono key="p">{port.path}</Mono>],
@@ -218,7 +217,7 @@ export function ProvisionWizard({ port, known, onClose }: { port: PortInfo; know
               ['held by', portHolder(port)],
             ]}
           />
-          {port.state === 'busy_external' ? <p className="text-sm text-warn">Another program holds this port: close it first, or provisioning fails with PORT_BUSY_EXTERNAL.</p> : null}
+          {port.state === 'busy_external' ? <p>Another program holds this port: close it first, or provisioning fails with PORT_BUSY_EXTERNAL.</p> : null}
           <div>
             <Button tone="primary" onClick={() => dispatch({ type: 'next' })} disabled={s.network.state === 'loading'}>
               Next
@@ -228,9 +227,9 @@ export function ProvisionWizard({ port, known, onClose }: { port: PortInfo; know
       ) : null}
 
       {s.step === 'network' ? (
-        <div className="flex flex-col gap-3">
-          <p className="text-sm">The hub has no Wi-Fi network for its nodes yet. Set it once; every board you provision joins it.</p>
-          {s.network.state === 'error' ? <p className="text-sm text-bad">{s.network.error}</p> : null}
+        <div>
+          <p>The hub has no Wi-Fi network for its nodes yet. Set it once; every board you provision joins it.</p>
+          {s.network.state === 'error' ? <p>{s.network.error}</p> : null}
           <NetworkForm onSaved={(n) => dispatch({ type: 'network', network: { state: 'set', ssid: n.ssid } })} />
           <div>
             <Button tone="ghost" onClick={() => dispatch({ type: 'back' })}>
@@ -242,7 +241,6 @@ export function ProvisionWizard({ port, known, onClose }: { port: PortInfo; know
 
       {s.step === 'profile' ? (
         <form
-          className="flex max-w-lg flex-col gap-3"
           onSubmit={(e) => {
             e.preventDefault();
             if (canSubmit(s)) {
@@ -263,8 +261,8 @@ export function ProvisionWizard({ port, known, onClose }: { port: PortInfo; know
           <Field label="Alias" error={s.aliasError} hint={known ? `now ${known.alias}` : 'empty: <profile>-<last 6 hex of the MAC>'}>
             <Input value={s.alias} onChange={(e) => dispatch({ type: 'alias', alias: e.target.value })} placeholder="pad-red-1" maxLength={31} data-input="alias" />
           </Field>
-          <p className="text-xs text-muted">Wi-Fi: {s.network.state === 'set' ? s.network.ssid : 'not set'}. Provisioning erases what the board runs and flashes the newest debug build.</p>
-          <div className="flex gap-2">
+          <p>Wi-Fi: {s.network.state === 'set' ? s.network.ssid : 'not set'}. Provisioning erases what the board runs and flashes the newest debug build.</p>
+          <div>
             <Button tone="ghost" onClick={() => dispatch({ type: 'back' })}>
               Back
             </Button>
@@ -276,25 +274,25 @@ export function ProvisionWizard({ port, known, onClose }: { port: PortInfo; know
       ) : null}
 
       {s.step === 'flash' || s.step === 'done' ? (
-        <div className="flex flex-col gap-3">
+        <div>
           <Stages s={s} />
           {s.step === 'flash' && !s.error ? <Progress pct={s.job?.stage === 'flash' ? s.job.progress?.pct : undefined} /> : null}
-          {s.job?.progress?.message && s.step === 'flash' ? <p className="text-xs text-muted">{s.job.progress.message}</p> : null}
-          {prompt ? <p className="rounded bg-warn/15 px-3 py-2 text-sm font-semibold">{prompt.text}</p> : null}
+          {s.job?.progress?.message && s.step === 'flash' ? <p>{s.job.progress.message}</p> : null}
+          {prompt ? <p>{prompt.text}</p> : null}
           {s.error ? (
-            <div className="rounded border border-bad/40 bg-bad/5 px-3 py-2 text-sm" role="alert" data-error={s.error.code}>
+            <div role="alert" data-error={s.error.code}>
               <p>
-                <span className="font-semibold text-bad">{s.error.code}</span> {s.error.message}
+                <span>{s.error.code}</span> {s.error.message}
               </p>
               {s.error.human.length ? (
-                <ul className="mt-1 list-disc pl-5">
+                <ul>
                   {s.error.human.map((h) => (
                     <li key={h}>{h}</li>
                   ))}
                 </ul>
               ) : null}
               {s.error.candidates.length ? (
-                <div className="mt-2 flex flex-wrap items-center gap-2">
+                <div>
                   <span>Pick the profile:</span>
                   {s.error.candidates.map((c) => (
                     <Button key={c} onClick={() => dispatch({ type: 'pick', profile: c })}>
@@ -303,7 +301,7 @@ export function ProvisionWizard({ port, known, onClose }: { port: PortInfo; know
                   ))}
                 </div>
               ) : null}
-              <div className="mt-2 flex gap-2">
+              <div>
                 <Button onClick={() => dispatch({ type: 'back' })}>Back</Button>
                 {!s.error.candidates.length ? (
                   <Button tone="primary" onClick={submit} data-action="retry">
@@ -314,36 +312,36 @@ export function ProvisionWizard({ port, known, onClose }: { port: PortInfo; know
             </div>
           ) : null}
           {s.step === 'done' && !s.result && s.job?.detail ? (
-            <div className="flex gap-2" data-result="unknown">
-              <span className="self-center text-sm text-muted">Provisioned; the job returned no result.</span>
+            <div data-result="unknown">
+              <span>Provisioned; the job returned no result.</span>
               <Button tone="primary" onClick={onClose}>
                 Done
               </Button>
             </div>
           ) : null}
           {s.step === 'done' && s.result ? (
-            <div className="flex flex-col gap-2" data-result={s.result.wifi}>
+            <div data-result={s.result.wifi}>
               <KV
                 items={[
-                  ['alias', <span key="a" className="font-semibold">{s.result.alias}</span>],
+                  ['alias', <span key="a">{s.result.alias}</span>],
                   ['profile · firmware', `${s.result.profile} · ${s.result.fw_id.slice(0, 8)}`],
                   ['Wi-Fi', s.result.wifi === 'joined' ? <Badge key="w" tone="ok">joined</Badge> : <Badge key="w" tone="warn">not joined</Badge>],
                   ['online', s.online ? <Badge key="o" tone="ok">online</Badge> : <Badge key="o">waiting</Badge>],
                 ]}
               />
               {s.result.wifi !== 'joined' ? (
-                <p className="text-sm text-warn">It said HELLO over USB but not over Wi-Fi: check the network (Network page) and its log on its device page.</p>
+                <p>It said HELLO over USB but not over Wi-Fi: check the network (Network page) and its log on its device page.</p>
               ) : null}
               {s.result.warnings?.map((w) => (
-                <p key={w} className="text-xs text-warn">
+                <p key={w}>
                   {w}
                 </p>
               ))}
-              <div className="flex gap-2">
+              <div>
                 <Button tone="primary" onClick={onClose}>
                   Done
                 </Button>
-                <span className="self-center text-xs text-muted">{wizardDeviceId(s)}</span>
+                <span>{wizardDeviceId(s)}</span>
               </div>
             </div>
           ) : null}

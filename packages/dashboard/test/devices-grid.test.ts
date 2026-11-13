@@ -14,13 +14,13 @@ import type { DeviceView } from '@fractonica/protocol/browser';
 vi.mock('@tanstack/react-router', async () => {
   const react = await import('react');
   return {
-    Link: ({ children, params }: { children?: ReactNode; params?: { alias?: string } }) => react.createElement('a', { href: `#/device/${params?.alias ?? ''}` }, children),
+    Link: ({ children, params }: { children?: ReactNode; params?: { id?: string } }) => react.createElement('a', { href: `#/devices/${params?.id ?? ''}` }, children),
   };
 });
 
 type Runtime = typeof import('../src/runtime.ts');
-type Page = typeof import('../src/pages/devices.tsx');
-type Tile = typeof import('../src/components/device.tsx');
+type Page = typeof import('../src/legacy/pages/devices.tsx');
+type Tile = typeof import('../src/legacy/components/device.tsx');
 
 let runtime: Runtime;
 let page: Page;
@@ -30,8 +30,8 @@ beforeAll(async () => {
   // runtime.ts builds its /ws URL from the page's location at import.
   (globalThis as { location?: unknown }).location ??= { protocol: 'http:', host: '127.0.0.1:7420' };
   runtime = await import('../src/runtime.ts');
-  page = await import('../src/pages/devices.tsx');
-  tile = await import('../src/components/device.tsx');
+  page = await import('../src/legacy/pages/devices.tsx');
+  tile = await import('../src/legacy/components/device.tsx');
 });
 
 const N = 30;

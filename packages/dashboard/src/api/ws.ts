@@ -19,7 +19,7 @@
 // 'unsafe-eval', and Zod 4 probes `new Function` on its first object parse (a test keeps this decoder in
 // step with WsHubFrameSchema).
 
-import { parseCursor, WS_PATH, type HubEvent, type LogLine, type WsHubFrame, type WsSub } from '@fractonica/protocol/browser';
+import { parseCursor, WS_PATH, type HubEvent, type LogLine, type WsHubFrame, type WsSub } from '@fractonica/protocol/client';
 
 import type { EventsPage } from './types.ts';
 

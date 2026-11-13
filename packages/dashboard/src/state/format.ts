@@ -1,6 +1,6 @@
 // Display helpers shared by the pages: times, durations, sizes and the short forms of ids.
 
-import type { PortInfo } from '@fractonica/protocol/browser';
+import type { PortInfo } from '@fractonica/protocol/client';
 
 import type { Now } from './clock.ts';
 

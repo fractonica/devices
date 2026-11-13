@@ -6,11 +6,11 @@
 
 import { Link } from '@tanstack/react-router';
 
-import type { DeviceView } from '@fractonica/protocol/browser';
+import type { DeviceView } from '@fractonica/protocol/client';
 
 import { DeviceTile } from '../components/device.tsx';
 import { Empty, ErrorBox } from '../components/ui.tsx';
-import { useOp } from '../hooks.ts';
+import { useOp } from '../../hooks.ts';
 
 const PRESENCE_ORDER: Record<string, number> = { online: 0, suspect: 1, offline: 2, unknown: 3 };
 
@@ -23,11 +23,11 @@ export function DevicesPage() {
   const devices = (q.data?.devices ?? []).slice().sort(byPresenceThenAlias);
   const online = devices.filter((d) => d.presence === 'online').length;
   return (
-    <div className="flex flex-col gap-4">
-      <div className="flex items-baseline justify-between">
-        <h1 className="text-lg font-semibold">Devices</h1>
+    <div>
+      <div>
+        <h1>Devices</h1>
         {q.data ? (
-          <p className="text-sm text-muted" data-count={devices.length}>
+          <p data-count={devices.length}>
             {online} of {devices.length} online{q.data.truncated ? ` (first ${devices.length} of ${q.data.count})` : ''}
           </p>
         ) : null}
@@ -35,10 +35,10 @@ export function DevicesPage() {
       <ErrorBox error={q.error} what="device_list" />
       {q.data && !devices.length ? (
         <Empty>
-          No devices yet. Plug a board in and provision it on the <Link to="/ports" className="underline">Ports</Link> page.
+          No devices yet. Plug a board in and provision it on the <Link to="/provision">Provision</Link> page.
         </Empty>
       ) : null}
-      <div className="grid grid-cols-[repeat(auto-fill,minmax(16rem,1fr))] gap-3" data-grid="devices">
+      <div data-grid="devices">
         {devices.map((d) => (
           <DeviceTile key={d.device_id} device={d} />
         ))}

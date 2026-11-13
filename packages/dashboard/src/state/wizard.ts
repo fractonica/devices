@@ -14,7 +14,7 @@
 // An error shows the hub's message and what a person can do (remediation). INVALID_ARGS with candidate
 // profiles (several built for the chip) offers them and retries with the one picked.
 
-import { aliasProblem, BROADCAST_ALIAS, type Prompt, type ToolError } from '@fractonica/protocol/browser';
+import { aliasProblem, BROADCAST_ALIAS, type Prompt, type ToolError } from '@fractonica/protocol/client';
 
 import { remedies } from '../api/rest.ts';
 import { TERMINAL_JOB_STATUSES, type JobStatus, type ProvisionResult } from '../api/types.ts';

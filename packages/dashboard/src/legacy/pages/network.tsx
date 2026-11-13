@@ -5,12 +5,12 @@
 
 import { useState } from 'react';
 
-import type { LatencyStats } from '../api/types.ts';
+import type { LatencyStats } from '../../api/types.ts';
 import { Badge, Button, Empty, ErrorBox, Json, KV, Mono, Panel, Table, type BadgeTone } from '../components/ui.tsx';
 import { NetworkForm } from '../components/wizard.tsx';
-import { useAct, useNow, useOp } from '../hooks.ts';
-import { agoIso, ms } from '../state/format.ts';
-import { BROADCAST_PING } from '../state/wizard.ts';
+import { useAct, useNow, useOp } from '../../hooks.ts';
+import { agoIso, ms } from '../../state/format.ts';
+import { BROADCAST_PING } from '../../state/wizard.ts';
 
 const LNP_TONE: Record<string, BadgeTone> = { allowed: 'ok', denied: 'bad', unknown: 'muted' };
 const ADVERT_TONE: Record<string, BadgeTone> = { registered: 'ok', retrying: 'warn', off: 'muted' };
@@ -22,11 +22,11 @@ function Wifi() {
   return (
     <Panel title="Wi-Fi for the nodes" actions={q.data && !editing ? <Button onClick={() => setEditing(true)}>Change</Button> : null}>
       {q.error && !missing ? <ErrorBox error={q.error} what="network_get" /> : null}
-      {missing ? <p className="mb-3 text-sm">Not set yet: nodes cannot join until it is.</p> : null}
+      {missing ? <p>Not set yet: nodes cannot join until it is.</p> : null}
       {q.data && !editing ? (
         <KV
           items={[
-            ['SSID', <span key="s" className="font-semibold">{q.data.ssid}</span>],
+            ['SSID', <span key="s">{q.data.ssid}</span>],
             ['password', q.data.password_set ? 'stored (never shown)' : 'none (open network)'],
             ['country', q.data.country ?? '–'],
             ['BSSID', q.data.bssid ?? 'any'],
@@ -45,7 +45,7 @@ function Broadcast() {
   const act = useAct('message_send', { done: () => 'ping broadcast' });
   return (
     <Panel title="Hub broadcast">
-      <div className="flex flex-wrap items-center gap-3">
+      <div>
         <Button
           tone="primary"
           disabled={act.isPending}
@@ -54,10 +54,10 @@ function Broadcast() {
         >
           Broadcast "ping"
         </Button>
-        <span className="text-sm text-muted">One MSG to every node (hub broadcast, flooded over ESP-NOW; never acknowledged).</span>
+        <span>One MSG to every node (hub broadcast, flooded over ESP-NOW; never acknowledged).</span>
       </div>
       {last !== null ? (
-        <div className="mt-3">
+        <div>
           <Json value={last} />
         </div>
       ) : null}
@@ -74,7 +74,7 @@ function Lan() {
   // The router's `udp_blocked: <alias>: …` warnings: a node whose UDP never reaches the hub (05 §5.10).
   const blocked = (s?.warnings ?? []).filter((w) => w.startsWith('udp_blocked:')).map((w) => w.split(':')[1]?.trim() ?? '?');
   return (
-    <div className="grid gap-4 lg:grid-cols-2">
+    <div>
       <Panel title="Hub on the LAN">
         <ErrorBox error={status.error} what="hub_status" />
         {s ? (
@@ -82,24 +82,24 @@ function Lan() {
             items={[
               [
                 'Local Network',
-                <span key="l" className="flex flex-wrap items-center gap-2">
+                <span key="l">
                   <Badge tone={LNP_TONE[s.lnp ?? 'unknown']}>{s.lnp ?? 'unknown'}</Badge>
-                  {s.lnp_checked_at ? <span className="text-xs text-muted">checked {agoIso(s.lnp_checked_at, now)}</span> : null}
+                  {s.lnp_checked_at ? <span>checked {agoIso(s.lnp_checked_at, now)}</span> : null}
                 </span>,
               ],
               ['launched by', <Mono key="b">{s.launched_by ?? '–'}</Mono>],
               [
                 'advert',
-                <span key="a" className="flex flex-wrap items-center gap-2">
+                <span key="a">
                   <Badge tone={ADVERT_TONE[s.advert?.state ?? 'off']}>{s.advert?.state ?? 'off'}</Badge>
                   {s.advert?.name ? <Mono>{s.advert.name}</Mono> : null}
-                  {s.advert?.error ? <span className="text-xs text-bad">{s.advert.error}</span> : null}
+                  {s.advert?.error ? <span>{s.advert.error}</span> : null}
                 </span>,
               ],
               [
                 'UDP from nodes',
                 blocked.length ? (
-                  <span key="u" className="flex flex-wrap items-center gap-1" data-udp-blocked={blocked.join(',')}>
+                  <span key="u" data-udp-blocked={blocked.join(',')}>
                     <Badge tone="warn">blocked</Badge> {blocked.join(', ')}
                   </span>
                 ) : (
@@ -123,13 +123,13 @@ function Lan() {
           />
         ) : null}
         {s?.lnp === 'denied' ? (
-          <p className="mt-3 text-sm text-bad">
+          <p>
             macOS denies the hub Local Network access: approve it for {s.launched_by ?? 'the app that started it'} in System Settings → Privacy &amp; Security → Local Network, or start the hub from
             Terminal.
           </p>
         ) : null}
         {s?.warnings.length ? (
-          <ul className="mt-3 list-disc pl-5 text-sm text-warn" data-warnings>
+          <ul data-warnings>
             {s.warnings.map((w) => (
               <li key={w}>{w}</li>
             ))}
@@ -143,9 +143,9 @@ function Lan() {
           <Empty>No broadcast counters yet.</Empty>
         )}
         {counters.length > flood.length ? (
-          <details className="mt-3 text-sm">
-            <summary className="cursor-pointer text-muted">all {counters.length} counters</summary>
-            <div className="mt-2">
+          <details>
+            <summary>all {counters.length} counters</summary>
+            <div>
               <KV items={counters.map(([k, v]) => [k, String(v)])} />
             </div>
           </details>
@@ -157,10 +157,10 @@ function Lan() {
 
 function Pct({ p }: { p: { n: number; p50_ms: number | null; p99_ms: number | null } | undefined }) {
   if (!p || !p.n) {
-    return <span className="text-muted">–</span>;
+    return <span>–</span>;
   }
   return (
-    <span className="font-mono text-xs" title={`${p.n} samples`}>
+    <span title={`${p.n} samples`}>
       {ms(p.p50_ms)} / {ms(p.p99_ms)}
     </span>
   );
@@ -188,7 +188,7 @@ function Latency() {
         <Table head={['device', ...links.map((l) => `PING ${l}`), 'input → hub', ...paths.map((p) => `binding ${p}`)]}>
           {d.devices.map((x) => (
             <tr key={x.device} data-latency={x.alias}>
-              <td className="font-medium">
+              <td>
                 {x.alias} <Badge tone={x.presence === 'online' ? 'ok' : 'muted'}>{x.presence}</Badge>
               </td>
               {links.map((l) => (
@@ -214,9 +214,9 @@ function Latency() {
 
 export function NetworkPage() {
   return (
-    <div className="flex flex-col gap-4">
-      <h1 className="text-lg font-semibold">Network</h1>
-      <div className="grid gap-4 lg:grid-cols-2">
+    <div>
+      <h1>Network</h1>
+      <div>
         <Wifi />
         <Broadcast />
       </div>

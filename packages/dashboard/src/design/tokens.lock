@@ -1,0 +1,13 @@
+{
+  "schema": "fractonica.tokens-lock/1",
+  "web": {
+    "repository": "https://github.com/fractonica/web",
+    "commit": "892997c3e6d4d15d2fa475fa13684e323797d999"
+  },
+  "files": {
+    "tokens.js": {
+      "from": "public/app/design/tokens.js",
+      "sha256": "8cd320c0cbcada129081b4f49d32346c192f8685b7193eec6bae40cbd722dce7"
+    }
+  }
+}

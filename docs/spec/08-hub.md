@@ -10,7 +10,7 @@
 | Serial | `serialport` 13 behind a `SerialTransport` interface | N-API prebuilds for darwin-arm64 and linux-arm64. Plan B: a napi-rs addon over `serialport-rs` |
 | Flashing | `pytools` sidecar: uv-managed Python 3.12, **esptool 5.6.0 API**, one process per job, JSON lines ([06 §6.10](06-identity-ota.md)) | Espressif recommends the API over log scraping |
 | Storage | `better-sqlite3` (WAL) behind a `Db` interface, **writes on a worker thread** | Fast; keeps the event loop free |
-| Dashboard | React 19 + Vite + TanStack Query/Router/Virtual + Zustand + Tailwind + xterm.js (logs) | Good fit for agents writing the code; logs bypass React state |
+| Dashboard | React 19 + Vite + TanStack Query/Router/Virtual + Zustand + xterm.js (logs); styled only from the site's design tokens (`src/design/tokens.js`, vendored from the web repository) | Good fit for agents writing the code; logs bypass React state |
 | MCP | `@modelcontextprotocol/server` v2 (spec 2026-07-28, legacy serving on), stdio adapter first | [09 §9.6](09-agent-api.md) |
 | Rejected | Bun (serialport panics, oven-sh/bun#18546); Python, Go or Rust hub (the consumer surfaces are TS); a Docker hub (no USB on macOS) | |
 

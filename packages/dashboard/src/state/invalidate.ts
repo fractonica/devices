@@ -1,7 +1,7 @@
 // Which cached op results an event makes stale (design c6 §5 live-update rules). Query keys start with the
 // op name, so the app invalidates by name; it batches the names of one burst (runtime.ts).
 
-import type { HubEvent, OpName } from '@fractonica/protocol/browser';
+import type { HubEvent, OpName } from '@fractonica/protocol/client';
 
 import { TERMINAL_JOB_STATUSES, type JobKind, type JobStatus } from '../api/types.ts';
 

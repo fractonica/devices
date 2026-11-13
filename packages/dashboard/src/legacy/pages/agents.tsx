@@ -2,13 +2,13 @@
 // waiting for a person (design c6 D3), the active serial leases (D4), and the jobs started through
 // `fr mcp` (job origin mcp, D18). Confirmations of destructive ops come in M2.
 
-import type { Prompt } from '@fractonica/protocol/browser';
+import type { Prompt } from '@fractonica/protocol/client';
 
 import { JobTable } from '../components/jobs.tsx';
 import { Empty, ErrorBox, Mono, Panel, Table } from '../components/ui.tsx';
-import { useLive, useNow, useOp } from '../hooks.ts';
-import { agoIso, leftMs, span } from '../state/format.ts';
-import { pendingPrompts } from '../state/live.ts';
+import { useLive, useNow, useOp } from '../../hooks.ts';
+import { agoIso, leftMs, span } from '../../state/format.ts';
+import { pendingPrompts } from '../../state/live.ts';
 import { ReleaseButton } from './ports.tsx';
 
 export function AgentsPage() {
@@ -19,15 +19,15 @@ export function AgentsPage() {
   const prompts: Prompt[] = pendingPrompts({ prompts: useLive((s) => s.prompts) }, now);
   const leased = (ports.data?.ports ?? []).filter((p) => p.lease);
   return (
-    <div className="flex flex-col gap-4">
-      <h1 className="text-lg font-semibold">Agents</h1>
+    <div>
+      <h1>Agents</h1>
       <Panel title="Waiting for a person">
         {prompts.length ? (
-          <ul className="flex flex-col gap-2">
+          <ul>
             {prompts.map((p) => (
-              <li key={p.prompt_id} className="rounded border border-warn/60 bg-warn/10 px-3 py-2" data-prompt={p.prompt_id}>
-                <p className="font-semibold">{p.text}</p>
-                <p className="text-xs text-muted">
+              <li key={p.prompt_id} data-prompt={p.prompt_id}>
+                <p>{p.text}</p>
+                <p>
                   waiting for <Mono>{p.types.join(', ')}</Mono>
                   {p.selector ? (
                     <>
@@ -58,7 +58,7 @@ export function AgentsPage() {
                 </td>
                 <td>{p.device_id ? <Mono>{p.device_id}</Mono> : '–'}</td>
                 <td>{p.lease!.holder_pid ?? '–'}</td>
-                <td className="text-xs text-muted">{agoIso(p.lease!.expires_at, now)}</td>
+                <td>{agoIso(p.lease!.expires_at, now)}</td>
                 <td>
                   <ReleaseButton leaseId={p.lease!.lease_id} />
                 </td>

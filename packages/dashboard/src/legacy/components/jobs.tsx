@@ -3,11 +3,11 @@
 
 import { useState } from 'react';
 
-import type { Job } from '@fractonica/protocol/browser';
+import type { Job } from '@fractonica/protocol/client';
 
-import { TERMINAL_JOB_STATUSES } from '../api/types.ts';
-import { useAct, useLive, useNow } from '../hooks.ts';
-import { agoIso, brief } from '../state/format.ts';
+import { TERMINAL_JOB_STATUSES } from '../../api/types.ts';
+import { useAct, useLive, useNow } from '../../hooks.ts';
+import { agoIso, brief } from '../../state/format.ts';
 import { JobLogTerm } from './log-term.tsx';
 import { Badge, Button, Empty, Progress, statusTone, Table } from './ui.tsx';
 
@@ -29,31 +29,31 @@ function JobRow({ job, onLogs, open }: { job: Job; onLogs: () => void; open: boo
   const err = job.error as { code?: string; message?: string } | undefined;
   return (
     <tr data-job={job.job_id} data-status={j.status}>
-      <td className="font-mono text-xs">{job.job_id}</td>
+      <td>{job.job_id}</td>
       <td>{job.kind}</td>
-      <td className="max-w-48 truncate" title={job.targets.join(', ')}>
+      <td title={job.targets.join(', ')}>
         {job.targets.join(', ')}
       </td>
       <td>
         <Badge tone={statusTone(j.status)}>{j.status}</Badge>
       </td>
-      <td className="min-w-40">
-        <div className="flex flex-col gap-1">
-          <span className="text-xs">
+      <td>
+        <div>
+          <span>
             {j.stage ?? ''}
             {j.progress?.message ? ` · ${j.progress.message}` : ''}
           </span>
           {running ? <Progress pct={j.progress?.pct} /> : null}
           {err?.code ? (
-            <span className="text-xs text-bad" title={err.message}>
+            <span title={err.message}>
               {err.code}: {brief(err.message, 80)}
             </span>
           ) : null}
         </div>
       </td>
-      <td className="text-xs text-muted">{job.origin ?? '–'}</td>
-      <td className="text-xs whitespace-nowrap text-muted">{agoIso(job.created_at, now)}</td>
-      <td className="whitespace-nowrap">
+      <td>{job.origin ?? '–'}</td>
+      <td>{agoIso(job.created_at, now)}</td>
+      <td>
         <Button tone="ghost" onClick={onLogs}>
           {open ? 'Hide output' : 'Output'}
         </Button>
@@ -73,7 +73,7 @@ export function JobTable({ jobs }: { jobs: Job[] }) {
     return <Empty>No jobs.</Empty>;
   }
   return (
-    <div className="flex flex-col gap-3">
+    <div>
       <Table head={['job', 'kind', 'targets', 'status', 'stage', 'origin', 'created', '']}>
         {jobs.map((j) => (
           <JobRow key={j.job_id} job={j} open={open === j.job_id} onLogs={() => setOpen((o) => (o === j.job_id ? null : j.job_id))} />

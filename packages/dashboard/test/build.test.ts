@@ -1,7 +1,8 @@
 // The dashboard build (design c6 §5): `vite build` with the package's own config succeeds, emits one
 // index.html whose scripts are external files (the hub's CSP allows no inline script), keeps no Node
 // builtin import in any chunk, embeds the op registry hash and stamps dist/.source-hash as `fr doctor
-// --fix` does (design c6 D10); an entry that imports a Node builtin fails the build.
+// --fix` does (design c6 D10); an entry that imports a Node builtin fails the build. Stage 4: the core's
+// wasm is an asset, and neither Zod nor Tailwind is in the output.
 
 import { mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -45,6 +46,15 @@ describe('dashboard build', () => {
     expect(all).not.toMatch(/\bfrom\s*["']node:|\bimport\(\s*["']node:|\brequire\(\s*["']node:/);
     expect(all).not.toContain('__vite-browser-external');
     expect(all).toContain(REGISTRY_HASH);
+    // The temporal core is one of the build's own assets (the hub serves it as application/wasm), referenced by name.
+    const wasm = assets.filter((f) => /^fractonica-[\w-]+\.wasm$/.test(f));
+    expect(wasm).toHaveLength(1);
+    expect(all).toContain(`/assets/${wasm[0]}`);
+    // Frames are checked by shape: no Zod in any chunk (it came in through @fractonica/protocol/browser before).
+    expect(all).not.toMatch(/ZodError|\$ZodType|zod\/v4/);
+    // No Tailwind: the stylesheet is the tokens' (no utility layer, no colour literal in it; test/design-rules).
+    const css = assets.filter((f) => f.endsWith('.css')).map((f) => readFileSync(join(out, 'assets', f), 'utf8')).join('\n');
+    expect(css).not.toMatch(/tailwindcss|--tw-/);
     // The hub calls a dist without it stale (hub_status.dashboard.stale): a plain `vite build` stamps it.
     expect(readFileSync(join(out, SOURCE_HASH_FILE), 'utf8')).toBe(`${await sourceHash(REPO, PKG)}\n`);
   });

@@ -6,7 +6,7 @@ import { useMutation, useQuery, type UseQueryResult } from '@tanstack/react-quer
 import { useEffect, useState } from 'react';
 import { useStore } from 'zustand';
 
-import type { OpName } from '@fractonica/protocol/browser';
+import type { OpName } from '@fractonica/protocol/client';
 
 import { OpError, remedies } from './api/rest.ts';
 import type { OpInput, OpOutput } from './api/types.ts';

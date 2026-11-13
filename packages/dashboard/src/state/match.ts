@@ -3,7 +3,7 @@
 // in which `*` matches any run of characters, dots included — and a selector resolved by the hub
 // (device_list) to a set of device ids.
 
-import { type HubEvent, matchType } from '@fractonica/protocol/browser';
+import { type HubEvent, matchType } from '@fractonica/protocol/client';
 
 /** `"boot.*, device.online"` -> ['boot.*', 'device.online']; empty parts dropped. */
 export function parseTypes(types: string | undefined): string[] {

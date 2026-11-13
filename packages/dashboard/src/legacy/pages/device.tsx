@@ -11,16 +11,16 @@ import { useMemo, useState } from 'react';
 
 import { CATALOG, type CatalogCapability, type CatalogCommand } from '@fractonica/protocol/gen';
 
-import { opMissing } from '../api/rest.ts';
-import type { CommandOutcome, DeviceDetail } from '../api/types.ts';
+import { opMissing } from '../../api/rest.ts';
+import type { CommandOutcome, DeviceDetail } from '../../api/types.ts';
 import { IdentifyButton, RenameForm, TagsForm, useFlash } from '../components/device.tsx';
 import { DisplayCard } from '../components/display.tsx';
 import { LogTerm } from '../components/log-term.tsx';
 import { Badge, Button, Empty, ErrorBox, Input, Json, KV, Mono, Panel, presenceTone, Table } from '../components/ui.tsx';
-import { useAct, useLive, useNow, useOp } from '../hooks.ts';
-import { agoIso, brief, short, span } from '../state/format.ts';
-import { defaultArgs, joinCatalog, parseArgs, visibleMembers, type InstanceView } from '../state/caps.ts';
-import type { PropPoint } from '../state/live.ts';
+import { useAct, useLive, useNow, useOp } from '../../hooks.ts';
+import { agoIso, brief, short, span } from '../../state/format.ts';
+import { defaultArgs, joinCatalog, parseArgs, visibleMembers, type InstanceView } from '../../state/caps.ts';
+import type { PropPoint } from '../../state/live.ts';
 import { EventRow } from './live.tsx';
 
 const GESTURES = ['press', 'release', 'click', 'double_click', 'long_press'] as const;
@@ -32,7 +32,6 @@ function CommandForm({ deviceId, inst, cmd }: { deviceId: string; inst: string; 
   const res: CommandOutcome | undefined = act.data?.results[0];
   return (
     <form
-      className="flex flex-wrap items-center gap-2"
       data-command={`${inst}.${cmd.name}`}
       onSubmit={(e) => {
         e.preventDefault();
@@ -49,17 +48,16 @@ function CommandForm({ deviceId, inst, cmd }: { deviceId: string; inst: string; 
           value={text}
           onChange={(e) => setText(e.target.value)}
           aria-label={`${cmd.name} args`}
-          className="min-w-48 flex-1"
           title={cmd.fields.map((f) => `${f.name}: ${f.type}${f.default !== undefined ? ` = ${String(f.default)}` : ''}`).join(', ')}
         />
       ) : null}
-      {!parsed.ok ? <span className="text-xs text-bad">{parsed.error}</span> : null}
+      {!parsed.ok ? <span>{parsed.error}</span> : null}
       {res ? (
-        <span className="text-xs" data-result={res.status}>
+        <span data-result={res.status}>
           <Badge tone={res.status === 'ok' || res.status === 'sent' ? 'ok' : 'warn'}>{res.status}</Badge>
-          {res.rtt_ms !== undefined ? <span className="text-muted"> {res.rtt_ms} ms</span> : null}
-          {res.fields && Object.keys(res.fields).length ? <Mono className="text-muted"> {brief(res.fields, 80)}</Mono> : null}
-          {res.error ? <span className="text-bad"> {res.error}</span> : null}
+          {res.rtt_ms !== undefined ? <span> {res.rtt_ms} ms</span> : null}
+          {res.fields && Object.keys(res.fields).length ? <Mono> {brief(res.fields, 80)}</Mono> : null}
+          {res.error ? <span> {res.error}</span> : null}
         </span>
       ) : null}
     </form>
@@ -69,8 +67,8 @@ function CommandForm({ deviceId, inst, cmd }: { deviceId: string; inst: string; 
 function Gestures({ deviceId, inst }: { deviceId: string; inst: string }) {
   const act = useAct('input_simulate', { done: (r) => ({ tone: r.results[0]?.status === 'ok' ? 'ok' : 'warn', title: `${inst}: ${r.results[0]?.status ?? 'no answer'}` }) });
   return (
-    <div className="flex flex-wrap items-center gap-1">
-      <span className="text-xs text-muted">simulate</span>
+    <div>
+      <span>simulate</span>
       {GESTURES.map((g) => (
         <Button key={g} tone="ghost" disabled={act.isPending} onClick={() => act.mutate({ selector: `id:${deviceId}`, instance: inst, gesture: g })}>
           {g}
@@ -90,16 +88,15 @@ function AnalogForm({ deviceId, inst }: { deviceId: string; inst: string }) {
   const set = (v: number) => setValue(Number.isFinite(v) ? Math.min(ANALOG_MAX, Math.max(0, Math.round(v))) : 0);
   return (
     <form
-      className="flex flex-wrap items-center gap-2"
       data-analog={inst}
       onSubmit={(e) => {
         e.preventDefault();
         act.mutate({ selector: `id:${deviceId}`, instance: inst, value, layer: 'inject' });
       }}
     >
-      <span className="text-xs text-muted">simulate</span>
-      <input type="range" min={0} max={ANALOG_MAX} value={value} onChange={(e) => set(Number(e.target.value))} aria-label={`${inst} value`} className="min-w-32 flex-1 accent-accent" />
-      <Input type="number" min={0} max={ANALOG_MAX} value={value} onChange={(e) => set(Number(e.target.value))} aria-label={`${inst} value number`} className="w-24" />
+      <span>simulate</span>
+      <input type="range" min={0} max={ANALOG_MAX} value={value} onChange={(e) => set(Number(e.target.value))} aria-label={`${inst} value`} />
+      <Input type="number" min={0} max={ANALOG_MAX} value={value} onChange={(e) => set(Number(e.target.value))} aria-label={`${inst} value number`} />
       <Button type="submit" tone="ghost" disabled={act.isPending} title="hold the value for 1 s (fr.analog_in inject)">
         inject
       </Button>
@@ -120,7 +117,7 @@ function Sparkline({ points, max }: { points: readonly PropPoint[] | undefined; 
   const h = 20;
   const d = nums.map((v, i) => `${((i / (nums.length - 1)) * w).toFixed(1)},${(h - ((v - lo) / range) * h).toFixed(1)}`).join(' ');
   return (
-    <svg viewBox={`0 0 ${w} ${h}`} width={w} height={h} className="ml-2 inline-block align-middle text-accent" aria-hidden="true" data-sparkline>
+    <svg viewBox={`0 0 ${w} ${h}`} width={w} height={h} aria-hidden="true" data-sparkline>
       <polyline points={d} fill="none" stroke="currentColor" strokeWidth="1.2" vectorEffect="non-scaling-stroke" />
     </svg>
   );
@@ -163,26 +160,26 @@ function InstanceCard({
   const injectable = button || analog;
   const display = inst.cap === 'fr.display';
   return (
-    <div className="rounded border border-line p-3" data-instance={inst.name}>
-      <div className="mb-2 flex flex-wrap items-baseline gap-2">
-        <span className="font-semibold">{inst.name}</span>
-        <Mono className="text-muted">
+    <div data-instance={inst.name}>
+      <div>
+        <span>{inst.name}</span>
+        <Mono>
           {inst.cap}
           {inst.v ? ` ${inst.v}` : ''} · port {inst.port}
           {inst.driver ? ` · ${inst.driver}` : ''}
         </Mono>
-        {inst.traits ? <Mono className="text-muted">traits {brief(inst.traits, 80)}</Mono> : null}
+        {inst.traits ? <Mono>traits {brief(inst.traits, 80)}</Mono> : null}
       </div>
-      {!m ? <p className="text-xs text-muted">Not in the catalog this dashboard has.</p> : null}
+      {!m ? <p>Not in the catalog this dashboard has.</p> : null}
       {m?.properties.length ? (
-        <dl className="mb-2 grid grid-cols-[max-content_1fr] gap-x-4 text-sm">
+        <dl>
           {m.properties.map((p) => {
             const key = `${inst.name}.${p.name}`;
             const v = live?.[key]?.value ?? mirror[key];
             return (
-              <div key={p.name} className="contents" data-property={key}>
-                <dt className="text-muted">{p.name}</dt>
-                <dd className="font-mono">
+              <div key={p.name} data-property={key}>
+                <dt>{p.name}</dt>
+                <dd>
                   {v === undefined ? '–' : brief(v, 60)}
                   <Sparkline points={history?.[key]} {...(analog && p.name === 'value' ? { max: ANALOG_MAX } : {})} />
                 </dd>
@@ -191,7 +188,7 @@ function InstanceCard({
           })}
         </dl>
       ) : null}
-      <div className="flex flex-col gap-1.5">
+      <div>
         {m?.commands
           .filter((c) => !(c.name === 'inject' && injectable) && !(display && SNAPSHOT_COMMANDS.includes(c.name)))
           .map((c) => (
@@ -201,7 +198,7 @@ function InstanceCard({
         {analog ? <AnalogForm deviceId={deviceId} inst={inst.name} /> : null}
       </div>
       {display ? <DisplayCard deviceId={deviceId} inst={inst.name} traits={inst.traits} touch={touch} profile={profile} /> : null}
-      {m?.events.length ? <p className="mt-2 text-xs text-muted">events: {m.events.map((e) => e.name).join(', ')}</p> : null}
+      {m?.events.length ? <p>events: {m.events.map((e) => e.name).join(', ')}</p> : null}
     </div>
   );
 }
@@ -222,7 +219,7 @@ function Capabilities({ detail }: { detail: DeviceDetail }) {
     <Panel title="Capabilities" actions={q.error && !opMissing(q.error) ? <Badge tone="warn">catalog from this dashboard</Badge> : null}>
       {q.error && !opMissing(q.error) ? <ErrorBox error={q.error} what="capability_list" /> : null}
       {!rows.length ? <Empty>No capability instances known yet (the device has not said HELLO this hub run).</Empty> : null}
-      <div className="grid gap-3 lg:grid-cols-2">
+      <div>
         {rows.map(({ inst, cap }) => (
           <InstanceCard
             key={inst.name}
@@ -251,22 +248,22 @@ function Bindings({ deviceId, alias }: { deviceId: string; alias: string }) {
     <Panel
       title="Bindings"
       actions={
-        <label className="flex items-center gap-1 text-xs">
+        <label>
           <input type="checkbox" checked={liveRead} onChange={(e) => setLiveRead(e.target.checked)} /> read the node's own table
         </label>
       }
     >
       <ErrorBox error={q.error} what="binding_list" />
       {liveRead && q.data?.devices ? (
-        <pre className="max-h-60 overflow-auto rounded bg-sunk p-2 font-mono text-xs">{JSON.stringify(q.data.devices, null, 2)}</pre>
+        <pre>{JSON.stringify(q.data.devices, null, 2)}</pre>
       ) : rows.length ? (
         <Table head={['slot', 'from', 'to', 'args', 'pushed', '']}>
           {rows.map((b) => (
             <tr key={b.slot} data-binding={b.slot}>
               <td>{b.slot}</td>
-              <td className="font-mono text-xs">{b.from}</td>
-              <td className="font-mono text-xs">{b.to}</td>
-              <td className="font-mono text-xs">{brief(b.args, 60)}</td>
+              <td>{b.from}</td>
+              <td>{b.to}</td>
+              <td>{brief(b.args, 60)}</td>
               <td>{b.pushed ? <Badge tone="ok">pushed</Badge> : <Badge tone="warn">pending</Badge>}</td>
               <td>
                 <Button tone="danger" disabled={clear.isPending} onClick={() => clear.mutate({ device: `id:${deviceId}`, slot: b.slot })}>
@@ -280,7 +277,6 @@ function Bindings({ deviceId, alias }: { deviceId: string; alias: string }) {
         <Empty>No bindings.</Empty>
       ) : null}
       <form
-        className="mt-3 flex flex-wrap items-center gap-2"
         onSubmit={(e) => {
           e.preventDefault();
           const args = form.args.trim() ? parseArgs(form.args) : null;
@@ -291,9 +287,9 @@ function Bindings({ deviceId, alias }: { deviceId: string; alias: string }) {
         }}
       >
         <Input value={form.from} onChange={(e) => setForm({ ...form, from: e.target.value })} placeholder={`${alias}.boot.down`} aria-label="from" />
-        <span className="text-muted">→</span>
+        <span>→</span>
         <Input value={form.to} onChange={(e) => setForm({ ...form, to: e.target.value })} placeholder="pad-c3.status.blink" aria-label="to" />
-        <Input value={form.args} onChange={(e) => setForm({ ...form, args: e.target.value })} placeholder='{"count":1}' aria-label="args" className="w-36" />
+        <Input value={form.args} onChange={(e) => setForm({ ...form, args: e.target.value })} placeholder='{"count":1}' aria-label="args" />
         <Button type="submit" disabled={!form.from.trim() || !form.to.trim() || set.isPending}>
           Bind
         </Button>
@@ -325,11 +321,11 @@ function Diagnostics({ deviceId }: { deviceId: string }) {
         </Button>
       ))}
     >
-      {act.isPending ? <p className="text-sm text-muted">Asking the node ({line})…</p> : null}
+      {act.isPending ? <p>Asking the node ({line})…</p> : null}
       <ErrorBox error={act.error} what={`diag ${line ?? ''}`} />
       {act.data && !act.isPending ? (
-        <div className="flex flex-col gap-1" data-diag={line ?? ''}>
-          <p className="text-xs text-muted">
+        <div data-diag={line ?? ''}>
+          <p>
             {line} via {act.data.via}
           </p>
           <Json value={act.data.response} />
@@ -351,17 +347,17 @@ function OtaHistory({ deviceId }: { deviceId: string }) {
         <Table head={['job', 'state', 'build', 'via', 'bytes', 'updated', 'message']}>
           {rows.map((r) => (
             <tr key={r.job}>
-              <td className="font-mono text-xs">{r.job}</td>
+              <td>{r.job}</td>
               <td>
                 <Badge tone={r.state === 'SUCCEEDED' ? 'ok' : r.state === 'FAILED' || r.state === 'ROLLED_BACK' || r.state === 'TIMED_OUT' ? 'bad' : 'info'}>{r.state}</Badge>
               </td>
-              <td className="font-mono text-xs">{short(r.fw_id)}</td>
+              <td>{short(r.fw_id)}</td>
               <td>{r.via}</td>
-              <td className="text-xs">
+              <td>
                 {r.bytes}/{r.size}
               </td>
-              <td className="text-xs text-muted">{agoIso(r.updated_at, now)}</td>
-              <td className="text-xs">{r.message ?? r.reason ?? r.code ?? ''}</td>
+              <td>{agoIso(r.updated_at, now)}</td>
+              <td>{r.message ?? r.reason ?? r.code ?? ''}</td>
             </tr>
           ))}
         </Table>
@@ -382,7 +378,7 @@ interface Heartbeat {
 }
 
 export function DevicePage() {
-  const { alias } = useParams({ from: '/device/$alias' });
+  const { id: alias } = useParams({ from: '/devices/$id' });
   const navigate = useNavigate();
   const now = useNow(2000);
   const q = useOp('device_get', { device: alias }, { refetchInterval: 10_000 });
@@ -393,8 +389,8 @@ export function DevicePage() {
   const [renaming, setRenaming] = useState(false);
   if (q.error) {
     return (
-      <div className="flex flex-col gap-3">
-        <Link to="/" className="text-sm text-muted hover:underline">
+      <div>
+        <Link to="/devices">
           ← Devices
         </Link>
         <ErrorBox error={q.error} what={alias} />
@@ -402,31 +398,31 @@ export function DevicePage() {
     );
   }
   if (!d) {
-    return <p className="text-muted">Loading {alias}…</p>;
+    return <p>Loading {alias}…</p>;
   }
   const r = d.router;
   const hb = (r?.heartbeat ?? null) as Heartbeat | null;
   return (
-    <div className="flex flex-col gap-4" data-device-page={d.alias}>
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div className="flex flex-wrap items-center gap-3">
-          <Link to="/" className="text-sm text-muted hover:underline">
+    <div data-device-page={d.alias}>
+      <div>
+        <div>
+          <Link to="/devices">
             ← Devices
           </Link>
           {renaming ? (
-            <RenameForm device={d} onDone={() => setRenaming(false)} onRenamed={(a) => void navigate({ to: '/device/$alias', params: { alias: a }, replace: true })} />
+            <RenameForm device={d} onDone={() => setRenaming(false)} onRenamed={(a) => void navigate({ to: '/devices/$id', params: { id: a }, replace: true })} />
           ) : (
-            <h1 className="text-lg font-semibold">{d.alias}</h1>
+            <h1>{d.alias}</h1>
           )}
           <Badge tone={presenceTone(d.presence)}>{d.presence}</Badge>
           {flashing ? <Badge tone="info">input</Badge> : null}
         </div>
-        <div className="flex flex-wrap gap-2">
+        <div>
           <IdentifyButton device={d} />
           {!renaming ? <Button onClick={() => setRenaming(true)}>Rename</Button> : null}
         </div>
       </div>
-      <div className="grid gap-4 lg:grid-cols-2">
+      <div>
         <Panel title="Device">
           <KV
             items={[
@@ -463,7 +459,7 @@ export function DevicePage() {
       <Capabilities detail={d} />
       <Panel title="Recent events">
         {recent.length ? (
-          <div className="overflow-x-auto">
+          <div>
             {recent.map((e) => (
               <EventRow key={e.cursor} e={e} style={{ height: 28 }} />
             ))}
@@ -475,7 +471,7 @@ export function DevicePage() {
       <Bindings deviceId={d.device_id} alias={d.alias} />
       <Panel title="Logs">
         <LogTerm selector={`id:${d.device_id}`} device={d.device_id} />
-        <p className="mt-2 text-xs text-muted">The hub reads logs from a USB port it holds open; a node on Wi-Fi alone sends none (C6).</p>
+        <p>The hub reads logs from a USB port it holds open; a node on Wi-Fi alone sends none (C6).</p>
       </Panel>
       {d.port || d.presence === 'online' || d.presence === 'suspect' ? <Diagnostics deviceId={d.device_id} /> : null}
       <OtaHistory deviceId={d.device_id} />

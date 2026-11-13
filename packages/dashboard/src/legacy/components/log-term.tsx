@@ -2,62 +2,19 @@
 // logs_read, then the `/ws` log frames after that cursor, written straight into the terminal. A job's:
 // job_logs, paged by line while the job runs. Device output is untrusted: only colour sequences pass.
 
-import type { Terminal } from '@xterm/xterm';
 import { useEffect, useRef } from 'react';
 
-import type { LogLine } from '@fractonica/protocol/browser';
+import type { LogLine } from '@fractonica/protocol/client';
 
-import { OpError } from '../api/rest.ts';
-import { TERMINAL_JOB_STATUSES } from '../api/types.ts';
-import { live, rest } from '../runtime.ts';
-import { termSafe } from '../state/format.ts';
+import { OpError } from '../../api/rest.ts';
+import { TERMINAL_JOB_STATUSES } from '../../api/types.ts';
+import { live, rest } from '../../runtime.ts';
+import { openTerminal, termLevel } from '../../ui/term.tsx';
 
-const LEVEL_SGR: Record<string, string> = { E: '31', W: '33', D: '2', V: '2' };
+type Term = Awaited<ReturnType<typeof openTerminal>>;
 
-interface Term {
-  term: Terminal;
-  dispose(): void;
-}
-
-/** xterm.js and its fit addon, loaded on first use (a chunk of their own: most pages show no log). */
-async function openTerminal(host: HTMLDivElement): Promise<Term> {
-  const [{ Terminal }, { FitAddon }] = await Promise.all([import('@xterm/xterm'), import('@xterm/addon-fit')]);
-  const term = new Terminal({
-    convertEol: true,
-    disableStdin: true,
-    cursorStyle: 'underline',
-    cursorInactiveStyle: 'none',
-    fontFamily: "ui-monospace, 'SF Mono', Menlo, monospace",
-    fontSize: 12,
-    scrollback: 5000,
-    theme: { background: '#0b0e12', foreground: '#d5dae1' },
-  });
-  const fit = new FitAddon();
-  term.loadAddon(fit);
-  term.open(host);
-  const refit = () => {
-    try {
-      fit.fit();
-    } catch {
-      // not laid out yet
-    }
-  };
-  refit();
-  const ro = new ResizeObserver(refit);
-  ro.observe(host);
-  return {
-    term,
-    dispose() {
-      ro.disconnect();
-      term.dispose();
-    },
-  };
-}
-
-function writeLine(term: Terminal, l: LogLine): void {
-  const sgr = l.level ? LEVEL_SGR[l.level] : l.kind === 'frame' || l.kind === 'diag' ? '2' : undefined;
-  const text = termSafe(l.text);
-  term.writeln(sgr ? `\x1b[${sgr}m${text}\x1b[0m` : text);
+function writeLine(t: Term, l: LogLine): void {
+  t.line(l.text, l.level ? termLevel(l.level) : l.kind === 'frame' || l.kind === 'diag' ? 'debug' : 'info');
 }
 
 let subSeq = 0;
@@ -78,7 +35,7 @@ export function LogTerm({ selector, device }: { selector: string; device?: strin
         const lines = device ? all.filter((l) => l.device === device) : all;
         const cur = ready ? t : null;
         if (cur) {
-          lines.forEach((l) => writeLine(cur.term, l));
+          lines.forEach((l) => writeLine(cur, l));
         } else {
           early.push(...lines);
         }
@@ -96,17 +53,17 @@ export function LogTerm({ selector, device }: { selector: string; device?: strin
         if (cancelled) {
           return;
         }
-        page.lines.forEach((l) => writeLine(term.term, l));
+        page.lines.forEach((l) => writeLine(term, l));
         live.subscribe(id, { logs: { selector, since: page.next_cursor } });
       } catch (err) {
         if (cancelled) {
           return;
         }
-        term.term.writeln(`\x1b[31m${termSafe(err instanceof OpError ? `${err.code}: ${err.message}` : String(err))}\x1b[0m`);
+        term.line(err instanceof OpError ? `${err.code}: ${err.message}` : String(err), 'error');
         live.subscribe(id, { logs: { selector } });
       }
       ready = true;
-      early.splice(0).forEach((l) => writeLine(term.term, l));
+      early.splice(0).forEach((l) => writeLine(term, l));
     })();
     return () => {
       cancelled = true;
@@ -115,7 +72,7 @@ export function LogTerm({ selector, device }: { selector: string; device?: strin
       t?.dispose();
     };
   }, [selector, device]);
-  return <div ref={host} className="xterm-host h-80 overflow-hidden rounded bg-[#0b0e12]" data-logs={selector} />;
+  return <div ref={host} className="ui-term" data-logs={selector} />;
 }
 
 /** A job's output, followed while it runs. */
@@ -135,7 +92,7 @@ export function JobLogTerm({ jobId }: { jobId: string }) {
         }
         t = opened;
       }
-      const term = t.term;
+      const term = t;
       try {
         for (;;) {
           const page = await rest.op('job_logs', { job_id: jobId, after_line: after, max_lines: 500 });
@@ -144,9 +101,7 @@ export function JobLogTerm({ jobId }: { jobId: string }) {
           }
           for (const l of page.lines) {
             // JobCtx streams: out, err, and the runner's own `event` lines (stages).
-            const sgr = l.stream === 'err' ? '31' : l.stream === 'event' ? '36' : undefined;
-            const text = termSafe(l.text);
-            term.writeln(sgr ? `\x1b[${sgr}m${text}\x1b[0m` : text);
+            term.line(l.text, termLevel(null, l.stream));
           }
           after = page.next_line;
           if (!page.truncated) {
@@ -159,7 +114,7 @@ export function JobLogTerm({ jobId }: { jobId: string }) {
         }
       } catch (err) {
         if (!stopped) {
-          term.writeln(`\x1b[31m${termSafe(err instanceof OpError ? `${err.code}: ${err.message}` : String(err))}\x1b[0m`);
+          term.line(err instanceof OpError ? `${err.code}: ${err.message}` : String(err), 'error');
         }
       }
     };
@@ -170,5 +125,5 @@ export function JobLogTerm({ jobId }: { jobId: string }) {
       t?.dispose();
     };
   }, [jobId]);
-  return <div ref={host} className="xterm-host h-72 overflow-hidden rounded bg-[#0b0e12]" data-job-logs={jobId} />;
+  return <div ref={host} className="ui-term" data-job-logs={jobId} />;
 }

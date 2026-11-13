@@ -10,7 +10,7 @@
 
 import { QueryClient } from '@tanstack/react-query';
 
-import type { HubEvent, OpName } from '@fractonica/protocol/browser';
+import type { HubEvent, OpName } from '@fractonica/protocol/client';
 
 import { createRest, OpError } from './api/rest.ts';
 import { LiveClient, wsUrl, type WsLike } from './api/ws.ts';

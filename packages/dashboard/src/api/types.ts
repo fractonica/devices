@@ -1,8 +1,8 @@
 // View types of what the hub answers (spec 09 §9.1, design c6 §5): an op's input and output types come
-// from the op registry (`@fractonica/protocol/browser`, design c6 D17); the ops that declare no output
+// from the op registry (`@fractonica/protocol/client`, design c6 D17); the ops that declare no output
 // schema get a hand-written view here, read defensively (the hub may add fields).
 
-import type { DeviceView, HubEvent, Job, LatencyStatsSchema, LogLine, OPS, OpName, ProvisionWifi } from '@fractonica/protocol/browser';
+import type { DeviceView, HubEvent, Job, LatencyStatsSchema, LogLine, OPS, OpName, ProvisionWifi } from '@fractonica/protocol/client';
 
 export type { DeviceView, HubEvent, Job, LogLine, OpName };
 export type JobStatus = Job['status'];

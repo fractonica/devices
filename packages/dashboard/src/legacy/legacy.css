@@ -1,0 +1,153 @@
+/*
+ * legacy.css - just enough for the old pages (src/legacy) to read in the new shell, from the tokens, until the page
+ * builders replace them. Scoped under .legacy; nothing new should use these classes.
+ */
+
+.legacy {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-4);
+  font-size: var(--fs-data);
+}
+
+.legacy-note {
+  color: var(--c-etch3);
+}
+
+.legacy section,
+.legacy form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-3);
+}
+
+.legacy h1,
+.legacy h2,
+.legacy h3 {
+  font-family: var(--font-caps);
+  font-weight: var(--w-caps);
+  font-size: var(--fs-label);
+  letter-spacing: var(--track-caps);
+  text-transform: uppercase;
+  color: var(--c-ash);
+}
+
+.legacy a {
+  color: var(--c-lumen);
+}
+
+.legacy a:hover {
+  color: var(--c-bone);
+}
+
+.legacy p {
+  overflow-wrap: anywhere;
+}
+
+.legacy ul,
+.legacy ol {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.legacy label {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--sp-2);
+}
+
+.legacy input:not([class]),
+.legacy select:not([class]),
+.legacy textarea {
+  min-height: 30px;
+  padding: 4px 0;
+  border: 0;
+  border-bottom: var(--hair) solid var(--c-etch3);
+  background: none;
+  color: var(--c-bone);
+}
+
+.legacy select option {
+  background: var(--c-plate);
+}
+
+.legacy input[type='checkbox'],
+.legacy input[type='radio'] {
+  accent-color: var(--c-lumen);
+  min-height: 0;
+}
+
+.legacy-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  white-space: nowrap;
+}
+
+.legacy-badge .caps {
+  font-size: 8px;
+  text-transform: uppercase;
+  color: var(--c-ash);
+}
+
+.legacy-badge[data-tone='bad'] .caps {
+  color: var(--c-fault);
+}
+
+.legacy-badge[data-tone='ok'] .caps,
+.legacy-badge[data-tone='info'] .caps {
+  color: var(--c-lumen);
+}
+
+.legacy-table {
+  overflow-x: auto;
+}
+
+.legacy table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.legacy th {
+  text-align: left;
+  padding: 6px 12px 6px 0;
+  border-bottom: 0.75px solid var(--c-etch2);
+  color: var(--c-ash);
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.legacy td {
+  padding: 8px 12px 8px 0;
+  border-bottom: var(--hair) solid var(--c-etch1);
+  vertical-align: top;
+}
+
+.legacy-json {
+  max-height: 320px;
+  overflow: auto;
+  padding: var(--sp-2);
+  background: var(--c-plate);
+  font-size: 11px;
+}
+
+.legacy-empty {
+  color: var(--c-ash);
+  padding: var(--sp-3) 0;
+}
+
+.legacy-kv {
+  margin: 0;
+}
+
+.legacy-kv dd {
+  margin: 0 0 0 auto;
+  text-align: right;
+}
+
+.legacy details > summary {
+  cursor: pointer;
+  color: var(--c-ash);
+}

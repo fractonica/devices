@@ -4,7 +4,7 @@
 // application/json, which the web guard requires of mutations (D9). DOM-free: fetch is injected, so the
 // tests run in node.
 
-import { CLIENT_HEADER, type ErrorCode, type JobOrigin, type OpName, type Remediation, type ToolError } from '@fractonica/protocol/browser';
+import { CLIENT_HEADER, type ErrorCode, type JobOrigin, type OpName, type Remediation, type ToolError } from '@fractonica/protocol/client';
 
 import type { OpInput, OpOutput } from './types.ts';
 

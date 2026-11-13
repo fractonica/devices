@@ -4,13 +4,13 @@
 
 import { useState } from 'react';
 
-import type { PortInfo } from '@fractonica/protocol/browser';
+import type { PortInfo } from '@fractonica/protocol/client';
 
 import { Badge, Button, Empty, ErrorBox, Mono, Table, type BadgeTone } from '../components/ui.tsx';
 import { ProvisionWizard } from '../components/wizard.tsx';
-import { useAct, useNow, useOp } from '../hooks.ts';
-import { agoIso, portHolder } from '../state/format.ts';
-import type { WizardKnown } from '../state/wizard.ts';
+import { useAct, useNow, useOp } from '../../hooks.ts';
+import { agoIso, portHolder } from '../../state/format.ts';
+import type { WizardKnown } from '../../state/wizard.ts';
 
 const STATE_TONE: Record<string, BadgeTone> = { open: 'ok', closed: 'muted', leased: 'info', busy_external: 'warn', error: 'bad', unwatched: 'muted', ignored: 'muted' };
 
@@ -65,11 +65,11 @@ export function PortsPage() {
     return d ? { device_id: d.device_id, alias: d.alias, profile: d.profile, presence: d.presence } : null;
   };
   return (
-    <div className="flex flex-col gap-4">
-      <h1 className="text-lg font-semibold">Ports</h1>
+    <div>
+      <h1>Ports</h1>
       <ErrorBox error={ports.error} what="port_list" />
       {wizard ? <ProvisionWizard key={wizard.port.path} port={wizard.port} known={wizard.known} onClose={() => setWizard(null)} /> : null}
-      <section className="rounded-lg border border-line bg-panel p-4">
+      <section>
         {ports.data && !rows.length ? <Empty>No USB serial port. Plug a board in; it shows here within a second.</Empty> : null}
         {rows.length ? (
           <Table head={['port', 'USB serial', 'board', 'state', 'held by', 'lines', '']}>
@@ -83,16 +83,16 @@ export function PortsPage() {
                   <td>
                     <Mono>{p.usb_serial ?? '–'}</Mono>
                   </td>
-                  <td>{known ? <span className="font-medium">{known.alias}</span> : p.device_id ? <Mono>{p.device_id}</Mono> : <Badge>new</Badge>}</td>
+                  <td>{known ? <span>{known.alias}</span> : p.device_id ? <Mono>{p.device_id}</Mono> : <Badge>new</Badge>}</td>
                   <td>
                     <Badge tone={STATE_TONE[p.state] ?? 'muted'}>{p.state}</Badge>
                   </td>
-                  <td className="text-sm">
+                  <td>
                     {portHolder(p)}
-                    {p.lease ? <span className="block text-xs text-muted">ends {agoIso(p.lease.expires_at, now)}</span> : null}
+                    {p.lease ? <span>ends {agoIso(p.lease.expires_at, now)}</span> : null}
                   </td>
-                  <td className="text-xs text-muted">{p.lines}</td>
-                  <td className="whitespace-nowrap">
+                  <td>{p.lines}</td>
+                  <td>
                     {p.lease ? <ReleaseButton leaseId={p.lease.lease_id} /> : null}
                     <PolicyButtons port={p} />
                     <Button tone={known ? 'default' : 'primary'} onClick={() => setWizard({ port: p, known })} data-action="provision">
@@ -105,7 +105,7 @@ export function PortsPage() {
           </Table>
         ) : null}
       </section>
-      <p className="text-xs text-muted">
+      <p>
         The dashboard never opens a port itself (no Web Serial). The hub reads only the ports of registered boards (unwatched: a board it does not know; Claim lets it
         say HELLO). To use a port from another program, lend it: <Mono>fr serial lease &lt;device&gt; -- &lt;command&gt;</Mono>.
       </p>

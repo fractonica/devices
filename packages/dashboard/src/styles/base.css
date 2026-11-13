@@ -1,0 +1,491 @@
+/*
+ * base.css - the dashboard's global layer: the hub's scale, the element defaults and the shell.
+ *
+ * RULE (design README "Hub" 1): no colour and no font family is written in any dashboard stylesheet. Colours are
+ * the custom properties tokens.js writes (--c-*, applyTheme in main.tsx) and the hub's one extension (--c-fault,
+ * design/hub-tokens.ts); faces are --font-reading and --font-caps. test/design-rules.test.ts fails on a literal.
+ *
+ * Two arrangements, as the site: phone below 700 px of width (sigils at the bottom), desktop from 700 px (a rail
+ * on the left). Nothing blinks or pulses; under prefers-reduced-motion every transition is a cut.
+ */
+
+:root {
+  color-scheme: dark;
+  /* the hub's type scale (CSS px): use these, never a new size */
+  --fs-reading: 44px; /*  a Fractonica reading, Ultralight */
+  --fs-title: 20px; /*    a page title, engraved caps tracked 0.34em (the lens word) */
+  --fs-value: 15px; /*    values in a list */
+  --fs-data: 13px; /*     data and running text */
+  --fs-earth: 11.5px; /*  an Earth translation */
+  --fs-label: 9px; /*     caps labels */
+  --fs-micro: 7.5px; /*   rail words, bezel words */
+  /* spacing */
+  --sp-1: 4px;
+  --sp-2: 8px;
+  --sp-3: 12px;
+  --sp-4: 20px;
+  --sp-5: 32px;
+  --sp-6: 56px;
+  --gutter: 48px;
+  --column: 1040px;
+  --rail: 88px;
+  --row-min: 34px;
+  --hair: 1px;
+  --safe-bottom: env(safe-area-inset-bottom, 0px);
+  --mono: ui-monospace, 'SF Mono', Menlo, monospace;
+}
+
+@media (max-width: 699.98px) {
+  :root {
+    --fs-reading: 34px;
+    --fs-title: 17px;
+    --gutter: 16px;
+    --rail: 0px;
+    --row-min: 40px;
+  }
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  height: 100%;
+  margin: 0;
+  background: var(--c-void);
+  color: var(--c-bone);
+  overscroll-behavior: none;
+}
+
+body {
+  font-family: var(--font-reading);
+  font-weight: var(--w-value);
+  font-size: var(--fs-data);
+  line-height: 1.45;
+  font-variant-numeric: tabular-nums lining-nums;
+  font-kerning: normal;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
+}
+
+#root {
+  height: 100%;
+}
+
+button,
+input,
+select,
+textarea {
+  font: inherit;
+  color: inherit;
+  letter-spacing: inherit;
+}
+
+button {
+  background: none;
+  border: 0;
+  padding: 0;
+  margin: 0;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+
+input,
+textarea {
+  /* nothing blinks: not even the caret (the site's steady caret, wave.css) */
+  caret-animation: manual;
+  caret-color: var(--c-lumen);
+}
+
+h1,
+h2,
+h3,
+h4,
+p,
+ul,
+ol,
+dl,
+dd,
+figure {
+  margin: 0;
+}
+
+ul,
+ol {
+  padding: 0;
+  list-style: none;
+}
+
+h1,
+h2,
+h3,
+h4,
+strong,
+b,
+th {
+  font-weight: inherit; /* no semibold, no bold: hierarchy is size and colour */
+}
+
+a {
+  color: inherit;
+  text-decoration: none;
+}
+
+code,
+pre,
+kbd {
+  font-family: var(--mono);
+  font-size: 0.92em;
+}
+
+[hidden] {
+  display: none !important;
+}
+
+:focus {
+  outline: none;
+}
+
+:focus-visible {
+  outline: 1px solid var(--c-lumen);
+  outline-offset: 4px;
+  border-radius: 2px;
+}
+
+::selection {
+  background: var(--c-lumen-dim);
+  color: var(--c-bone);
+}
+
+::placeholder {
+  color: var(--c-etch3);
+  opacity: 1;
+}
+
+/* ------------------------------------------------------------------ type */
+
+/* Engraved words: capitals (made with engrave() so that Greek letters stay lowercase), tracked. */
+.caps {
+  font-family: var(--font-caps);
+  font-weight: var(--w-caps);
+  letter-spacing: var(--track-caps);
+  font-size: var(--fs-label);
+  line-height: 1.2;
+  white-space: nowrap;
+}
+
+.label {
+  color: var(--c-ash);
+}
+
+/* A reading: numerals in the element's colour (bone), unit letters and # in ash (<Reading>). */
+.u {
+  color: var(--c-ash);
+}
+
+.ash {
+  color: var(--c-ash);
+}
+
+.mono {
+  font-family: var(--mono);
+  font-size: 0.92em;
+}
+
+/* Every Earth translation: led by the Earth sign, ash, never in pure mode (<Earth>). */
+.earth {
+  color: var(--c-earth);
+  font-weight: var(--w-earth);
+  font-style: var(--earth-style);
+  font-size: var(--fs-earth);
+  white-space: nowrap;
+}
+
+.earth .sign {
+  font-size: 1.05em;
+  font-style: normal;
+  margin-right: 0.3em;
+}
+
+/* the 200 ms cross-fade of the annotations when the mode is toggled (shell/mode.ts sets the class) */
+html.mode-fade .earth {
+  animation: earth-in 200ms linear;
+}
+
+@keyframes earth-in {
+  from {
+    opacity: 0;
+  }
+}
+
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+/* ------------------------------------------------------------- the shell */
+
+.ground {
+  position: fixed;
+  inset: 0;
+  width: 100vw;
+  height: 100dvh;
+  z-index: 0;
+  pointer-events: none;
+}
+
+.shell {
+  position: relative;
+  z-index: 1;
+  height: 100dvh;
+  display: grid;
+  grid-template-columns: var(--rail) minmax(0, 1fr);
+}
+
+.shell-main {
+  grid-column: 2;
+  min-width: 0;
+  height: 100dvh;
+  overflow-x: hidden;
+  overflow-y: auto;
+  scrollbar-width: thin;
+  scrollbar-color: var(--c-etch2) var(--c-void);
+}
+
+.shell-column {
+  width: 100%;
+  max-width: calc(var(--column) + 2 * var(--gutter));
+  margin: 0 auto;
+  padding: var(--sp-6) var(--gutter) var(--sp-6);
+}
+
+/* the rail (desktop): mode at the top, the sigils centred, the live bead at the foot, an etch1 rule on its right */
+.rail {
+  grid-column: 1;
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  height: 100dvh;
+}
+
+.rail::after {
+  content: '';
+  position: absolute;
+  right: 0;
+  top: 40px;
+  bottom: 40px;
+  border-right: var(--hair) solid var(--c-etch1);
+}
+
+.rail-top {
+  position: absolute;
+  top: clamp(8px, 5.9dvh, 47px);
+  left: 0;
+  right: 0;
+  display: flex;
+  justify-content: center;
+}
+
+.rail-foot {
+  position: absolute;
+  bottom: clamp(12px, 4dvh, 36px);
+  left: 0;
+  right: 0;
+  display: flex;
+  justify-content: center;
+}
+
+.sigils {
+  display: flex;
+  flex-direction: column;
+  gap: clamp(2px, 2.6dvh, 22px);
+}
+
+.sigil {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  width: 72px;
+  padding: 6px 0 4px;
+  color: var(--c-etch3);
+  transition: color 200ms linear;
+}
+
+.sigil:hover {
+  color: var(--c-ash);
+}
+
+.sigil .caps {
+  font-size: var(--fs-micro);
+  line-height: 9px;
+  margin-right: calc(var(--track-caps) * -1);
+}
+
+.sigil[aria-current='page'] {
+  color: var(--c-lumen);
+}
+
+.sigil[aria-current='page'] .caps {
+  color: var(--c-ash);
+}
+
+.sigil .badge {
+  position: absolute;
+  top: 4px;
+  right: 16px;
+}
+
+/* a touch target of 44 x 44 around a small mark, without changing what is drawn */
+.sigil::before,
+.mode-toggle::before {
+  content: '';
+  position: absolute;
+  inset: min(0px, calc((100% - 44px) / 2));
+}
+
+.mode-toggle {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  color: var(--c-etch3);
+}
+
+.mode-toggle .caps {
+  font-size: var(--fs-micro);
+  line-height: 9px;
+  margin-right: calc(var(--track-caps) * -1);
+}
+
+.mode-toggle .cross {
+  opacity: 0;
+  transition: opacity 200ms linear;
+}
+
+[data-mode='earth'] .mode-toggle {
+  color: var(--c-bone);
+}
+
+[data-mode='earth'] .mode-toggle .caps {
+  color: var(--c-ash);
+}
+
+[data-mode='earth'] .mode-toggle .cross {
+  opacity: 1;
+}
+
+.live-mark {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  color: var(--c-ash);
+}
+
+.live-mark .caps {
+  font-size: var(--fs-micro);
+  margin-right: calc(var(--track-caps) * -1);
+}
+
+/* phone: the page scrolls above, the sigils sit in a bottom row; the mode toggle is in the top right corner */
+@media (max-width: 699.98px) {
+  .shell {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: minmax(0, 1fr) auto;
+  }
+
+  .shell-main {
+    grid-column: 1;
+    grid-row: 1;
+    height: auto;
+  }
+
+  .shell-column {
+    padding-top: var(--sp-5);
+    padding-bottom: var(--sp-5);
+  }
+
+  .rail {
+    grid-column: 1;
+    grid-row: 2;
+    height: auto;
+    display: block;
+    border-top: var(--hair) solid var(--c-etch1);
+    background: var(--c-void);
+    padding-bottom: var(--safe-bottom);
+  }
+
+  .rail::after {
+    content: none;
+  }
+
+  .rail-top {
+    position: fixed;
+    top: 18px;
+    left: auto;
+    right: 12px;
+    z-index: 3;
+  }
+
+  .rail-top .mode-toggle {
+    flex-direction: row-reverse;
+    gap: 8px;
+  }
+
+  .rail-foot {
+    display: none;
+  }
+
+  .sigils {
+    flex-direction: row;
+    justify-content: space-around;
+    gap: 0;
+    padding: 8px 4px 10px;
+  }
+
+  .sigil {
+    width: auto;
+    flex: 1 1 0;
+    min-width: 0;
+    gap: 4px;
+  }
+
+  .sigil .badge {
+    right: calc(50% - 18px);
+  }
+}
+
+/* ------------------------------------------------------------- motion */
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    transition-duration: 0ms !important;
+    animation-duration: 0ms !important;
+    animation-iteration-count: 1 !important;
+  }
+
+  html.mode-fade .earth {
+    animation: none;
+  }
+}
+
+.shell-notices {
+  display: flex;
+  flex-direction: column;
+  margin-bottom: var(--sp-5);
+}

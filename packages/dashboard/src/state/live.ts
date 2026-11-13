@@ -17,7 +17,7 @@
 
 import { createStore, type StoreApi } from 'zustand/vanilla';
 
-import type { HubEvent, Prompt } from '@fractonica/protocol/browser';
+import type { HubEvent, Prompt } from '@fractonica/protocol/client';
 
 import { TERMINAL_JOB_STATUSES, type JobKind, type JobStatus } from '../api/types.ts';
 import type { ConnState, WsJob } from '../api/ws.ts';

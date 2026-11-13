@@ -1,4 +1,4 @@
-// The Ports page's policy buttons (pages/ports.tsx PolicyButtons): each port state offers the actions that change it,
+// The Ports page's policy buttons (legacy/pages/ports.tsx PolicyButtons, until the Settings page replaces it): each port state offers the actions that change it,
 // and the undo of each: Ignore / Stop ignoring, Claim / Unclaim, Lend (a lent port has only its Release button).
 // Rendered to a string; no hub is called.
 
@@ -10,7 +10,7 @@ import { beforeAll, describe, expect, it } from 'vitest';
 import type { PortInfo } from '@fractonica/protocol/browser';
 
 type Runtime = typeof import('../src/runtime.ts');
-type Page = typeof import('../src/pages/ports.tsx');
+type Page = typeof import('../src/legacy/pages/ports.tsx');
 
 let runtime: Runtime;
 let page: Page;
@@ -19,7 +19,7 @@ beforeAll(async () => {
   // runtime.ts builds its /ws URL from the page's location at import.
   (globalThis as { location?: unknown }).location ??= { protocol: 'http:', host: '127.0.0.1:7420' };
   runtime = await import('../src/runtime.ts');
-  page = await import('../src/pages/ports.tsx');
+  page = await import('../src/legacy/pages/ports.tsx');
 });
 
 function actions(port: Partial<PortInfo>): string[] {

@@ -76,6 +76,20 @@ person or the HIL fixture: run them only when asked.
 
 The clock: `cd clock/sim && make test`, and its own ESP-IDF 5.5 builds (`clock/AGENTS.md`).
 
+The dashboard (`packages/dashboard`, stage 4): styled only from the site's tokens (`src/design/tokens.js`, vendored
+and locked like the core; `fr gen` refreshes it), with the primitives in `src/ui` (their README) and one file per page
+in `src/pages`. To see it with simulated devices and never a board or the lab hub:
+
+```sh
+node tools/host-test.mjs --fleet                                    # once: build/host-fleet/fr_fleet
+pnpm -C packages/dashboard build                                    # after each change (or `watch`)
+node --conditions=@fractonica/source tools/dash-dev.ts --url-file /tmp/hub.url   # a scratch hub + fleet; Ctrl-C ends it
+node tools/dash-shoot.mjs --url "$(cat /tmp/hub.url)" --out <dir> /=hub /devices=devices   # PNGs at 1440 and 390
+```
+
+`dash-shoot` fails on any console error or warning (a CSP refusal included); `--mode earth` shoots Earth mode,
+`--full` the whole scrolling page; `#/ui` is the specimen of every primitive.
+
 ## 4. Layout
 
 | Path | What |
