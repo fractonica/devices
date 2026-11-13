@@ -6,7 +6,7 @@ import type { AddressInfo } from 'node:net';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-import { idfStatus, paths, pytoolsStatus, readConfig, readIdfLock, rotateLog, type IdfStatus, type PytoolsStatus } from '@fractonica/host';
+import { idfStatus, liveConfig, paths, pytoolsStatus, readIdfLock, rotateLog, type IdfStatus, type PytoolsStatus } from '@fractonica/host';
 import { HUB_API_PORT, HUB_VERSION, REGISTRY_HASH } from '@fractonica/protocol';
 
 import { createAppServer } from './apps/server.ts';
@@ -137,6 +137,12 @@ async function main(): Promise<void> {
     }
     throw new Error(`${HOST}:${port} is in use by a program that is not a Fractonica hub`);
   }
+  // One hub per FR_HOME, whatever its port: two would share hub.db and fight over the USB ports.
+  const sibling = runningHubPid(paths.lock());
+  if (sibling) {
+    console.log(JSON.stringify({ event: 'already_running', pid: sibling, home: paths.home(), message: `hub pid ${sibling} already runs from this FR_HOME on another port` }));
+    process.exit(0);
+  }
   const lock = writePidfile(paths.lock());
   process.on('exit', () => lock.release()); // also on a failed start and the stop backstop
   // fr_ident renders (with the Wi-Fi password) a killed hub left behind: nobody's now, before any job runs.
@@ -169,11 +175,23 @@ async function main(): Promise<void> {
   // Every `@fr1:` line passes the log store's frame decoder: the tap there feeds the serial node link.
   const frames = new SerialFrameTap(db);
   const logs = new LogStore(db, run, { frames, seq });
+  // config.json, re-read when it changes; a section the file stops giving keeps its last good value. Its problems are
+  // logged when they appear (and once more when they are gone).
+  let configProblems = false;
+  const hubConfig = liveConfig(paths.config(), {
+    onProblems: (problems) => {
+      for (const problem of problems) {
+        console.error(JSON.stringify({ event: 'config_problem', message: problem }));
+      }
+      if (!problems.length && configProblems) {
+        console.error(JSON.stringify({ event: 'config_ok', file: paths.config() }));
+      }
+      configProblems = problems.length > 0;
+    },
+  });
+  hubConfig.read();
   // Which ports the hub opens (config.json ports; mode adopted unless the file says all).
-  const portPolicy = createPortPolicy(db);
-  for (const problem of portPolicy.warnings()) {
-    console.error(JSON.stringify({ event: 'config_problem', message: problem }));
-  }
+  const portPolicy = createPortPolicy(db, hubConfig);
   const serial = new SerialPortManager(logs, db, { policy: portPolicy, ...(serialBridge ? { binding: bridgeBinding(serialBridge) } : {}) });
   const jobs = new JobRunner(db);
   const registry = createRegistry(db);
@@ -189,14 +207,16 @@ async function main(): Promise<void> {
   };
   const eventsRing = new RingRetention(db, 'events', () => seq.head());
   // Finished jobs and their logs (config.json retention), read at each pass so an edit applies without a restart.
+  // Nothing is deleted while the file has given no valid retention settings since the start.
   const jobsRetention = new JobRetention(db, () => {
-    const r = readConfig().config.retention;
-    return { days: r.jobs_days, rows: r.jobs_rows };
+    const read = hubConfig.read();
+    const r = read.config.retention;
+    return read.unset.includes('retention') ? null : { days: r.jobs_days, rows: r.jobs_rows };
   });
   // hub.log by size (config.json log), when it is this process's stdout.
   const rotateOwnLog = () => {
     if (stdoutIsHubLog()) {
-      const { max_bytes, keep } = readConfig().config.log;
+      const { max_bytes, keep } = hubConfig.read().config.log;
       if (rotateLog(paths.log(), { maxBytes: max_bytes, keep, how: 'copytruncate' })) {
         console.log(JSON.stringify({ event: 'log_rotated', file: paths.log(), keep }));
       }

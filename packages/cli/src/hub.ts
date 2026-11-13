@@ -97,17 +97,19 @@ export async function startHub(foreground: boolean, opts: { main?: string } = {}
     return { started: false, already: true, pid: health.pid, ...(await dashboardUrl()) };
   }
   // FR_HUB (a second hub, a test hub): started on its port, so the health checked below is that hub's. A remote one
-  // is refused; so is a second hub on this FR_HOME while another one runs from it (they would share hub.db and fight
-  // over the ports).
+  // is refused; so is a second hub on this FR_HOME while another one runs from it, on any port (they would share
+  // hub.db and fight over the ports). The hub itself refuses that too (main.ts), should two starts race.
   const target = hubTarget();
   if (target.remote) {
     return { started: false, error: target.remote };
   }
-  if (target.port !== undefined) {
-    const other = readPid();
-    if (other && (await isHubProcess(other))) {
-      return { started: false, error: `hub pid ${other} already runs from ${paths.home()} on another port: set FR_HOME to another directory for a second hub, or unset FR_HUB` };
-    }
+  const other = readPid();
+  if (other && (await isHubProcess(other))) {
+    return {
+      started: false,
+      pid: other,
+      error: `hub pid ${other} already runs from ${paths.home()} but does not answer at ${hubUrl()}: it serves another port (point FR_HUB at it), or it is still starting (fr hub status); for a second hub set FR_HOME to another directory`,
+    };
   }
   const args = ['--conditions=@fractonica/source', opts.main ?? HUB_MAIN, ...(target.port !== undefined ? ['--port', String(target.port)] : [])];
   if (foreground) {

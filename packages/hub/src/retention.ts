@@ -36,13 +36,14 @@ export interface PruneReport {
 
 export class JobRetention {
   #db: Db;
-  #limits: () => JobRetentionLimits;
+  #limits: () => JobRetentionLimits | null;
   #timers: NodeJS.Timeout[] = [];
   #running = false;
   /** The last pass, for hub_status. */
   last: PruneReport | null = null;
 
-  constructor(db: Db, limits: () => JobRetentionLimits) {
+  /** `limits` null: no limits known (config.json has never given valid retention settings): the pass deletes nothing. */
+  constructor(db: Db, limits: () => JobRetentionLimits | null) {
     this.#db = db;
     this.#limits = limits;
   }
@@ -72,7 +73,11 @@ export class JobRetention {
     this.#running = true;
     const t0 = performance.now();
     try {
-      const { days, rows } = this.#limits();
+      const limits = this.#limits();
+      if (!limits) {
+        return report;
+      }
+      const { days, rows } = limits;
       const cutoff = new Date(Date.now() - days * 86_400_000).toISOString();
       // Finished jobs past the age limit or beyond the newest `rows` (the row cap counts every job, finished or not).
       const pick = this.#db.prepare(

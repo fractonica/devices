@@ -456,6 +456,9 @@ export function portStateText(p: PortInfo): string {
     case 'ignored':
       return `ignored${p.holder ? `, held by ${p.holder}` : ''}`;
     case 'unwatched':
+      if (p.policy === 'config_invalid') {
+        return `not opened (config.json has no valid ports settings)${p.holder ? `, held by ${p.holder}` : ''}`;
+      }
       return p.holder ? `held by ${p.holder}` : 'not opened (board not adopted)';
     default:
       return `${p.state}${p.holder ? ` (${p.holder})` : ''}`;

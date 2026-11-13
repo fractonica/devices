@@ -61,7 +61,7 @@ const LATE_POLL_MS = 2000;
 type State = PortInfo['state'];
 
 /** What the port policy (ports/policy.ts) says of a port: watch it (and why), or leave it closed (and why). */
-export type PortDecision = { watch: true; why: 'adopted' | 'claimed' | 'all' } | { watch: false; why: 'not_adopted' | 'ignored' };
+export type PortDecision = { watch: true; why: 'adopted' | 'claimed' | 'all' } | { watch: false; why: 'not_adopted' | 'ignored' | 'config_invalid' };
 
 /** The port as the policy sees it. */
 export interface PolicyPort {
@@ -71,6 +71,13 @@ export interface PolicyPort {
   vid?: string;
   pid?: string;
   bridge?: string;
+  /** A bridge's own USB serial number, when the adapter has one (many CP210x, FTDI and CH343 do; a CH340 has none). */
+  bridgeSerial?: string;
+}
+
+/** A bridge port's adapter as `vid:pid:serial` (serial empty when it has none): what ports_seen.device_port records. */
+export function adapterId(p: { vid?: string; pid?: string; bridgeSerial?: string }): string {
+  return `${p.vid?.toLowerCase() ?? ''}:${p.pid?.toLowerCase() ?? ''}:${p.bridgeSerial ?? ''}`;
 }
 
 /** Decides per poll which ports the hub opens (config.json ports). Without one, every listed port is watched. */
@@ -86,6 +93,8 @@ export interface Entry {
   pid?: string;
   /** A USB-UART bridge's name (BRIDGES); undefined on a chip's own USB. */
   bridge?: string;
+  /** The bridge adapter's own USB serial number, when it has one. */
+  bridgeSerial?: string;
   /** A bridge port's device id, learned from the first `@fr1:` envelope (the HELLO) on it; a chip's own USB has it in `key`. */
   deviceId?: string;
   state: State;
@@ -198,7 +207,7 @@ export class SerialPortManager {
     if (!this.#policy || e.state === 'leased' || e.claimed) {
       return;
     }
-    const d = this.#policy.decide({ key: e.key, path: e.path, usbSerial: e.usbSerial, vid: e.vid, pid: e.pid, bridge: e.bridge });
+    const d = this.#policy.decide(policyPort(e));
     e.policy = d.why;
     if (d.watch) {
       if (e.state === 'unwatched' || e.state === 'ignored') {
@@ -218,6 +227,18 @@ export class SerialPortManager {
     }
   }
 
+  /** Why the policy keeps `e` closed (`ignored`, `not_adopted`, ...), or null when it is (or may be) opened. */
+  #leftClosed(e: Entry): PortDecision['why'] | null {
+    if (e.state === 'unwatched' || e.state === 'ignored') {
+      return e.policy ?? (e.state === 'ignored' ? 'ignored' : 'not_adopted');
+    }
+    if (!this.#policy || e.state !== 'closed' || e.claimed) {
+      return null;
+    }
+    const d = this.#policy.decide(policyPort(e));
+    return d.watch ? null : d.why;
+  }
+
   /** Re-applies the policy now (a port op changed config.json); resolves after that poll. */
   async recheck(): Promise<void> {
     while (this.#polling) {
@@ -234,9 +255,13 @@ export class SerialPortManager {
   notePortDevice(key: string, deviceId: string): void {
     const id = normalizeMac(deviceId);
     const e = this.#entries.get(key);
+    // A bridge port also records its adapter, so a different adapter later in the same socket is not this board.
+    const adapter = e?.bridge ? adapterId(e) : null;
     this.#db
-      .prepare('INSERT INTO ports_seen (usb_serial, last_path, vid, pid, last_seen, device_id) VALUES (?, ?, ?, ?, ?, ?) ON CONFLICT(usb_serial) DO UPDATE SET device_id = excluded.device_id')
-      .run(key, e?.path ?? key, e?.vid ?? null, e?.pid ?? null, new Date().toISOString(), id);
+      .prepare(
+        'INSERT INTO ports_seen (usb_serial, last_path, vid, pid, last_seen, device_id, device_port) VALUES (?, ?, ?, ?, ?, ?, ?) ON CONFLICT(usb_serial) DO UPDATE SET device_id = excluded.device_id, device_port = excluded.device_port',
+      )
+      .run(key, e?.path ?? key, e?.vid ?? null, e?.pid ?? null, new Date().toISOString(), id, adapter);
   }
 
   /**
@@ -335,12 +360,18 @@ export class SerialPortManager {
         const key = p.bridge ? pathKey(p.path) : p.serialNumber ? normalizeMac(p.serialNumber) : cuPath(p.path);
         present.add(key);
         let e = this.#entries.get(key);
+        if (e?.bridge && e.state !== 'leased' && adapterId(e) !== adapterId({ vid: p.vendorId, pid: p.productId, bridgeSerial: p.serialNumber })) {
+          // Another adapter in the same USB socket, re-plugged inside GONE_DEBOUNCE_MS: a new port, not the old board's.
+          await this.#close(e);
+          this.#entries.delete(key);
+          e = undefined;
+        }
         if (!e) {
           this.#gone.delete(key);
           e = {
             key,
             path: cuPath(p.path),
-            ...(p.bridge ? { bridge: p.bridge } : { usbSerial: p.serialNumber }),
+            ...(p.bridge ? { bridge: p.bridge, ...(p.serialNumber ? { bridgeSerial: p.serialNumber } : {}) } : { usbSerial: p.serialNumber }),
             vid: p.vendorId,
             pid: p.productId,
             state: 'closed',
@@ -884,13 +915,24 @@ export class SerialPortManager {
 
   /** The hub's own handle on `e` once it is open, waiting up to `ms` for an open in progress. */
   async #waitOpen(e: Entry, ms: number, what: string): Promise<SerialPort> {
-    if (e.state === 'unwatched' || e.state === 'ignored') {
-      throw new FrError('DEVICE_OFFLINE', `${e.path} is ${e.state === 'ignored' ? 'on the ignore list' : 'not watched by the hub (no registered board on it)'}; ${what}`, {
-        remediation: [{ tool: 'port_claim', args: { port: e.path }, cli: `fr ports claim ${e.path}` }],
-      });
-    }
     const deadline = Date.now() + ms;
     while (!(e.state === 'open' && e.port?.isOpen)) {
+      // A port the policy leaves closed is never opened by waiting: say so at once (a lease that just ended leaves
+      // the port `closed` until the next poll applies the policy, so it is asked here too). A caller with a fallback
+      // (flash.ts: esptool's reset) takes it without the wait.
+      const why = this.#leftClosed(e);
+      if (why) {
+        const reason =
+          why === 'ignored'
+            ? 'on the ignore list'
+            : why === 'config_invalid'
+              ? 'not watched by the hub (config.json has no valid ports settings)'
+              : 'not watched by the hub (no registered board on it)';
+        throw new FrError('DEVICE_OFFLINE', `${e.path} is ${reason}; ${what}`, {
+          remediation: [{ tool: 'port_claim', args: { port: e.path }, cli: `fr ports claim ${e.path}` }],
+          details: { state: why === 'ignored' ? 'ignored' : 'unwatched' },
+        });
+      }
       if (Date.now() > deadline) {
         throw new FrError('DEVICE_OFFLINE', `${e.path} is ${e.state}, not open by the hub; ${what}`);
       }
@@ -929,6 +971,10 @@ export class SerialPortManager {
 }
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+
+function policyPort(e: Entry): PolicyPort {
+  return { key: e.key, path: e.path, usbSerial: e.usbSerial, vid: e.vid, pid: e.pid, bridge: e.bridge, bridgeSerial: e.bridgeSerial };
+}
 
 /** DTR and RTS set together on the hub's handle (serialport: true = asserted, the low level on a board's EN/IO0 circuit). */
 function lines(port: SerialPort): (v: { dtr: boolean; rts: boolean }) => Promise<void> {

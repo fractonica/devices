@@ -91,7 +91,13 @@ export async function hardResetCapturing(hub: Pick<HubContext, 'serial'> & Parti
     await hub.serial.hardReset(key);
     return 'hub';
   } catch (e) {
-    ctx.log(`hub reset failed (${(e as Error).message}); resetting with esptool, boot log may be incomplete`, 'event');
+    const closed = (e as { details?: { state?: string } }).details?.state;
+    ctx.log(
+      closed === 'unwatched' || closed === 'ignored'
+        ? `the hub does not read this port (${closed}, config.json ports); resetting with esptool, so the boot log is not captured`
+        : `hub reset failed (${(e as Error).message}); resetting with esptool, boot log may be incomplete`,
+      'event',
+    );
     const lease = await hub.serial.lease(key, `job ${ctx.jobId}`);
     try {
       await runPytools({ cmd: 'reset', port: lease.path, mode: 'hard' }, ctx);

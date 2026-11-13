@@ -102,5 +102,6 @@ describe('port_list under the port policy', () => {
     expect(out[5]).toMatch(/ch340 +ignored/);
     expect(out[6]).toContain('held by Google Chrome (pid 715)');
     expect(portStateText({ path: 'p', state: 'leased', lease: { lease_id: 'l_1', expires_at: until }, lines: 0 })).toBe(`lent until ${clockTime(until)}`);
+    expect(portStateText({ path: 'p', state: 'unwatched', policy: 'config_invalid', lines: 0 })).toBe('not opened (config.json has no valid ports settings)');
   });
 });

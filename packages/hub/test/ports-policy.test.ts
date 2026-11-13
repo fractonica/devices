@@ -2,8 +2,10 @@
 // and lists the others closed (`unwatched`), never opens an ignored port (path, MAC or VID:PID), reopens an adopted
 // board after a USB re-enumeration (a new path), opens a bridge port once its board is known, lends an unwatched port
 // and leaves it closed when the lend expires, and port_claim / port_ignore write config.json (unknown keys kept) and
-// act at once. A config file that is not JSON is reported (hub_status shows the policy's warnings), not fatal. SerialPort.list and the ports are
-// fakes: no real serial port is opened.
+// act at once. A config file that is not JSON is reported (hub_status shows the policy's warnings), not fatal: a hand
+// edit that breaks it keeps the ports settings read before, and with none read since the start no port is opened.
+// A bridge port's board is remembered with its adapter. SerialPort.list and the ports are fakes: no real serial port
+// is opened.
 
 import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -286,11 +288,16 @@ describe('port_claim and port_ignore', () => {
 });
 
 describe('a config file that is not right', () => {
-  it('is reported in hub_status and not fatal: the defaults apply (mode adopted)', async () => {
+  it('is reported in hub_status and not fatal; with no valid ports settings read yet, no port is opened', async () => {
     const r = await rig('{ "ports": { "mode": "al');
-    h.FakePort.listed = [OWN(1201, STRANGER)];
+    r.register(KNOWN, 'pad-c6');
+    h.FakePort.listed = [OWN(1201, STRANGER), OWN(1101, KNOWN)];
     await r.serial.poll();
     expect(r.state('/dev/cu.usbmodem1201')).toBe('unwatched');
+    // Not even a registered board: the file may have meant to ignore it.
+    expect(r.serial.list().find((p) => p.path === '/dev/cu.usbmodem1101')).toMatchObject({ state: 'unwatched', policy: 'config_invalid' });
+    expect(h.FakePort.opened).toEqual([]);
+    expect(r.hub.portPolicy!.warnings().some((w) => w.includes('opens no port until the file is fixed'))).toBe(true);
     // hub_status lists the policy's warnings with the other parts'.
     expect(r.hub.portPolicy!.warnings().some((w) => w.includes('is not valid JSON'))).toBe(true);
     // A port op does not overwrite it.
@@ -304,5 +311,150 @@ describe('a config file that is not right', () => {
     expect(warnings).toMatch(/ports\.mode is "everything"/);
     expect(warnings).toMatch(/ports\.ignore is not a list/);
     expect(r.hub.portPolicy!.config().config.ports.mode).toBe('adopted');
+  });
+
+  it('a hand edit that breaks the file keeps the ports settings read before: an ignored board stays closed', async () => {
+    const r = await rig();
+    r.register(KNOWN, 'clock');
+    h.FakePort.listed = [OWN(1101, KNOWN)];
+    await r.serial.poll();
+    expect(r.state('/dev/cu.usbmodem1101')).toBe('open');
+    await HANDLERS.port_ignore({ port: 'clock', remove: false }, r.hub);
+    expect(r.state('/dev/cu.usbmodem1101')).toBe('ignored');
+    // A trailing comma.
+    writeFileSync(r.config, `{"ports":{"ignore":["${KNOWN}"],}}`);
+    r.hub.portPolicy!.refresh();
+    for (let i = 0; i < 3; i++) {
+      await r.serial.poll();
+    }
+    expect(r.state('/dev/cu.usbmodem1101')).toBe('ignored');
+    expect(h.FakePort.opened).toEqual(['/dev/cu.usbmodem1101']); // only the first open, before the ignore
+    const warnings = r.hub.portPolicy!.warnings().join('\n');
+    expect(warnings).toMatch(/is not valid JSON/);
+    expect(warnings).toMatch(/keeping the ports, retention, log, mcp settings read before/);
+    // A wrong value in the ports section alone holds that section too.
+    writeFileSync(r.config, JSON.stringify({ ports: { ignore: KNOWN } }));
+    r.hub.portPolicy!.refresh();
+    await r.serial.poll();
+    expect(r.state('/dev/cu.usbmodem1101')).toBe('ignored');
+    expect(r.hub.portPolicy!.warnings().join('\n')).toMatch(/keeping the ports settings read before/);
+    // A port op does not rewrite the broken section (that would drop the settings held).
+    await expect(HANDLERS.port_claim({ port: KNOWN, remove: false }, r.hub)).rejects.toMatchObject({ code: 'INVALID_ARGS' });
+    expect(JSON.parse(readFileSync(r.config, 'utf8'))).toEqual({ ports: { ignore: KNOWN } });
+    // Fixed (and the ignore taken out): the new settings apply.
+    writeFileSync(r.config, JSON.stringify({ ports: { ignore: [] } }));
+    r.hub.portPolicy!.refresh();
+    await vi.waitFor(async () => {
+      await r.serial.poll();
+      expect(r.state('/dev/cu.usbmodem1101')).toBe('open');
+    });
+    expect(r.hub.portPolicy!.warnings()).toEqual([]);
+  });
+});
+
+describe('port_ignore by name', () => {
+  it('ignores a registered board that is not plugged in by its MAC, so it stays closed when it is', async () => {
+    const r = await rig();
+    r.register('aabbcc000009', 'gamma');
+    const res = await HANDLERS.port_ignore({ port: 'gamma', remove: false }, r.hub);
+    expect(res).toMatchObject({ port: 'aabbcc000009', ignore: ['aabbcc000009'] });
+    h.FakePort.listed = [OWN(1501, 'aabbcc000009')];
+    await r.serial.poll();
+    expect(r.state('/dev/cu.usbmodem1501')).toBe('ignored');
+    expect(h.FakePort.opened).toEqual([]);
+    // And `--remove` by the same name.
+    await HANDLERS.port_ignore({ port: 'gamma', remove: true }, r.hub);
+    await vi.waitFor(() => expect(r.state('/dev/cu.usbmodem1501')).toBe('open'));
+  });
+
+  it('refuses text that is no port, pattern or registered board (it would match nothing)', async () => {
+    const r = await rig();
+    await expect(HANDLERS.port_ignore({ port: 'gamma', remove: false }, r.hub)).rejects.toMatchObject({ code: 'INVALID_ARGS' });
+    expect(() => readFileSync(r.config, 'utf8')).toThrow();
+    // Patterns are taken as they are.
+    for (const p of ['/dev/tty.usbmodem1701', 'usbserial-120', 'path:usbserial-130', '10c4:ea60', 'AA:BB:CC:00:00:0A']) {
+      await HANDLERS.port_ignore({ port: p, remove: false }, r.hub);
+    }
+    expect(JSON.parse(readFileSync(r.config, 'utf8')).ports.ignore).toEqual([
+      '/dev/cu.usbmodem1701',
+      'usbserial-120',
+      'path:usbserial-130',
+      '10c4:ea60',
+      'aabbcc00000a',
+    ]);
+  });
+
+  it("a board's MAC also covers the bridge port it was last seen on", async () => {
+    const r = await rig({ ports: { mode: 'all' } });
+    r.register('a0b1c2d3e4f5', 'cam-esp32');
+    h.FakePort.listed = [CH340];
+    await r.serial.poll();
+    r.serial.learnDevice('path:usbserial-110', 'a0b1c2d3e4f5'); // its HELLO
+    const res = await HANDLERS.port_ignore({ port: 'cam-esp32', remove: false }, r.hub);
+    expect(res).toMatchObject({ port: 'a0b1c2d3e4f5', path: '/dev/cu.usbserial-110', state: 'ignored' });
+  });
+});
+
+describe('a bridge port and its adapter', () => {
+  const CP2102 = (serial?: string) => ({ path: '/dev/tty.usbserial-110', vendorId: '10c4', productId: 'ea60', ...(serial ? { serialNumber: serial } : {}) });
+
+  async function adopted(first: { path: string; vendorId: string; productId: string; serialNumber?: string }) {
+    const r = await rig();
+    r.register('a0b1c2d3e4f5', 'cam-esp32');
+    h.FakePort.listed = [first];
+    await r.serial.poll();
+    r.serial.notePortDevice('path:usbserial-110', 'a0b1c2d3e4f5');
+    await r.serial.poll();
+    expect(r.state('/dev/cu.usbserial-110')).toBe('open');
+    return r;
+  }
+
+  async function replug(r: Rig, next: { path: string; vendorId: string; productId: string; serialNumber?: string }) {
+    h.FakePort.listed = [];
+    await r.serial.poll();
+    await new Promise((res) => setTimeout(res, 1600)); // past the gone debounce
+    await r.serial.poll();
+    h.FakePort.listed = [next];
+    h.FakePort.opened = [];
+    await r.serial.poll();
+  }
+
+  it('another kind of adapter in the same socket is not the adopted board', async () => {
+    const r = await adopted(CH340);
+    await replug(r, CP2102());
+    expect(r.serial.list()[0]).toMatchObject({ state: 'unwatched', policy: 'not_adopted' });
+    expect(h.FakePort.opened).toEqual([]);
+  });
+
+  it('an adapter of the same kind with another serial number is not either; the same adapter is', async () => {
+    const r = await adopted(CP2102('0001A'));
+    await replug(r, CP2102('0002B'));
+    expect(r.state('/dev/cu.usbserial-110')).toBe('unwatched');
+    await replug(r, CP2102('0001A'));
+    expect(r.state('/dev/cu.usbserial-110')).toBe('open');
+  });
+
+  it('a different adapter re-plugged inside the gone debounce is a new port too', async () => {
+    const r = await adopted(CH340);
+    h.FakePort.listed = [CP2102('77')];
+    h.FakePort.opened = [];
+    await r.serial.poll();
+    expect(r.state('/dev/cu.usbserial-110')).toBe('unwatched');
+    expect(h.FakePort.opened).toEqual([]);
+  });
+});
+
+describe('a reset through the hub on a port it leaves closed', () => {
+  it('fails at once, so a job falls back to esptool without waiting', async () => {
+    const r = await rig();
+    h.FakePort.listed = [OWN(1201, STRANGER)];
+    await r.serial.poll();
+    const t0 = Date.now();
+    await expect(r.serial.hardReset(STRANGER)).rejects.toMatchObject({ code: 'DEVICE_OFFLINE', details: { state: 'unwatched' } });
+    // Also right after a lease ends, while the port is `closed` until the next poll applies the policy.
+    const lease = await r.serial.lease(STRANGER, 'job j_1');
+    lease.release();
+    await expect(r.serial.hardReset(STRANGER)).rejects.toMatchObject({ code: 'DEVICE_OFFLINE' });
+    expect(Date.now() - t0).toBeLessThan(1000);
   });
 });

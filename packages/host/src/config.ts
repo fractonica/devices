@@ -1,7 +1,8 @@
 // The hub's config file, `$FR_HOME/config.json` (paths.config()): settings a person edits or the port ops write.
 // Every key is optional; a missing file is the defaults. Reading never fails: a file that is not JSON, or a key with a
 // value of the wrong type, is reported in `problems` and that part falls back to its default, so a typo never stops
-// the hub. Writing (updateConfig) changes only the keys it is asked to and keeps every other key, known or not; it
+// the hub. The hub reads it through liveConfig, which keeps the last good value of a section the file no longer gives
+// (a half-finished edit never drops ports.ignore), and has no value at all for one it never read cleanly. Writing (updateConfig) changes only the keys it is asked to and keeps every other key, known or not; it
 // refuses to overwrite a file that is not valid JSON, so a person's half-finished edit is never lost.
 //
 //   {
@@ -39,8 +40,13 @@ export const DEFAULT_CONFIG: HubConfig = {
   mcp: { autostart: false },
 };
 
+/** A part of the file that could not be used: the whole file, or one section. */
+export type ConfigPart = 'file' | keyof HubConfig;
+
 export interface ConfigRead {
   config: HubConfig;
+  /** The parts with a problem (their values in `config` are defaults): `file` when it could not be read or parsed. */
+  bad: ConfigPart[];
   /** The file's top-level object as read (unknown keys included); null when absent or not a JSON object. */
   raw: Record<string, unknown> | null;
   file: string;
@@ -58,22 +64,28 @@ function defaults(): HubConfig {
 }
 
 /** The typed config from a parsed file: each known key checked, a bad one reported and left at its default. */
-export function parseConfig(raw: unknown): { config: HubConfig; problems: string[] } {
+export function parseConfig(raw: unknown): { config: HubConfig; problems: string[]; bad: ConfigPart[] } {
   const config = defaults();
   const problems: string[] = [];
+  const bad = new Set<ConfigPart>();
   if (raw === null || raw === undefined) {
-    return { config, problems };
+    return { config, problems, bad: [] };
   }
   if (!isObject(raw)) {
-    return { config, problems: ['the file is not a JSON object; using the defaults'] };
+    return { config, problems: ['the file is not a JSON object; using the defaults'], bad: ['file'] };
   }
+  // Every problem is in a section: `where` starts with its name.
+  const problem = (where: string, text: string) => {
+    problems.push(text);
+    bad.add(where.split('.')[0] as keyof HubConfig);
+  };
   const section = (name: keyof HubConfig): Record<string, unknown> | null => {
     const v = raw[name];
     if (v === undefined) {
       return null;
     }
     if (!isObject(v)) {
-      problems.push(`${name} is not an object; using its defaults`);
+      problem(name, `${name} is not an object; using its defaults`);
       return null;
     }
     return v;
@@ -83,7 +95,7 @@ export function parseConfig(raw: unknown): { config: HubConfig; problems: string
       return null;
     }
     if (!Array.isArray(v) || !v.every((s) => typeof s === 'string' && s.trim() !== '')) {
-      problems.push(`${where} is not a list of non-empty strings; ignored`);
+      problem(where, `${where} is not a list of non-empty strings; ignored`);
       return null;
     }
     return v.map((s: string) => s.trim());
@@ -93,7 +105,7 @@ export function parseConfig(raw: unknown): { config: HubConfig; problems: string
       return null;
     }
     if (typeof v !== 'number' || !Number.isFinite(v) || v <= 0 || (integer && !Number.isInteger(v))) {
-      problems.push(`${where} is not a positive ${integer ? 'integer' : 'number'}; using the default`);
+      problem(where, `${where} is not a positive ${integer ? 'integer' : 'number'}; using the default`);
       return null;
     }
     return v;
@@ -105,7 +117,7 @@ export function parseConfig(raw: unknown): { config: HubConfig; problems: string
       if ((PORT_MODES as readonly unknown[]).includes(ports.mode)) {
         config.ports.mode = ports.mode as PortMode;
       } else {
-        problems.push(`ports.mode is ${JSON.stringify(ports.mode)}, not one of ${PORT_MODES.join(', ')}; using adopted`);
+        problem('ports', `ports.mode is ${JSON.stringify(ports.mode)}, not one of ${PORT_MODES.join(', ')}; using adopted`);
       }
     }
     config.ports.ignore = strings('ports.ignore', ports.ignore) ?? config.ports.ignore;
@@ -126,16 +138,16 @@ export function parseConfig(raw: unknown): { config: HubConfig; problems: string
     if (typeof mcp.autostart === 'boolean') {
       config.mcp.autostart = mcp.autostart;
     } else {
-      problems.push('mcp.autostart is not true or false; using false');
+      problem('mcp', 'mcp.autostart is not true or false; using false');
     }
   }
-  return { config, problems };
+  return { config, problems, bad: [...bad] };
 }
 
 /** Reads `file` (default $FR_HOME/config.json). Never throws: problems are reported, defaults fill in. */
 export function readConfig(file = paths.config()): ConfigRead {
   if (!existsSync(file)) {
-    return { config: defaults(), raw: null, file, exists: false, problems: [], mtimeMs: 0 };
+    return { config: defaults(), bad: [], raw: null, file, exists: false, problems: [], mtimeMs: 0 };
   }
   let mtimeMs = 0;
   let text: string;
@@ -143,16 +155,16 @@ export function readConfig(file = paths.config()): ConfigRead {
     mtimeMs = statSync(file).mtimeMs;
     text = readFileSync(file, 'utf8');
   } catch (e) {
-    return { config: defaults(), raw: null, file, exists: true, problems: [`cannot read ${file}: ${(e as Error).message}`], mtimeMs };
+    return { config: defaults(), bad: ['file'], raw: null, file, exists: true, problems: [`cannot read ${file}: ${(e as Error).message}`], mtimeMs };
   }
   let parsed: unknown;
   try {
     parsed = text.trim() === '' ? {} : JSON.parse(text);
   } catch (e) {
-    return { config: defaults(), raw: null, file, exists: true, problems: [`${file} is not valid JSON (${(e as Error).message}); using the defaults`], mtimeMs };
+    return { config: defaults(), bad: ['file'], raw: null, file, exists: true, problems: [`${file} is not valid JSON (${(e as Error).message})`], mtimeMs };
   }
-  const { config, problems } = parseConfig(parsed);
-  return { config, raw: isObject(parsed) ? parsed : null, file, exists: true, problems: problems.map((p) => `${file}: ${p}`), mtimeMs };
+  const { config, problems, bad } = parseConfig(parsed);
+  return { config, bad, raw: isObject(parsed) ? parsed : null, file, exists: true, problems: problems.map((p) => `${file}: ${p}`), mtimeMs };
 }
 
 /**
@@ -188,25 +200,88 @@ export function configSection(raw: Record<string, unknown>, key: string): Record
   return fresh;
 }
 
-/** A reader that re-reads the file only when its mtime changed, at most every `everyMs`. */
-export function cachedConfig(file = paths.config(), everyMs = 1000): () => ConfigRead {
-  let last: ConfigRead | null = null;
+const SECTIONS = Object.keys(DEFAULT_CONFIG) as (keyof HubConfig)[];
+
+/** What liveConfig reads: the file as read, with each section the file cannot give replaced by its last good value. */
+export interface LiveConfigRead extends ConfigRead {
+  /** Sections whose value is the last good read's, because the file cannot give them now. */
+  held: (keyof HubConfig)[];
+  /** Sections the file has not given cleanly since this reader started: their values are only the defaults. */
+  unset: (keyof HubConfig)[];
+}
+
+export interface LiveConfig {
+  /** The config, re-read when the file's mtime changed (checked at most every `everyMs`). */
+  read(): LiveConfigRead;
+  /** Re-reads now (after a port op wrote the file). */
+  refresh(): LiveConfigRead;
+}
+
+/**
+ * The config for a long-running process (the hub). A section the file cannot give (a syntax error makes that every
+ * section; a wrong value, its own) keeps the value of the last read that gave it, so a half-finished hand edit never
+ * drops ports.ignore and opens a port the owner protected. A section never read cleanly since the start is in `unset`:
+ * its value is only the default, and a careful caller (the port policy, job pruning) does not act on it. `onProblems`
+ * hears the problem list whenever it changes, the first read included (an empty list: the file is fine again).
+ */
+export function liveConfig(file = paths.config(), opts: { everyMs?: number; onProblems?: (problems: string[]) => void } = {}): LiveConfig {
+  const everyMs = opts.everyMs ?? 1000;
+  const good: Partial<HubConfig> = {};
+  let last: LiveConfigRead | null = null;
   let checkedAt = 0;
-  return () => {
-    const now = Date.now();
-    if (last && now - checkedAt < everyMs) {
+  let told: string | null = null;
+  const load = (): LiveConfigRead => {
+    const r = readConfig(file);
+    const config = structuredClone(r.config);
+    const held: (keyof HubConfig)[] = [];
+    const unset: (keyof HubConfig)[] = [];
+    for (const s of SECTIONS) {
+      const usable = !r.bad.includes('file') && !r.bad.includes(s);
+      if (usable) {
+        (good as Record<string, unknown>)[s] = structuredClone(r.config[s]);
+      } else if (good[s] !== undefined) {
+        (config as unknown as Record<string, unknown>)[s] = structuredClone(good[s]);
+        held.push(s);
+      } else {
+        unset.push(s);
+      }
+    }
+    const problems = [...r.problems];
+    if (held.length) {
+      problems.push(`${file}: keeping the ${held.join(', ')} settings read before, until the file is fixed`);
+    }
+    if (unset.includes('ports')) {
+      problems.push(`${file}: no valid ports settings read since the hub started, so it opens no port until the file is fixed`);
+    }
+    const key = JSON.stringify(problems);
+    if (key !== told) {
+      told = key;
+      opts.onProblems?.(problems);
+    }
+    return { ...r, config, problems, held, unset };
+  };
+  return {
+    read() {
+      const now = Date.now();
+      if (last && now - checkedAt < everyMs) {
+        return last;
+      }
+      checkedAt = now;
+      let mtimeMs = 0;
+      try {
+        mtimeMs = statSync(file).mtimeMs;
+      } catch {
+        mtimeMs = 0;
+      }
+      if (!last || mtimeMs !== last.mtimeMs || (mtimeMs === 0 && last.exists)) {
+        last = load();
+      }
       return last;
-    }
-    checkedAt = now;
-    let mtimeMs = 0;
-    try {
-      mtimeMs = statSync(file).mtimeMs;
-    } catch {
-      mtimeMs = 0;
-    }
-    if (!last || mtimeMs !== last.mtimeMs || (mtimeMs === 0 && last.exists)) {
-      last = readConfig(file);
-    }
-    return last;
+    },
+    refresh() {
+      checkedAt = Date.now();
+      last = load();
+      return last;
+    },
   };
 }

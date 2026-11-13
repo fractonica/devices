@@ -123,6 +123,9 @@ const ADDED_COLUMNS: { table: string; column: string; decl: string }[] = [
   // The port policy (ports/policy.ts): the device a port was last seen carrying (a bridge port's HELLO, a provision's
   // probe), so in mode adopted a known board's port is opened again after a re-plug.
   { table: 'ports_seen', column: 'device_id', decl: 'TEXT' },
+  // A bridge port's adapter when device_id was recorded (`vid:pid:serial`, serialport's identity of the adapter): a
+  // different adapter in the same USB socket is not taken for that board (ports/policy.ts).
+  { table: 'ports_seen', column: 'device_port', decl: 'TEXT' },
 ];
 
 /**

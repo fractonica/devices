@@ -80,9 +80,10 @@ export const PortInfoSchema = z.object({
   alias: z.string().optional(),
   /**
    * Why the hub opens the port or not (config.json ports): `adopted` (a registered board), `claimed` (ports.claim, or
-   * fr ports claim), `all` (mode all), `not_adopted` (mode adopted and no registered board known on it), `ignored`.
+   * fr ports claim), `all` (mode all), `not_adopted` (mode adopted and no registered board known on it), `ignored`,
+   * `config_invalid` (config.json has given no valid ports settings since the hub started, so it opens no port).
    */
-  policy: z.enum(['adopted', 'claimed', 'all', 'not_adopted', 'ignored']).optional(),
+  policy: z.enum(['adopted', 'claimed', 'all', 'not_adopted', 'ignored', 'config_invalid']).optional(),
   /** For display: the hub, `lease l_… (pid N)`, or the external program. */
   holder: z.string().optional(),
   lines: z.number(),
