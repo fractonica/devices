@@ -7,9 +7,11 @@
 //   node tools/display-build.mjs --test [filter]
 // The build directory is build/host-display, or FR_DISPLAY_BUILD_DIR (relative to the checkout, or absolute).
 // FR_DISPLAY_LV_MEM_SIZE=32768 (with its own FR_DISPLAY_BUILD_DIR) builds the tests with a board's 32 KB LVGL pool.
+// Runs are serialised per checkout (build/.display-build.lock): every build directory shares the one LVGL download in
+// build/_deps, and two first builds at once (two test files, the CLI and the hub) would fetch it into the same place.
 
 import { spawnSync } from 'node:child_process';
-import { existsSync, utimesSync } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync, renameSync, rmSync, utimesSync, writeFileSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -39,6 +41,81 @@ function run(cmd, args, opts = {}) {
   }
 }
 
+// One run at a time per checkout: a lock directory holding the owner's pid. A lock whose owner is gone (killed, the
+// machine restarted) is taken over; a live one is waited for, up to FR_DISPLAY_LOCK_WAIT_S (default 30 minutes).
+const lockDir = join(root, 'build', '.display-build.lock');
+let locked = false;
+
+function alive(pid) {
+  try {
+    process.kill(pid, 0);
+    return true;
+  } catch (e) {
+    return e.code === 'EPERM';
+  }
+}
+
+function sleepMs(ms) {
+  Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, ms);
+}
+
+function acquireLock() {
+  const waitS = Number(process.env.FR_DISPLAY_LOCK_WAIT_S ?? 1800);
+  const deadline = Date.now() + waitS * 1000;
+  let told = false;
+  mkdirSync(dirname(lockDir), { recursive: true });
+  for (;;) {
+    try {
+      mkdirSync(lockDir);
+      writeFileSync(join(lockDir, 'pid'), String(process.pid));
+      locked = true;
+      return;
+    } catch (e) {
+      if (e.code !== 'EEXIST') {
+        throw e;
+      }
+    }
+    let owner = NaN;
+    try {
+      owner = Number(readFileSync(join(lockDir, 'pid'), 'utf8'));
+    } catch {
+      // Just created and its pid not written yet, or just released: look again.
+    }
+    if (Number.isInteger(owner) && owner > 0 && !alive(owner)) {
+      // Stale: move it aside (only one taker's rename succeeds), then try again.
+      const aside = `${lockDir}.stale-${process.pid}`;
+      try {
+        renameSync(lockDir, aside);
+        rmSync(aside, { recursive: true, force: true });
+      } catch {
+        // Someone else took it over first.
+      }
+      continue;
+    }
+    if (Date.now() > deadline) {
+      console.error(`display-build: another build (pid ${owner}) has held ${lockDir} for over ${waitS} s; giving up`);
+      process.exit(75);
+    }
+    if (!told) {
+      console.error(`display-build: waiting for another build (pid ${owner}) to finish`);
+      told = true;
+    }
+    sleepMs(500);
+  }
+}
+
+function releaseLock() {
+  if (locked) {
+    locked = false;
+    rmSync(lockDir, { recursive: true, force: true });
+  }
+}
+
+process.on('exit', releaseLock);
+for (const [sig, n] of [['SIGINT', 2], ['SIGTERM', 15], ['SIGHUP', 1]]) {
+  process.on(sig, () => process.exit(128 + n));
+}
+
 const args = process.argv.slice(2);
 const testAt = args.indexOf('--test');
 const test = testAt >= 0;
@@ -52,6 +129,7 @@ if (test) {
 // Configuring every time is cheap and lets CONFIGURE_DEPENDS globs pick up new sources. stdout carries the build's
 // progress; callers that parse output read the renderer's own, never this script's.
 // FR_DISPLAY_LV_MEM_SIZE (bytes) builds with a board's LVGL pool instead of the Mac's (use its own build directory).
+acquireLock();
 const pool = `-DFR_LV_MEM_SIZE=${process.env.FR_DISPLAY_LV_MEM_SIZE ?? ''}`;
 run(cmake, ['-S', source, '-B', build, '-G', 'Ninja', `-DCMAKE_CXX_COMPILER=${cxx}`, `-DCMAKE_C_COMPILER=${cc}`, '-DCMAKE_BUILD_TYPE=Debug', pool, '--log-level=WARNING']);
 run(cmake, ['--build', build, '--target', 'fr_display_render', ...(test ? ['fr_display_tests'] : [])]);

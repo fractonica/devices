@@ -4,7 +4,8 @@
 // `fr codegen client`, `fr display window` (design m2-c5-display D6) and `fr audio record|play|tone` (design
 // audio-a1 D9) are hand-written in their own modules (design c6 §3.3).
 
-import { resolve as resolvePath } from 'node:path';
+import { dirname, resolve as resolvePath } from 'node:path';
+import { fileURLToPath } from 'node:url';
 
 import { Command, CommanderError, InvalidArgumentError, Option } from 'commander';
 import { z } from 'zod';
@@ -314,7 +315,10 @@ program
       const r = await hubCall('hub_status', {}, 3000);
       return r.ok ? ((r.data ?? null) as HubSelfTests | null) : null;
     };
-    const checks = await runDoctor({ sourceDir: findSourceDir(process.cwd()), fix: Boolean(opts.fix), hub: hubSelfTests });
+    // Outside a checkout (the shim runs from anywhere), the checks are about the checkout this CLI runs from.
+    const here = findSourceDir(process.cwd());
+    const sourceDir = here ?? findSourceDir(dirname(fileURLToPath(import.meta.url)));
+    const checks = await runDoctor({ sourceDir, sourceFrom: here ? 'cwd' : 'cli', fix: Boolean(opts.fix), hub: hubSelfTests });
     const ok = !checks.some((c) => c.level === 'error');
     await exit(ok ? 0 : 1, (isJson() ? JSON.stringify({ ok, data: { checks }, cursor: '' }) : renderChecks(checks)) + '\n');
   });

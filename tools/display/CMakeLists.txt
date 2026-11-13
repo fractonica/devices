@@ -38,6 +38,10 @@ FetchContent_Declare(lvgl
     URL https://github.com/lvgl/lvgl/archive/refs/tags/${FR_LVGL_TAG}.tar.gz
     URL_HASH SHA256=${FR_LVGL_SHA256}
     DOWNLOAD_EXTRACT_TIMESTAMP TRUE
+    # A stalled download fails instead of hanging its caller (a test worker blocks on it): no byte for 2 minutes, or
+    # 30 minutes in all.
+    INACTIVITY_TIMEOUT 120
+    TIMEOUT 1800
     # LVGL's own CMake is not used: the sources are compiled below with fr_ui's lv_conf.h.
     SOURCE_SUBDIR fr-no-cmake
     SOURCE_DIR ${REPO_DIR}/build/_deps/lvgl-${FR_LVGL_TAG}

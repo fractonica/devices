@@ -193,6 +193,8 @@ export function hubChecks(s: HubSelfTests): Check[] {
 
 export async function runDoctor(opts: {
   sourceDir: string | null;
+  /** Where sourceDir came from: the working directory (default) or, outside any checkout, the CLI's own checkout. */
+  sourceFrom?: 'cwd' | 'cli';
   fix: boolean;
   /** The running hub's self-tests (hub_status), null when no hub answers; fr doctor passes it, hub_doctor adds its own. */
   hub?: () => Promise<HubSelfTests | null>;
@@ -210,7 +212,7 @@ export async function runDoctor(opts: {
     add({ id: 'source', level: 'error', detail: 'not inside a Fractonica checkout (no firmware/idf-version.lock)' });
     return checks;
   }
-  add({ id: 'source', level: 'ok', detail: opts.sourceDir });
+  add({ id: 'source', level: 'ok', detail: opts.sourceFrom === 'cli' ? `${opts.sourceDir} (this fr's checkout; the working directory is not inside one)` : opts.sourceDir });
 
   const lock = readIdfLock(opts.sourceDir);
   const idf = await idfStatus(lock);
