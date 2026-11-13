@@ -15,16 +15,15 @@ import {
   BROADCAST_PING,
   canSubmit,
   needsJobDetail,
-  networkInput,
-  networkProblem,
   PROVISION_STAGES,
   provisionInput,
-  stageView,
   WIZARD_CLOSED,
   wizardReducer,
   type WizardAction,
   type WizardState,
 } from '../src/state/wizard.ts';
+import { provisionDial } from '../src/state/provision.ts';
+import { networkErrors, networkSetInput } from '../src/state/settings-view.ts';
 
 const PORT = { path: '/dev/cu.usbmodem1101', usb_serial: '1C:DB:D4:00:01:34', device_id: '1cdbd4000134', state: 'open' };
 
@@ -64,7 +63,7 @@ describe('dashboard provision wizard', () => {
     s = wizardReducer(s, { type: 'job', job: { job_id: 'j_other', status: 'failed' } }); // another job
     expect(canSubmit(s)).toBe(false);
     expect(s.job).toMatchObject({ status: 'working', stage: 'flash', progress: { pct: 45 }, stages: ['lease', 'flash'] });
-    expect(stageView(s).map((x) => x.status)).toEqual(['done', 'done', 'done', 'done', 'done', 'current', 'pending', 'pending', 'pending']);
+    expect(provisionDial(s)).toMatchObject({ current: 5, fraction: 0.45, failed: false });
 
     s = wizardReducer(s, { type: 'online', device_id: '1cdbd4000134' });
     s = wizardReducer(s, {
@@ -74,7 +73,7 @@ describe('dashboard provision wizard', () => {
     expect(s.step).toBe('done');
     expect(s.online).toBe(true);
     expect(s.result?.wifi).toBe('joined');
-    expect(stageView(s).every((x) => x.status === 'done')).toBe(true);
+    expect(provisionDial(s).current).toBe(PROVISION_STAGES.length);
     // A late frame changes nothing.
     expect(wizardReducer(s, { type: 'job', job: { job_id: 'j_p', status: 'working', stage: 'hello' } })).toBe(s);
   });
@@ -137,7 +136,7 @@ describe('dashboard provision wizard', () => {
       },
     });
     expect(s.error?.candidates).toEqual(['c6-pad', 'c6-lamp']);
-    expect(stageView(s)[2]).toEqual({ stage: 'select', status: 'failed' });
+    expect(provisionDial(s)).toMatchObject({ current: 2, failed: true });
     s = wizardReducer(s, { type: 'pick', profile: 'c6-lamp' });
     expect(s).toMatchObject({ step: 'profile', profile: 'c6-lamp', error: null, job: null });
     expect(canSubmit(s)).toBe(true);
@@ -185,29 +184,17 @@ describe('dashboard provision wizard', () => {
     expect(wizardReducer(s, { type: 'online', device_id: '1cdbd4000134' }).online).toBe(true);
   });
 
-  it('checks the network form like network_set does', () => {
-    const f = { ssid: 'lab', password: 'secret', country: 'us', bssid: '' };
-    expect(networkProblem(f)).toBeNull();
-    expect(networkInput(f)).toEqual({ ssid: 'lab', password: 'secret', country: 'US' });
-    expect(networkProblem({ ...f, ssid: '' })).toMatch(/SSID/);
-    expect(networkProblem({ ...f, ssid: 'x'.repeat(33) })).toMatch(/SSID/);
-    expect(networkProblem({ ...f, password: 'x'.repeat(65) })).toMatch(/password/);
-    expect(networkProblem({ ...f, country: 'USA' })).toMatch(/country/);
-    expect(networkProblem({ ...f, bssid: '3c:84:6a:12:34' })).toMatch(/BSSID/);
-    expect(networkInput({ ssid: 'open', password: '', country: '', bssid: '3C:84:6A:12:34:56' })).toEqual({ ssid: 'open', bssid: '3c:84:6a:12:34:56' });
-  });
-
   it("sends what the ops' input schemas accept, and knows the hub's provision stages in order", () => {
     // device_provision: an auto profile and the default alias, then both chosen (the alias lower-cased).
     let s = run({ type: 'open', port: PORT, known: null }, { type: 'network', network: { state: 'set', ssid: 'lab' } }, { type: 'next' });
     expect(accepts('device_provision', provisionInput(s)).success).toBe(true);
     s = run({ type: 'open', port: { path: '/dev/cu.usbmodem1101', state: 'free' }, known: null }, { type: 'profile', profile: 'c6-pad' }, { type: 'alias', alias: 'Pad-C6' });
     expect(accepts('device_provision', provisionInput(s))).toMatchObject({ success: true, data: { port: '/dev/cu.usbmodem1101', profile: 'c6-pad', alias: 'pad-c6', wait_s: 0 } });
-    // network_set from a form networkProblem passes.
-    const form = { ssid: 'lab', password: 'secret', country: 'us', bssid: '3C:84:6A:12:34:56' };
-    expect(networkProblem(form)).toBeNull();
-    expect(accepts('network_set', networkInput(form)).success).toBe(true);
-    expect(accepts('network_set', networkInput({ ssid: 'open', password: '', country: '', bssid: '' })).success).toBe(true);
+    // network_set from a form the shared network form passes (Settings › Networks and Provision's Network step).
+    const form = { name: 'lab', ssid: 'lab', password: 'secret-lab', open: false, band: 'auto' as const, country: 'us', bssid: '3C:84:6A:12:34:56' };
+    expect(networkErrors(form)).toEqual({});
+    expect(accepts('network_set', networkSetInput(form)).success).toBe(true);
+    expect(accepts('network_set', networkSetInput({ ...form, ssid: 'open', open: true, password: '', country: '', bssid: '' })).success).toBe(true);
     // The broadcast button: one MSG to every node, answered at once (count 1, not a repeating job).
     expect(accepts('message_send', BROADCAST_PING)).toMatchObject({ success: true, data: { to: 'broadcast', topic: 'ping', count: 1 } });
     // The stages the hub's device_provision job goes through, in its order (hub registry/provision.ts).

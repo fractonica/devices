@@ -1,28 +1,47 @@
-// PROVISION, routes `/provision` and `/provision/$job` (resumable). STUB of the stage 4 foundation, for the Provision
-// page builder (HARDWARE-REVIEW §4 "Screens" 2): plug in (live port detection, a "listening" bead), network
-// (network_list, add inline), board (probed chip -> profiles, build and provision), name (alias checked live, 31
-// characters), flash (StageRing with PROVISION_STAGES, job output folded under it, Cancel), done (Open device,
-// Identify). Blocks early with an in-page fix on busy_external or a leased port. Until then the old ports page, where
-// provisioning starts from a port, is mounted here.
+// PROVISION, routes `/provision` and `/provision/$job` (HARDWARE-REVIEW §4 "Screens" 2, 4 and 5; design README "Hub").
+// Three views on the one route, `?view=`:
+//   (none)       a new board: plug in · network · board · name · flash · done, the dial beside them (provision/new-board.tsx)
+//   firmware     the profiles with Build, the builds kept, the recent jobs (provision/firmware.tsx)
+//   ota          over the air: preview, then deploy, and the recent updates (provision/ota.tsx)
+// `/provision/<job>` is any job's page, resumable: a provisioning reopens in the steps (a build chained to one too, the
+// chain in the URL's search), a build or an update shows its ring and output (provision/job.tsx).
 
-import { useParams } from '@tanstack/react-router';
+import { useParams, useSearch } from '@tanstack/react-router';
 
-import { LegacyMount } from '../legacy/mount.tsx';
-import { PortsPage as LegacyPorts } from '../legacy/pages/ports.tsx';
-import { Page, PROVISION_STAGES, Section, StageRing } from '../ui/index.ts';
+import { engrave, Page } from '../ui/index.ts';
+import { Firmware } from './provision/firmware.tsx';
+import { JobRoute } from './provision/job.tsx';
+import { ProvisionNav, type ProvisionView } from './provision/nav.tsx';
+import { NewBoard } from './provision/new-board.tsx';
+import { OverTheAir } from './provision/ota.tsx';
+import './provision/provision.css';
+
+const SUBS: Record<ProvisionView | 'job', string> = {
+  board: 'A new board, start to finish',
+  firmware: 'Builds and the jobs that made them',
+  ota: 'Preview, then deploy',
+  job: 'A job of the hub',
+};
 
 export function ProvisionPage() {
   const { job } = useParams({ strict: false }) as { job?: string };
+  const search = useSearch({ strict: false }) as Record<string, unknown>;
+  const view: ProvisionView = search.view === 'firmware' ? 'firmware' : search.view === 'ota' ? 'ota' : 'board';
   return (
-    <Page title="Provision" sub={job ? `Job ${job}` : 'Plug a board in'}>
-      {job ? (
-        <Section title="Stages">
-          <StageRing stages={PROVISION_STAGES} current={0} label={`Provisioning job ${job}`} />
-        </Section>
-      ) : null}
-      <LegacyMount>
-        <LegacyPorts />
-      </LegacyMount>
+    <Page
+      title="Provision"
+      sub={
+        job ? (
+          <>
+            {engrave(SUBS.job)} <span className="mono prov-job-id">{job}</span>
+          </>
+        ) : (
+          SUBS[view]
+        )
+      }
+    >
+      <ProvisionNav current={job ? undefined : view} />
+      {job ? <JobRoute key={job} jobId={job} search={search} /> : view === 'firmware' ? <Firmware /> : view === 'ota' ? <OverTheAir /> : <NewBoard />}
     </Page>
   );
 }

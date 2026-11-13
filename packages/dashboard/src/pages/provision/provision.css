@@ -1,0 +1,396 @@
+/*
+ * provision.css - the Provision page (pages/provision.tsx, pages/provision/*). Tokens only: var(--c-*), the faces and
+ * weights of tokens.js, the hub's scale (styles/base.css). Classes start with `prov-`.
+ *
+ * Desktop: the dial on the left as the page's instrument (sticky while the steps scroll), the steps beside it.
+ * Phone: the dial on top, centred, the steps under it. Nothing pulses: light fills arcs as the hub reports progress,
+ * and a stage completing turns its arc lumen over 400 ms (a cut under reduced motion).
+ */
+
+/* ------------------------------------------------------------- layout */
+
+.prov-nav {
+  margin-top: calc(var(--sp-3) * -1);
+}
+
+.prov-job-id {
+  color: var(--c-ash);
+  letter-spacing: 0;
+  text-transform: none;
+}
+
+.prov-board {
+  display: grid;
+  grid-template-columns: 320px minmax(0, 1fr);
+  gap: var(--sp-5) var(--sp-6);
+  align-items: start;
+}
+
+.prov-instrument {
+  position: sticky;
+  top: var(--sp-4);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--sp-4);
+}
+
+.prov-steps,
+.prov-views {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-5);
+  min-width: 0;
+}
+
+.prov-steps {
+  gap: 0;
+}
+
+@media (max-width: 1099.98px) and (min-width: 700px) {
+  .prov-board {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .prov-instrument {
+    position: static;
+  }
+}
+
+@media (max-width: 699.98px) {
+  .prov-board {
+    grid-template-columns: minmax(0, 1fr);
+    gap: var(--sp-4);
+  }
+
+  .prov-instrument {
+    position: static;
+  }
+}
+
+/* ---------------------------------------------------------------- steps */
+
+.prov-step {
+  display: flex;
+  flex-direction: column;
+  border-bottom: 0.75px solid var(--c-etch2);
+}
+
+.prov-step:first-child {
+  border-top: 0.75px solid var(--c-etch2);
+}
+
+.prov-step-head {
+  display: flex;
+  align-items: baseline;
+  gap: var(--sp-3);
+  min-height: 44px;
+  padding: 14px 0 12px;
+}
+
+.prov-step-n {
+  width: 1.4em;
+  flex: none;
+  font-size: var(--fs-value);
+  font-weight: var(--w-reading);
+  color: var(--c-etch3);
+}
+
+.prov-step-title {
+  color: var(--c-etch3);
+  margin-right: auto;
+  transition: color 400ms linear;
+}
+
+.prov-step-summary {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: var(--fs-value);
+  color: var(--c-bone);
+}
+
+.prov-step[data-status='done'] .prov-step-n,
+.prov-step[data-status='done'] .prov-step-title {
+  color: var(--c-ash);
+}
+
+.prov-step[data-status='current'] .prov-step-n,
+.prov-step[data-status='current'] .prov-step-title {
+  color: var(--c-lumen);
+}
+
+.prov-step[data-status='failed'] .prov-step-n,
+.prov-step[data-status='failed'] .prov-step-title {
+  color: var(--c-fault);
+}
+
+.prov-step-body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-3);
+  padding: 0 0 var(--sp-4) calc(var(--fs-value) * 1.4 + var(--sp-3));
+}
+
+@media (max-width: 699.98px) {
+  .prov-step-body {
+    padding-left: 0;
+  }
+}
+
+.prov-lede {
+  max-width: 62ch;
+  color: var(--c-bone);
+  font-size: var(--fs-data);
+}
+
+.prov-note {
+  max-width: 68ch;
+  color: var(--c-ash);
+  font-size: var(--fs-data);
+}
+
+.prov-note a,
+.prov-lede a {
+  color: var(--c-bone);
+  border-bottom: var(--hair) solid var(--c-etch3);
+}
+
+.prov-note a:hover {
+  color: var(--c-lumen);
+}
+
+.prov-fault {
+  color: var(--c-fault);
+}
+
+.prov-lit {
+  color: var(--c-lumen);
+}
+
+.prov-stage-word {
+  font-family: var(--font-caps);
+  font-weight: var(--w-caps);
+  letter-spacing: var(--track-caps);
+  font-size: var(--fs-label);
+  text-transform: uppercase;
+  color: var(--c-lumen);
+}
+
+.prov-built {
+  color: var(--c-ash);
+}
+
+.prov-built .ui-ftime {
+  color: var(--c-bone);
+}
+
+/* ------------------------------------------------------ listening (no pulse) */
+
+.prov-listening {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--sp-2);
+  padding: var(--sp-3) 0 var(--sp-2);
+  max-width: 62ch;
+}
+
+.prov-listening-line {
+  flex-direction: row;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--sp-3);
+  padding: var(--sp-2) 0 0;
+}
+
+/* -------------------------------------------------------- choice rows */
+
+.prov-choices {
+  display: flex;
+  flex-direction: column;
+}
+
+.prov-choice,
+.prov-line {
+  align-items: center;
+}
+
+.prov-choice-lead,
+.prov-line-lead {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-3);
+  margin-right: auto;
+  min-width: 0;
+  text-align: left;
+  min-height: 34px;
+}
+
+.prov-choice-lead {
+  flex: 1 1 auto;
+}
+
+.prov-choice-lead:disabled {
+  cursor: not-allowed;
+}
+
+.prov-choice-mark {
+  flex: none;
+}
+
+.prov-choice-mark .ring {
+  fill: none;
+  stroke: var(--c-etch3);
+  stroke-width: 1;
+  transition: stroke 200ms linear;
+}
+
+.prov-choice-mark .dot {
+  fill: var(--c-lumen);
+  opacity: 0;
+  transition: opacity 200ms linear;
+}
+
+.prov-choice-lead:hover .ring {
+  stroke: var(--c-ash);
+}
+
+.prov-choice[data-chosen] .prov-choice-mark .ring {
+  stroke: var(--c-lumen);
+}
+
+.prov-choice[data-chosen] .prov-choice-mark .dot {
+  opacity: 1;
+}
+
+.prov-choice[data-chosen] {
+  border-bottom-color: var(--c-etch2);
+}
+
+.prov-choice-bead,
+.prov-line-mark {
+  display: flex;
+  flex: none;
+}
+
+.prov-choice-text {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 0;
+}
+
+.prov-choice-extra {
+  color: var(--c-ash);
+  font-size: var(--fs-earth);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.prov-choice[data-muted] .ui-row-name,
+.prov-line[data-muted] .ui-row-name {
+  color: var(--c-ash);
+}
+
+.prov-choice-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 0 var(--sp-2);
+}
+
+.prov-port-state {
+  color: var(--c-ash);
+}
+
+.prov-choice[data-chosen] .prov-port-state {
+  color: var(--c-bone);
+}
+
+@media (max-width: 699.98px) {
+  .prov-choice,
+  .prov-line {
+    align-items: flex-start;
+  }
+
+  .prov-choice .ui-row-values,
+  .prov-line .ui-row-values {
+    padding-left: calc(13px + var(--sp-3));
+    text-align: left;
+    align-items: flex-start;
+  }
+
+  .prov-choice-actions {
+    width: 100%;
+    justify-content: flex-start;
+    padding-left: calc(13px + var(--sp-3));
+  }
+
+  .prov-line .prov-choice-actions {
+    padding-left: 0;
+  }
+}
+
+/* ------------------------------------------------------------------ forms */
+
+.prov-form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-4);
+}
+
+.prov-form-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+  gap: var(--sp-4) var(--sp-5);
+}
+
+.prov-plan {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-2);
+}
+
+/* ------------------------------------------------------------ per-device rings */
+
+.prov-rings {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--sp-4) var(--sp-5);
+  padding-top: var(--sp-4);
+}
+
+.prov-ring {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--sp-2);
+}
+
+.prov-ring-name {
+  font-size: var(--fs-value);
+  color: var(--c-bone);
+}
+
+@media (max-width: 699.98px) {
+  .prov-rings {
+    justify-content: center;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .prov-step-title,
+  .prov-choice-mark .ring,
+  .prov-choice-mark .dot {
+    transition: none;
+  }
+}
+.prov-instrument:empty { display: none; }
+
+.prov-stage-word[data-failed] {
+  color: var(--c-fault);
+}

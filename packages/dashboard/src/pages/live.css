@@ -1,0 +1,274 @@
+/*
+ * live.css - the Live page (pages/live.tsx): filters as chips, the event rows on etch1 hairlines, thresholds as quiet
+ * engraved lines. Tokens only (styles/base.css header). Desktop: one line per event in four columns; phone: the time
+ * and the device over the type and fields.
+ */
+
+.live-filters {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-3);
+}
+
+.live-filter {
+  display: grid;
+  grid-template-columns: 76px 1fr;
+  align-items: baseline;
+  gap: var(--sp-3);
+}
+
+.live-filter-label {
+  color: var(--c-ash);
+  padding-top: 2px;
+}
+
+.live-filter-clear {
+  padding-left: calc(76px + var(--sp-3));
+}
+
+.live-list {
+  position: relative;
+}
+
+.live-slot {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+}
+
+/* ------------------------------------------------------------------ a row */
+
+.live-event {
+  border-bottom: var(--hair) solid var(--c-etch1);
+}
+
+.live-line {
+  display: grid;
+  grid-template-columns: 9.6em minmax(7rem, 10rem) minmax(8rem, 12rem) minmax(0, 1fr);
+  align-items: baseline;
+  column-gap: var(--sp-4);
+  width: 100%;
+  min-height: 37px;
+  padding: 10px 0 9px;
+  text-align: left;
+  font-size: var(--fs-data);
+  line-height: 16px;
+  transition: color 200ms linear;
+}
+
+html[data-mode='earth'] .live-line {
+  grid-template-columns: 17em minmax(7rem, 10rem) minmax(8rem, 12rem) minmax(0, 1fr);
+}
+
+.live-line:hover .live-type,
+.live-event[data-open] .live-type {
+  color: var(--c-lumen);
+}
+
+.live-event[data-open] {
+  border-bottom-color: var(--c-etch2);
+}
+
+.live-time {
+  white-space: nowrap;
+  color: var(--c-bone);
+}
+
+.live-time .earth {
+  margin-left: 0.6em;
+}
+
+.live-who {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  min-width: 0;
+}
+
+.live-who-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--c-bone);
+}
+
+.live-who-name.caps {
+  color: var(--c-ash);
+}
+
+.live-hub-mark {
+  display: inline-block;
+  width: 6px;
+  height: 0;
+  border-top: var(--hair) solid var(--c-etch3);
+  flex: none;
+}
+
+.live-type {
+  font-family: var(--mono);
+  font-size: 12px;
+  color: var(--c-bone);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  transition: color 200ms linear;
+}
+
+.live-flag {
+  margin-left: 8px;
+  font-size: var(--fs-micro);
+  color: var(--c-ash);
+}
+
+.live-fields {
+  color: var(--c-ash);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  min-width: 0;
+}
+
+/* the open row: the fields in full and the cursor's actions */
+.live-open {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-3);
+  padding: 2px 0 var(--sp-3) calc(9.6em + var(--sp-4));
+}
+
+html[data-mode='earth'] .live-open {
+  padding-left: calc(17em + var(--sp-4));
+}
+
+.live-json {
+  margin: 0;
+  max-height: 320px;
+  overflow: auto;
+  font-family: var(--mono);
+  font-size: 12px;
+  line-height: 17px;
+  color: var(--c-ash);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.live-none {
+  color: var(--c-ash);
+}
+
+/* ------------------------------------------------------------- a threshold */
+
+.live-threshold {
+  display: grid;
+  grid-template-columns: 9.6em minmax(var(--sp-4), 1fr) auto minmax(var(--sp-4), 1fr);
+  align-items: center;
+  column-gap: var(--sp-4);
+  min-height: 37px;
+  padding: 9px 0 8px;
+  border-bottom: var(--hair) solid var(--c-etch1);
+  font-size: var(--fs-data);
+}
+
+html[data-mode='earth'] .live-threshold {
+  grid-template-columns: 17em minmax(var(--sp-4), 1fr) auto minmax(var(--sp-4), 1fr);
+}
+
+.live-threshold .live-time {
+  color: var(--c-ash);
+}
+
+.live-threshold-rule {
+  height: 0;
+  border-top: var(--hair) solid var(--c-etch2);
+}
+
+.live-threshold-word {
+  color: var(--c-ash);
+}
+
+/* ------------------------------------------------------------- the cursor */
+
+.live-cursor-form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-3);
+  padding-top: var(--sp-3);
+}
+
+/* ------------------------------------------------------------------ phone */
+
+@media (max-width: 699.98px) {
+  .live-filter {
+    grid-template-columns: 1fr;
+    gap: var(--sp-2);
+  }
+
+  .live-filter-clear {
+    padding-left: 0;
+  }
+
+  /* one line of chips that scrolls sideways, so many devices do not push the events off the screen */
+  .live-filters .ui-chips {
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    scrollbar-width: none;
+    margin-right: calc(var(--gutter) * -1);
+    padding-right: var(--gutter);
+  }
+
+  .live-filters .ui-chip {
+    flex: none;
+  }
+
+  .live-line,
+  html[data-mode='earth'] .live-line {
+    grid-template-columns: minmax(0, 1fr) auto;
+    grid-template-areas:
+      'time who'
+      'type type'
+      'fields fields';
+    row-gap: 3px;
+    column-gap: var(--sp-3);
+  }
+
+  .live-line .live-time {
+    grid-area: time;
+  }
+
+  .live-line .live-who {
+    grid-area: who;
+    justify-self: end;
+    max-width: 44vw;
+  }
+
+  .live-line .live-type {
+    grid-area: type;
+  }
+
+  .live-line .live-fields {
+    grid-area: fields;
+    font-size: var(--fs-earth);
+  }
+
+  .live-open,
+  html[data-mode='earth'] .live-open {
+    padding-left: 0;
+  }
+
+  .live-threshold,
+  html[data-mode='earth'] .live-threshold {
+    grid-template-columns: auto minmax(var(--sp-3), 1fr) auto;
+  }
+
+  .live-threshold .live-threshold-rule:last-child {
+    display: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .live-line,
+  .live-type {
+    transition: none;
+  }
+}

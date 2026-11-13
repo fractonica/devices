@@ -1,0 +1,91 @@
+/*
+ * settings.css - Settings (pages/settings.tsx and pages/settings/*): sections on hairlines, forms down a column, the
+ * port and check lines. Tokens only (styles/base.css header). Classes start with `set-`.
+ */
+
+.set-body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-5);
+}
+
+.set-note {
+  padding-top: var(--sp-3);
+  color: var(--c-ash);
+  max-width: 68ch;
+}
+
+.set-after {
+  display: flex;
+  padding-top: var(--sp-3);
+}
+
+.set-detail-ok {
+  color: var(--c-ash);
+  font-size: var(--fs-earth);
+}
+
+.set-warning {
+  font-size: var(--fs-data);
+  color: var(--c-bone);
+}
+
+.set-fix {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--sp-2);
+  margin-right: var(--sp-2);
+  color: var(--c-bone);
+}
+
+/* ---------------------------------------------------------------- ports */
+
+.set-port-name {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  column-gap: var(--sp-3);
+}
+
+.set-port-alias {
+  font-size: var(--fs-data);
+}
+
+.set-port-ids {
+  margin-left: var(--sp-3);
+  color: var(--c-etch3);
+}
+
+/* ------------------------------------------------------------- networks */
+
+.set-editing .ui-line {
+  border-bottom: 0;
+}
+
+.set-latency {
+  display: inline-flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  column-gap: var(--sp-4);
+  row-gap: 2px;
+}
+
+.set-latency-link {
+  white-space: nowrap;
+}
+
+.set-latency-link .caps {
+  margin-right: 4px;
+}
+
+@media (max-width: 699.98px) {
+  .set-port-ids {
+    display: block;
+    margin-left: 0;
+  }
+
+  .set-latency {
+    justify-content: flex-start;
+  }
+}

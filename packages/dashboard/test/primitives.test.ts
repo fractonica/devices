@@ -100,7 +100,7 @@ describe('FTime, Earth and Page in the two modes', () => {
 
 describe('StageRing: progress as light', () => {
   const ring = (props: Partial<Parameters<typeof ui.StageRing>[0]>) => html(createElement(ui.StageRing, { stages: ui.PROVISION_STAGES, current: 0, ...props }));
-  const count = (out: string, cls: string) => (out.match(new RegExp(`class="arc ${cls}"`, 'g')) ?? []).length;
+  const count = (out: string, cls: string) => (out.match(new RegExp(`class="ui-ring-arc ${cls}"`, 'g')) ?? []).length;
 
   it('lights the stages done, engraves the running one lit to its fraction, and the rest to come', () => {
     const out = ring({ current: 5, fraction: 0.4 });
@@ -111,8 +111,12 @@ describe('StageRing: progress as light', () => {
     expect(count(out, 'todo')).toBe(3);
     expect(out).toContain('data-stage="flash"');
     expect(out).toContain('>FLASH<');
-    expect(out).toContain('aria-label="flash, stage 6 of 9"');
-    expect(out).not.toMatch(/%|\d+\s*percent/i);
+    expect(out).toContain('aria-label="Progress: flash, stage 6 of 9"');
+    // the point of now at the lit arc's edge, and a bead per stage on the carrier, five of them done
+    expect(out).toContain('class="ui-ring-now"');
+    expect((out.match(/class="ui-ring-bead lit"/g) ?? []).length).toBe(5);
+    // what a person reads (the text, not the drawing's attributes) has no percentage
+    expect(out.replace(/<[^>]*>/g, ' ')).not.toMatch(/%|\d+\s*percent/i);
   });
 
   it('leaves an unknown fraction engraved, turns a failure fault and says done at the end', () => {
@@ -123,6 +127,17 @@ describe('StageRing: progress as light', () => {
     const done = ring({ current: 9 });
     expect(count(done, 'done')).toBe(9);
     expect(done).toContain('data-state="done"');
+  });
+
+  it('draws arcs that go their own way (a guide’s steps), and a bare mark for a row', () => {
+    const steps = ring({ stages: ['a', 'b', 'c', 'd'], current: 2, bezel: false, arcs: [{ status: 'done' }, { status: 'todo' }, { status: 'done' }, { status: 'todo' }], label: 'Guide' });
+    expect(count(steps, 'done')).toBe(2);
+    expect(count(steps, 'todo')).toBe(2);
+    expect(steps).toContain('aria-label="Guide: 2 of 4 done"');
+    expect(steps).not.toContain('ui-ring-word');
+    const bare = ring({ current: 3, bare: true, size: 22 });
+    expect(bare).not.toContain('ui-ring-centre');
+    expect(count(bare, 'done')).toBe(3);
   });
 
   function PROVISION_STAGES_LEN() {

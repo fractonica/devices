@@ -1,0 +1,603 @@
+/*
+ * device.css - the Device page (pages/device.tsx, pages/device/*). Tokens only. Classes `dev-`.
+ * LENS layout: the instruments (capabilities, events, log) on the left, the data column on the right; one column with
+ * the data first at phone width.
+ */
+
+.dev-page {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-5);
+}
+
+.dev-back {
+  align-self: flex-start;
+  margin-top: calc(var(--sp-4) * -1);
+  color: var(--c-etch3);
+  transition: color 200ms linear;
+}
+
+.dev-back:hover {
+  color: var(--c-lumen);
+}
+
+.dev-sub {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  column-gap: var(--sp-4);
+  row-gap: var(--sp-1);
+}
+
+.dev-sub-fw .mono {
+  font-size: var(--fs-earth);
+  letter-spacing: 0.02em;
+  color: var(--c-ash);
+}
+
+.dev-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1.45fr) minmax(280px, 1fr);
+  column-gap: var(--sp-6);
+  align-items: start;
+}
+
+.dev-main,
+.dev-data,
+.dev-caps {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-5);
+  min-width: 0;
+}
+
+.dev-data {
+  gap: var(--sp-4);
+}
+
+/* ---------------------------------------------------------- capabilities */
+
+.dev-inst-aside {
+  display: inline-flex;
+  align-items: baseline;
+  gap: var(--sp-3);
+}
+
+.dev-inst-aside .mono {
+  font-size: var(--fs-earth);
+  color: var(--c-etch3);
+}
+
+.dev-summary {
+  padding: var(--sp-2) 0 var(--sp-1);
+  font-size: var(--fs-earth);
+  line-height: 16px;
+  color: var(--c-ash);
+  max-width: 62ch;
+}
+
+/* a property: label, sparkline, value or control, on one hairline */
+.dev-prop {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 96px minmax(0, auto);
+  align-items: center;
+  column-gap: var(--sp-4);
+  min-height: 44px;
+  padding: 6px 0 5px;
+  border-bottom: var(--hair) solid var(--c-etch1);
+  font-size: var(--fs-data);
+}
+
+.dev-prop-label {
+  color: var(--c-ash);
+}
+
+.dev-prop-spark {
+  display: flex;
+  justify-content: flex-end;
+}
+
+.dev-prop-value {
+  display: flex;
+  justify-content: flex-end;
+  min-width: 0;
+  text-align: right;
+}
+
+.dev-inline-slider {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--sp-3);
+  min-width: 0;
+}
+
+.dev-inline-slider .ui-slider {
+  width: 160px;
+  min-width: 96px;
+  flex: 1 1 160px;
+}
+
+.dev-inline-slider-wide {
+  display: flex;
+}
+
+.dev-inline-slider-wide .ui-slider {
+  width: auto;
+}
+
+.dev-slider-value {
+  min-width: 5ch;
+  text-align: right;
+  font-size: var(--fs-value);
+  white-space: nowrap;
+}
+
+.dev-inline-select {
+  width: auto;
+  min-width: 120px;
+  min-height: 28px;
+}
+
+.dev-onoff {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--sp-2);
+  color: var(--c-ash);
+}
+
+.dev-onoff circle {
+  fill: var(--c-void);
+  stroke: var(--c-etch3);
+  stroke-width: 0.8;
+}
+
+.dev-onoff[data-on] {
+  color: var(--c-bone);
+}
+
+.dev-onoff[data-on] circle {
+  fill: var(--c-lumen);
+  stroke: var(--c-lumen);
+}
+
+/* a colour the device shows: the only fill on the page, and it is data */
+.dev-colour-disc {
+  display: inline-block;
+  flex: none;
+  border-radius: 50%;
+  box-shadow: 0 0 0 1px var(--c-etch3);
+}
+
+.dev-colour-value,
+.dev-colour-well {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--sp-2);
+}
+
+.dev-colour-value .mono,
+.dev-colour-well .mono {
+  font-size: var(--fs-earth);
+  color: var(--c-ash);
+}
+
+.dev-colour-well {
+  position: relative;
+  cursor: pointer;
+  min-height: 32px;
+}
+
+.dev-colour-well input {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  opacity: 0;
+  cursor: pointer;
+}
+
+.dev-colour-well:has(input:focus-visible) .dev-colour-disc {
+  box-shadow: 0 0 0 1px var(--c-lumen);
+}
+
+.dev-colour-well:hover .dev-colour-disc {
+  box-shadow: 0 0 0 1px var(--c-ash);
+}
+
+.dev-colour-well[data-disabled] {
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+
+.dev-meter {
+  flex: none;
+  overflow: visible;
+}
+
+.dev-meter .base {
+  stroke: var(--c-etch2);
+  stroke-width: 1;
+}
+
+.dev-meter .lit {
+  stroke: var(--c-lumen);
+  stroke-width: 1;
+}
+
+.dev-meter .end {
+  fill: var(--c-lumen);
+}
+
+.dev-share,
+.dev-ota {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--sp-3);
+}
+
+.dev-last-event {
+  display: inline-flex;
+  gap: var(--sp-2);
+  align-items: baseline;
+}
+
+/* a command's fold and its form */
+.dev-command {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-3);
+  padding: var(--sp-2) 0 var(--sp-3);
+}
+
+.dev-doc {
+  font-size: var(--fs-earth);
+  line-height: 16px;
+  color: var(--c-ash);
+  max-width: 62ch;
+}
+
+.dev-fields {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: var(--sp-3) var(--sp-5);
+  align-items: end;
+}
+
+.dev-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+}
+
+.dev-field-inline {
+  justify-content: flex-end;
+}
+
+.dev-field-wide {
+  grid-column: 1 / -1;
+}
+
+.dev-optional {
+  color: var(--c-etch3);
+}
+
+.dev-json,
+.dev-raw {
+  width: 100%;
+  margin: 0;
+  padding: 10px 12px;
+  border: 0;
+  border-top: var(--hair) solid var(--c-etch2);
+  border-bottom: var(--hair) solid var(--c-etch2);
+  background: var(--c-plate);
+  color: var(--c-bone);
+  font-size: 12px;
+  line-height: 1.45;
+  resize: vertical;
+}
+
+.dev-raw {
+  max-height: 360px;
+  overflow: auto;
+  white-space: pre;
+}
+
+.dev-json:focus-visible {
+  outline: none;
+  border-bottom-color: var(--c-lumen);
+}
+
+.dev-outcome {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--sp-2) var(--sp-3);
+  font-size: var(--fs-earth);
+}
+
+.dev-outcome-fields {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: var(--sp-3);
+  color: var(--c-bone);
+}
+
+.dev-outcome-error {
+  color: var(--c-fault);
+}
+
+.dev-plain-outcome {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-3);
+  padding: var(--sp-2) 0;
+  border-bottom: var(--hair) solid var(--c-etch1);
+}
+
+.dev-analog {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--sp-3);
+}
+
+.dev-analog .ui-slider {
+  width: 160px;
+}
+
+.dev-display-shot {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--sp-2);
+  padding: var(--sp-3) 0;
+}
+
+.dev-panel {
+  image-rendering: pixelated;
+  max-width: 100%;
+  height: auto;
+  box-shadow: 0 0 0 1px var(--c-etch2);
+}
+
+.dev-panel[data-tappable] {
+  cursor: crosshair;
+}
+
+/* -------------------------------------------------------------- events */
+
+.dev-events {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.dev-event {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1.4fr) auto;
+  column-gap: var(--sp-4);
+  align-items: baseline;
+  min-height: var(--row-min);
+  padding: 9px 0 8px;
+  border-bottom: var(--hair) solid var(--c-etch1);
+  font-size: var(--fs-data);
+}
+
+.dev-event-type {
+  color: var(--c-bone);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.dev-event-fields {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 2px var(--sp-3);
+  font-size: var(--fs-earth);
+  min-width: 0;
+}
+
+.dev-event-time {
+  text-align: right;
+}
+
+.dev-more {
+  color: var(--c-ash);
+  transition: color 200ms linear;
+}
+
+.dev-more:hover {
+  color: var(--c-lumen);
+}
+
+.dev-quiet {
+  padding: var(--sp-3) 0;
+  font-size: var(--fs-earth);
+  display: flex;
+  gap: var(--sp-3);
+  align-items: baseline;
+}
+
+/* ---------------------------------------------------------- data column */
+
+.dev-tags {
+  display: inline-flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  align-items: baseline;
+  gap: var(--sp-2) var(--sp-3);
+}
+
+.dev-tag {
+  font-size: var(--fs-earth);
+  color: var(--c-bone);
+}
+
+.dev-tags-form,
+.dev-rename {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-3);
+  padding: var(--sp-3) 0;
+  border-bottom: var(--hair) solid var(--c-etch1);
+}
+
+.dev-rename {
+  max-width: 560px;
+  border-bottom: 0;
+}
+
+.dev-rename-buttons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--sp-2);
+}
+
+.dev-wrap {
+  overflow-wrap: anywhere;
+  white-space: normal;
+}
+
+/* -------------------------------------------------------- engineering */
+
+.dev-engineering-body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-5);
+  padding-top: var(--sp-4);
+}
+
+.dev-binding {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--sp-2) var(--sp-3);
+  min-height: var(--row-min);
+  padding: 6px 0;
+  border-bottom: var(--hair) solid var(--c-etch1);
+  font-size: var(--fs-data);
+}
+
+.dev-binding > .mono {
+  flex: 1 1 24ch;
+  min-width: 0;
+}
+
+.dev-bind-form {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  gap: var(--sp-3) var(--sp-4);
+  align-items: end;
+  padding-top: var(--sp-3);
+}
+
+/* ---------------------------------------------------------------- phone */
+
+/* one column: the instruments first, then the facts, then events and the log */
+@media (max-width: 999.98px) {
+  .dev-grid {
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    gap: var(--sp-5);
+  }
+
+  .dev-main {
+    display: contents;
+  }
+
+  .dev-main > * {
+    order: 3;
+  }
+
+  .dev-main > .dev-caps,
+  .dev-main > .dev-face {
+    order: 1;
+  }
+
+  .dev-side {
+    order: 2;
+  }
+}
+
+@media (max-width: 699.98px) {
+  .dev-prop {
+    grid-template-columns: minmax(0, 1fr) auto;
+    grid-template-areas:
+      'label value'
+      'spark spark';
+    row-gap: 2px;
+  }
+
+  .dev-prop-label {
+    grid-area: label;
+  }
+
+  .dev-prop-value {
+    grid-area: value;
+  }
+
+  .dev-prop-spark {
+    grid-area: spark;
+    justify-content: flex-start;
+  }
+
+  .dev-prop-spark:empty {
+    display: none;
+  }
+
+  .dev-inline-slider .ui-slider {
+    width: 120px;
+    flex-basis: 120px;
+  }
+
+  .dev-event {
+    grid-template-columns: minmax(0, 1fr) auto;
+    grid-template-areas:
+      'type time'
+      'fields fields';
+    row-gap: 2px;
+  }
+
+  .dev-event-type {
+    grid-area: type;
+  }
+
+  .dev-event-time {
+    grid-area: time;
+  }
+
+  .dev-event-fields {
+    grid-area: fields;
+  }
+
+  .dev-event-fields:empty {
+    display: none;
+  }
+
+  .dev-analog .ui-slider {
+    width: 120px;
+  }
+}
+
+.dev-json-value {
+  font-size: var(--fs-earth);
+}
+
+@media (max-width: 699.98px) {
+  .dev-engineering .ui-disclosure-aside {
+    display: none;
+  }
+}
+
+.dev-stale {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+}
+
+.dev-field-earth,
+.dev-field .dev-slider-value {
+  align-self: flex-end;
+}

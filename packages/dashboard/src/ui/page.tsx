@@ -25,7 +25,9 @@ export function Page({ title, sub, earth, actions, children }: PageProps) {
     <div className="ui-page" data-page={title.toLowerCase()}>
       <header className="ui-page-head">
         <div className="ui-page-titles">
-          <h1 className="ui-page-title">{engrave(title)}</h1>
+          <h1 className="ui-page-title" title={title}>
+            {engrave(title)}
+          </h1>
           {sub ? <div className="ui-page-sub caps">{typeof sub === 'string' ? engrave(sub) : sub}</div> : null}
           {earth ? <Earth block>{earth}</Earth> : null}
         </div>

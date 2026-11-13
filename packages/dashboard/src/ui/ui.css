@@ -39,6 +39,14 @@
   text-overflow: ellipsis;
 }
 
+/* a long name (a 31-character alias) wraps at phone width rather than being cut */
+@media (max-width: 639.98px) {
+  .ui-page-title {
+    white-space: normal;
+    overflow-wrap: anywhere;
+  }
+}
+
 .ui-page-sub {
   color: var(--c-ash);
 }
@@ -85,6 +93,12 @@
   display: flex;
   align-items: baseline;
   gap: var(--sp-2);
+  color: var(--c-ash);
+}
+
+/* an aside that is not a Caps word (a span in the core's notation): small, ash */
+.ui-section-aside-text {
+  font-size: var(--fs-earth);
   color: var(--c-ash);
 }
 
@@ -162,6 +176,50 @@
 .ui-row-earth {
   display: block;
   line-height: 14px;
+}
+
+.ui-row-mark {
+  align-self: center;
+  display: flex;
+  flex: none;
+}
+
+/* a label or name with a sub line under it (Row `sub`) */
+.ui-row-text {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 0;
+}
+
+.ui-row-sub {
+  color: var(--c-ash);
+  font-size: var(--fs-earth);
+  line-height: 14px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ui-row:has(.ui-row-text),
+.ui-row:has(.ui-row-actions) {
+  align-items: center;
+}
+
+/* the row's own buttons (Row `actions`): at its end, under it at phone width */
+.ui-row-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 0 var(--sp-2);
+}
+
+@media (max-width: 639.98px) {
+  .ui-row-actions {
+    width: 100%;
+    justify-content: flex-start;
+  }
 }
 
 a.ui-row,
@@ -301,14 +359,14 @@ button.ui-row:hover .ui-row-name {
 }
 
 .ui-button[data-variant='quiet'] {
-  border-color: var(--c-void);
+  border-color: transparent;
   border-bottom-color: var(--c-etch2);
   color: var(--c-ash);
   padding: 0 4px;
 }
 
 .ui-button[data-variant='quiet']:hover:not(:disabled) {
-  border-color: var(--c-void);
+  border-color: transparent;
   border-bottom-color: var(--c-ash);
   color: var(--c-bone);
 }
@@ -546,75 +604,195 @@ button.ui-row:hover .ui-row-name {
 
 /* ------------------------------------------------------------- StageRing */
 
-.ui-stage-ring {
-  display: inline-flex;
-  flex-direction: column;
-  align-items: center;
-  gap: var(--sp-2);
+.ui-ring {
+  display: block;
+  flex: none;
 }
 
-.ui-stage-ring svg {
+.ui-ring svg {
   display: block;
   overflow: visible;
 }
 
-.ui-stage-ring .arc {
+.ui-ring-arc {
   fill: none;
   stroke-linecap: round;
+  stroke-width: 1.4;
   transition: stroke 400ms linear;
 }
 
-.ui-stage-ring .arc.todo {
-  stroke: var(--c-etch2);
+.ui-ring-bare .ui-ring-arc {
+  stroke-width: 1.6;
 }
 
-.ui-stage-ring .arc.base {
+.ui-ring-arc.todo {
+  stroke: var(--c-etch3);
+  stroke-width: 0.9;
+}
+
+.ui-ring[data-state='idle'] .ui-ring-arc.todo {
   stroke: var(--c-etch3);
 }
 
-.ui-stage-ring .arc.done,
-.ui-stage-ring .arc.lit {
-  stroke: var(--c-lumen);
-  filter: drop-shadow(0 0 var(--glow-sigma-phone) var(--c-glow-lumen));
+.ui-ring-arc.base {
+  stroke: var(--c-etch3);
+  stroke-width: 0.9;
 }
 
-.ui-stage-ring .arc.failed {
+.ui-ring-arc.done,
+.ui-ring-arc.lit {
+  stroke: var(--c-lumen);
+  filter: drop-shadow(0 0 var(--glow-sigma-desktop) var(--c-glow-lumen));
+}
+
+.ui-ring-bare .ui-ring-arc.done,
+.ui-ring-bare .ui-ring-arc.lit {
+  filter: none;
+}
+
+.ui-ring-arc.failed {
   stroke: var(--c-fault);
 }
 
-.ui-stage-ring .carrier {
+.ui-ring-carrier {
   fill: none;
-  stroke: var(--c-etch1);
+  stroke: var(--c-etch2);
+  stroke-width: 0.75;
 }
 
-.ui-stage-ring .word {
+.ui-ring-bezel {
+  fill: none;
+  stroke: var(--c-etch1);
+  stroke-width: 0.75;
+}
+
+.ui-ring-bead {
+  fill: var(--c-void);
+  stroke: var(--c-etch3);
+  stroke-width: 0.8;
+  transition:
+    fill 400ms linear,
+    stroke 400ms linear;
+}
+
+.ui-ring-bead.lit {
+  fill: var(--c-bone);
+  stroke: var(--c-bone);
+}
+
+.ui-ring-word {
   font-family: var(--font-caps);
   font-weight: var(--w-caps);
   letter-spacing: var(--track-caps);
-  fill: var(--c-bone);
+  fill: var(--c-etch3);
+  transition: fill 400ms linear;
+}
+
+.ui-ring-word.done {
+  fill: var(--c-ash);
+}
+
+.ui-ring-word.current {
+  fill: var(--c-lumen);
+}
+
+.ui-ring-word.failed {
+  fill: var(--c-fault);
+}
+
+.ui-ring-alidade {
+  stroke: var(--c-bone);
+  stroke-width: 0.5;
+  opacity: 0.42;
+}
+
+.ui-ring-now-halo {
+  fill: none;
+  stroke: var(--c-lumen);
+  stroke-width: 0.5;
+  opacity: 0.55;
+}
+
+.ui-ring-now-disc {
+  fill: var(--c-now);
+  filter: drop-shadow(0 0 var(--glow-sigma-desktop) var(--c-glow-lumen));
+}
+
+.ui-ring-now-core {
+  fill: var(--c-now-core);
+}
+
+.ui-ring-centre text {
   text-anchor: middle;
   dominant-baseline: middle;
 }
 
-.ui-stage-ring .count {
+.ui-ring-centre-word {
+  font-family: var(--font-caps);
+  font-weight: var(--w-caps);
+  letter-spacing: 0.3em;
+  fill: var(--c-bone);
+}
+
+.ui-ring[data-state='done'] .ui-ring-centre-word {
+  fill: var(--c-lumen);
+}
+
+.ui-ring[data-state='failed'] .ui-ring-centre-word {
+  fill: var(--c-fault);
+}
+
+.ui-ring-centre-sub {
   font-family: var(--font-caps);
   font-weight: var(--w-caps);
   letter-spacing: var(--track-caps);
   fill: var(--c-ash);
-  text-anchor: middle;
-  dominant-baseline: middle;
 }
 
-.ui-stage-ring[data-state='failed'] .word {
-  fill: var(--c-fault);
+.ui-ring-centre-bead {
+  stroke-width: 1;
 }
 
-.ui-stage-ring[data-state='done'] .word {
+.ui-ring-centre-bead.waiting {
+  fill: var(--c-void);
+  stroke: var(--c-bone);
+}
+
+.ui-ring-centre-bead.online {
   fill: var(--c-lumen);
+  stroke: var(--c-lumen);
 }
 
-.ui-stage-ring-caption {
-  color: var(--c-ash);
+.ui-ring-centre-bead.fault {
+  fill: var(--c-fault);
+  stroke: var(--c-fault);
+}
+
+.ui-ring-centre-reading {
+  font-family: var(--font-reading);
+  font-weight: var(--w-value);
+  font-variant-numeric: tabular-nums;
+  fill: var(--c-bone);
+}
+
+.ui-ring-centre-reading .u {
+  fill: var(--c-ash);
+}
+
+@media (max-width: 699.98px) {
+  .ui-ring-arc.done,
+  .ui-ring-arc.lit,
+  .ui-ring-now-disc {
+    filter: drop-shadow(0 0 var(--glow-sigma-phone) var(--c-glow-lumen));
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ui-ring-arc,
+  .ui-ring-bead,
+  .ui-ring-word {
+    transition: none;
+  }
 }
 
 /* ------------------------------------------------------------ Disclosure */

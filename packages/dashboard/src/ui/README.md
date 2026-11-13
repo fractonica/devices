@@ -19,10 +19,15 @@ Rules every page keeps (test/design-rules.test.ts checks the first four):
 - Nothing pulses, blinks or spins; transitions are fades of 200–600 ms and vanish under reduced motion.
 - No cards, cells, filled bars or percentages. Lists are `Row`s; progress is a `StageRing`.
 - Pure mode shows only Fractonica units: no clock time, date, zone, second, Hz, metre or per cent, not even in a
-  `title` or `aria-label`. Anything Earth goes through `<Earth>`, `Row earth=`, `Page earth=` or `FTime`, which
-  render it only in Earth mode, led by ⊕.
+  `title` or `aria-label`. Anything Earth goes through `<Earth>`, `Row earth=`, `Page earth=`, `FTime` or `Span`,
+  which render it only in Earth mode, led by ⊕. A text the hub wrote goes through `useHubText()` (ErrorLine does it
+  itself); catalog prose is shown in pure mode only when `pureSafe` (src/state/pure-text.ts) passes it.
+- One vocabulary for states: a device's presence in words is `presenceWord` (src/state/words.ts: online, suspect,
+  offline, not heard yet), its bead `presenceBead`; something being read is `<Pending what="the registry" />`; the
+  hub's checks are src/state/checks.ts, the ports src/state/ports.ts. A section's aside is a `<Caps>` word.
 - Everything works at 390 px: rows wrap, buttons wrap (`ButtonRow`), no wide tables.
 - A page's own CSS goes in `src/pages/<page>.css`, classes prefixed with the page's name (`hub-…`, `prov-…`).
+  Components two pages share that call the hub (a port's actions, the network form) are in `src/pages/shared/`.
 
 ## Page
 
@@ -68,14 +73,21 @@ The LENS row: label (caps) or name (bone) left, value right, a hairline under it
 | `bead`, `beadLabel` | `BeadState`, `string` | a status bead before it |
 | `value` / `children` | `ReactNode` | right-aligned |
 | `extra` | `ReactNode` | a smaller ash line under the value |
+| `sub` | `ReactNode` | a smaller ash line under the label or name (a path, a profile) |
+| `lead` | `ReactNode` | a mark before the bead or name (a 22 px `StageRing bare`) |
+| `actions` | `ReactNode` | the row's own quiet buttons at its end (under it at phone width) |
 | `earth` | `ReactNode` | Earth mode only, ⊕-led, under the value |
 | `to`, `params` | route | the row is a link |
 | `onClick` | `() => void` | the row is a button |
 | `flash` | `boolean` | lights the hairline lumen; fades out over 600 ms when unset |
 | `id` | `string` | `data-row` for tests |
 
+`Pending({ what, word? })` is the row of something still being read: an idle bead and "READING THE REGISTRY".
+
 ```tsx
 <Row bead={presenceBead(d.presence)} name={d.alias} to="/devices/$id" params={{ id: d.alias }} value={d.profile} />
+<Row name={p.profile} sub={`${p.board} · ${p.chip}`} value={<FTime at={built} form="relative" />} actions={<Button variant="quiet">Build</Button>} />
+<Pending what="the registry" />
 <Row label="RSSI" value={<Reading text={…} />} extra="tcp · udp" />
 ```
 
@@ -136,22 +148,31 @@ A caps label over a hairline (no box), a note (ash) or an error (fault) under it
 
 ## StageRing
 
-Progress as light: N arcs from 12 o'clock; done lumen, the running one engraved and lit to its elapsed fraction,
-to come etch-2; the stage word engraved in the middle with "n OF N". `PROVISION_STAGES` is the nine of provisioning
-(lease · probe · select · registry · render · flash · reset · hello · join); builds and OTA pass their own.
+Progress as light, the one ring of every progress in the hub: N arcs from 12 o'clock; done lumen with the glow, the
+running one engraved and lit to its elapsed fraction with the point of now and the alidade at its edge, to come
+engraved; each stage's word along the bezel, a bead per stage on the carrier (bone when done), the stage and "n of N"
+in the middle. `PROVISION_STAGES` is the nine of provisioning (lease · probe · select · registry · render · flash ·
+reset · hello · join); builds and OTA pass their own (state/provision.ts), a wiring guide its steps.
 
 | Prop | Type | |
 |---|---|---|
-| `stages` | `readonly string[]` | words, in order |
-| `current` | `number` | index of the running stage; `stages.length` when done |
+| `stages` | `readonly string[]` | words, in order (or each arc's name: an update's devices) |
+| `current` | `number` | index of the running stage; `stages.length` when done (with `arcs`: the count done) |
 | `fraction` | `number?` | 0..1 of the running stage (flash bytes); undefined = unknown (stays engraved) |
 | `failed` | `boolean` | the running stage in fault |
-| `size` | `number` | px, default 168, min 96 |
-| `word` | `string` | replaces the middle word ("cancelled") |
+| `word` | `string` | replaces the middle word ("cancelled", "updated") |
+| `arcs` | `ArcState[]` | arcs that each go their own way (`{status, fraction?}`), in any order |
+| `size` | `number` | px, default 168 |
+| `centre` | `{ word, sub?, reading?, bead? }` | what the middle says instead (a span, "listening") |
+| `bare` | `boolean` | only the arcs: a 22 px mark in a row |
+| `bezel` | `boolean` | the bezel words (default on; off for many small steps) |
+| `idle` | `boolean` | before a job: every arc engraved |
+| `stageWord` | `(s) => string` | a stage's word for people |
 | `label` | `string` | what it is of, for assistive technology |
 
 ```tsx
 <StageRing stages={PROVISION_STAGES} current={stageIndex} fraction={flash ? sent / total : undefined} label={`Provisioning ${alias}`} />
+<StageRing stages={steps.map(String)} current={done} arcs={steps.map((d) => ({ status: d ? 'done' : 'todo' }))} bezel={false} label={title} />
 ```
 
 ## Disclosure
@@ -183,6 +204,7 @@ the hub lacks reads as a notice.
 | `error` | `unknown` | an `OpError` (code, message, hint, remediation) or anything thrown |
 | `message` | `ReactNode` | or a message of the page's own |
 | `what` | `string` | prefix ("Rename: …") |
+| `code` | `string` | the caps code for a message of the page's own (`PORT_LEASED`) |
 | `fix` | `{ label, onClick, busy? }` | the inline fix |
 
 ```tsx
@@ -263,3 +285,15 @@ current? }[]`, `label?`.
 - `useNowFor(core, origin, parts)` → now, redrawn when a span from `origin` next changes.
 - `instantOf(value)` → BigInt Unix µs from the hub's numbers, ISO strings or Dates.
 - `useGroundAnchor(ref)` (`src/shell/ground.tsx`): centre the plate's machining marks on an element (an instrument).
+
+## Span, useHubText, CopyButton, Chip, Code, Line
+
+- `<Span us={…} sign? parts?>`: a duration as the core's span ("0.048ν"), ⊕ its Earth duration in Earth mode.
+  `spanText(core, us)` and `useSpanOf()` give the same as strings.
+- `useHubText()` → `(text) => string`: a text the hub wrote in the mode's units (durations as spans, other Earth
+  measures left out in pure mode; whole in Earth mode).
+- `<CopyButton text label? what?>`: a quiet button that copies; its word says "Copied" (nothing moves).
+- `<ChipRow label>` of `<Chip pressed onToggle bead? count?>`: toggles on a line that wraps (Live's filters).
+- `<Code>`: a command or id in the monospace face, selectable.
+- `<Line bead? label|name value detail actions>`: a row with a detail line across it and its buttons under it (a
+  check with its fix, a port with its policy actions).

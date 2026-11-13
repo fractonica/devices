@@ -9,33 +9,35 @@
 //   /live                  pages/live.tsx       LivePage
 //   /bench                 pages/bench.tsx      BenchPage
 //   /settings              pages/settings.tsx   SettingsPage      (health)
-//   /settings/$section     pages/settings.tsx   SettingsPage      (health networks ports builds agents about)
+//   /settings/$section     pages/settings.tsx   SettingsPage      (health networks ports agents storage about)
 //   /ui                    pages/specimen.tsx   SpecimenPage      (every primitive; not on the rail)
 //
 // The old routes (/device/$alias, /ports, /builds, /network, /agents) redirect to their new homes, so a bookmark or a
-// link the CLI printed still lands.
+// link the CLI printed still lands: builds and their artifacts are Provision › Firmware (/provision?view=firmware).
 
-import { createHashHistory, createRootRoute, createRoute, createRouter, redirect } from '@tanstack/react-router';
+import { createHashHistory, createRootRoute, createRoute, createRouter, lazyRouteComponent, redirect } from '@tanstack/react-router';
 
-import { BenchPage } from './pages/bench.tsx';
-import { DevicePage } from './pages/device.tsx';
-import { DevicesPage } from './pages/devices.tsx';
 import { HubPage } from './pages/hub.tsx';
-import { LivePage } from './pages/live.tsx';
-import { ProvisionPage } from './pages/provision.tsx';
-import { SettingsPage } from './pages/settings.tsx';
-import { SpecimenPage } from './pages/specimen.tsx';
 import { Shell } from './shell/shell.tsx';
+
+// The Hub page is in the main chunk (it is the first page); every other page is its own chunk, loaded on first visit.
+const BenchPage = lazyRouteComponent(() => import('./pages/bench.tsx'), 'BenchPage');
+const DevicePage = lazyRouteComponent(() => import('./pages/device.tsx'), 'DevicePage');
+const DevicesPage = lazyRouteComponent(() => import('./pages/devices.tsx'), 'DevicesPage');
+const LivePage = lazyRouteComponent(() => import('./pages/live.tsx'), 'LivePage');
+const ProvisionPage = lazyRouteComponent(() => import('./pages/provision.tsx'), 'ProvisionPage');
+const SettingsPage = lazyRouteComponent(() => import('./pages/settings.tsx'), 'SettingsPage');
+const SpecimenPage = lazyRouteComponent(() => import('./pages/specimen.tsx'), 'SpecimenPage');
 
 const root = createRootRoute({ component: Shell });
 const parent = () => root;
 /** An old path: redirects to its new home. */
-const moved = (path: string, to: string, params?: (p: Record<string, string>) => Record<string, string>) =>
+const moved = (path: string, to: string, params?: (p: Record<string, string>) => Record<string, string>, search?: Record<string, string>) =>
   createRoute({
     getParentRoute: parent,
     path,
     beforeLoad: ({ params: p }) => {
-      throw redirect({ to: to as never, params: (params ? params(p as Record<string, string>) : undefined) as never, replace: true });
+      throw redirect({ to: to as never, params: (params ? params(p as Record<string, string>) : undefined) as never, search: search as never, replace: true });
     },
   });
 
@@ -48,11 +50,13 @@ const routeTree = root.addChildren([
   createRoute({ getParentRoute: parent, path: '/live', component: LivePage }),
   createRoute({ getParentRoute: parent, path: '/bench', component: BenchPage }),
   createRoute({ getParentRoute: parent, path: '/settings', component: SettingsPage }),
+  // the builds live on Provision (firmware); before the general /settings/$section, which would take the path
+  moved('/settings/builds', '/provision', undefined, { view: 'firmware' }),
   createRoute({ getParentRoute: parent, path: '/settings/$section', component: SettingsPage }),
   createRoute({ getParentRoute: parent, path: '/ui', component: SpecimenPage }),
   moved('/device/$alias', '/devices/$id', (p) => ({ id: p.alias ?? '' })),
   moved('/ports', '/settings/$section', () => ({ section: 'ports' })),
-  moved('/builds', '/settings/$section', () => ({ section: 'builds' })),
+  moved('/builds', '/provision', undefined, { view: 'firmware' }),
   moved('/network', '/settings/$section', () => ({ section: 'networks' })),
   moved('/agents', '/settings/$section', () => ({ section: 'agents' })),
 ]);

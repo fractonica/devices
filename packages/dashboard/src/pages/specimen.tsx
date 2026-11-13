@@ -3,28 +3,7 @@
 
 import { useState } from 'react';
 
-import {
-  Bead,
-  Button,
-  ButtonRow,
-  Caps,
-  Disclosure,
-  EmptyState,
-  ErrorLine,
-  FTime,
-  Page,
-  PROVISION_STAGES,
-  Reading,
-  Row,
-  Section,
-  Select,
-  Slider,
-  Sparkline,
-  StageRing,
-  Term,
-  TextField,
-  Toggle,
-} from '../ui/index.ts';
+import { Bead, Button, ButtonRow, Caps, Disclosure, EmptyState, ErrorLine, FTime, Page, Pending, PROVISION_STAGES, Reading, Row, Section, Select, Slider, Sparkline, StageRing, Term, TextField, Toggle } from '../ui/index.ts';
 import { OpError } from '../api/rest.ts';
 
 const WAVE = Array.from({ length: 60 }, (_, i) => -60 + 8 * Math.sin(i / 5) + (i % 7));
@@ -47,6 +26,15 @@ export function SpecimenPage() {
         <Row label="Stamp" value={<FTime at={now} form="stamp" stack />} />
         <Row label="RSSI" value={<Sparkline values={WAVE} label="rssi" />} extra="the last 60 values" />
         <Row label="A flashing row" value="input" flash />
+        <Row
+          lead={<StageRing stages={['a', 'b', 'c']} current={2} bare size={22} label="An update" />}
+          name="c6-pad"
+          sub="ESP32-C6-DevKitC · esp32c6"
+          value="built"
+          extra="3f2a9c01b2d4"
+          actions={<Button variant="quiet">Rebuild</Button>}
+        />
+        <Pending what="the registry" />
       </Section>
       <Section title="Beads with words">
         <ButtonRow>
@@ -80,6 +68,7 @@ export function SpecimenPage() {
           <StageRing stages={PROVISION_STAGES} current={2} size={120} />
           <StageRing stages={PROVISION_STAGES} current={7} failed size={120} />
           <StageRing stages={PROVISION_STAGES} current={9} size={120} />
+          <StageRing stages={Array.from({ length: 12 }, (_, i) => `step ${i}`)} current={5} arcs={Array.from({ length: 12 }, (_, i) => ({ status: i % 2 ? 'todo' : 'done' }))} bezel={false} size={120} centre={{ word: '6', sub: 'of 12 steps' }} label="A guide" />
         </ButtonRow>
       </Section>
       <Section title="Errors">

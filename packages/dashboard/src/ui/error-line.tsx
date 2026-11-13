@@ -1,12 +1,14 @@
 // An error as one line on a hairline: a fault bead, the code in caps, the message, what to do (the hub's hint and
 // remediation), and an inline fix button when the page knows one ("Release port", "Run fr doctor --fix"). An op this
-// hub does not have yet reads as a notice, not an error.
+// hub does not have yet reads as a notice, not an error. In pure mode the hub's texts go through useHubText (durations as
+// spans, other Earth measures left out: state/pure-text.ts), so every page's errors keep ruling 11.
 
 import type { ReactNode } from 'react';
 
 import { OpError, opMissing, remedies } from '../api/rest.ts';
 import { Bead } from './bead.tsx';
 import { Button } from './button.tsx';
+import { useHubText } from './kit.tsx';
 import { engrave } from './text.tsx';
 
 export interface ErrorFix {
@@ -20,17 +22,20 @@ export interface ErrorLineProps {
   error?: unknown;
   /** Or a message of the page's own. */
   message?: ReactNode;
+  /** The code in caps for a message of the page's own (default "error"): PORT_LEASED, NOT_JOINED … */
+  code?: string;
   /** What failed, before the message ("Rename"). */
   what?: string;
   /** The fix, as a button at the end of the line. */
   fix?: ErrorFix;
 }
 
-export function ErrorLine({ error, message, what, fix }: ErrorLineProps) {
+export function ErrorLine({ error, message, what, fix, code: ownCode }: ErrorLineProps) {
+  const say = useHubText();
   if (!error && !message) {
     return null;
   }
-  let code = 'error';
+  let code = ownCode ?? 'error';
   let text: ReactNode = message;
   let steps: string[] = [];
   let notice = false;
@@ -42,8 +47,8 @@ export function ErrorLine({ error, message, what, fix }: ErrorLineProps) {
       text = `${what ?? 'This'} is not available on this hub yet.`;
     } else {
       code = e.code;
-      text = `${what ? `${what}: ` : ''}${e.message}`;
-      steps = remedies(e);
+      text = `${what ? `${what}: ` : ''}${say(e.message)}`;
+      steps = remedies(e).map(say);
     }
   }
   return (

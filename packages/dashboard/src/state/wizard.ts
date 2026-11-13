@@ -13,6 +13,12 @@
 //   board that came online before the wizard knew its id) confirms it.
 // An error shows the hub's message and what a person can do (remediation). INVALID_ARGS with candidate
 // profiles (several built for the chip) offers them and retries with the one picked.
+//
+// Stage 4 (the Provision page, pages/provision/*) adds: several stored networks (network_list) and the one picked
+// (device_provision `network`, left out for the hub's default); the chip when known (the registry's, or what a
+// failed probe said), for the profiles that match it; "Build and provision" (build_start, then device_provision once
+// it is built: the `build` job in front of the provision job, one ring for both); and `resume`, which opens the
+// wizard on a job the hub is already running (the page's `/provision/<job>`, after a reload).
 
 import { aliasProblem, BROADCAST_ALIAS, type Prompt, type ToolError } from '@fractonica/protocol/client';
 
@@ -39,6 +45,18 @@ export interface WizardKnown {
   alias: string;
   profile: string | null;
   presence?: string;
+  /** The registry's chip (esp32c6, ...), when it knows the board. */
+  chip?: string | null;
+}
+
+/** A stored Wi-Fi network as network_list gives it (never a password: only whether one is stored). */
+export interface NetworkOption {
+  name: string;
+  ssid: string;
+  band?: string;
+  password_set?: boolean;
+  /** Registered devices that join it. */
+  devices?: number;
 }
 
 export interface ProfileOption {
@@ -76,6 +94,12 @@ export interface WizardState {
   port: WizardPort | null;
   known: WizardKnown | null;
   network: NetworkState;
+  /** network_list; null while loading. */
+  networks: NetworkOption[] | null;
+  /** The network picked; '' = the hub's choice (the registry row's, else default). */
+  networkName: string;
+  /** The board's chip (esp32c6, ...), when known: the registry's, or what the hub's probe said in an error. */
+  chip: string | null;
   /** null while loading. */
   profiles: ProfileOption[] | null;
   /** '' = auto. */
@@ -84,6 +108,8 @@ export interface WizardState {
   alias: string;
   aliasError: string | null;
   job: WizardJob | null;
+  /** "Build and provision": the build_start job that runs before device_provision. */
+  build: WizardJob | null;
   result: ProvisionResult | null;
   /** device.online seen for the board after the job started. */
   online: boolean;
@@ -104,18 +130,36 @@ export type WizardAction =
   | { type: 'job'; job: { job_id: string; status: JobStatus; stage?: string; progress?: { pct?: number; message?: string }; result?: unknown; error?: unknown }; full?: boolean }
   | { type: 'failed'; error: ToolError }
   | { type: 'online'; device_id: string }
-  | { type: 'pick'; profile: string };
+  | { type: 'pick'; profile: string }
+  | { type: 'networks'; networks: NetworkOption[] }
+  | { type: 'useNetwork'; name: string }
+  | { type: 'chip'; chip: string | null }
+  /** "Build and provision" pressed: the build job starts first. */
+  | { type: 'buildSubmitted' }
+  /** A frame (or with `full` the whole job) of that build job. */
+  | { type: 'build'; job: JobFrame; full?: boolean }
+  /** Open on a job the hub runs already (a reload of `/provision/<job>`): what the job knows. */
+  | { type: 'resume'; job: JobFrame & { targets?: string[] } }
+  /** Back to an earlier step from a later one (the page's "Change"), when no job runs. */
+  | { type: 'goto'; step: 'detect' | 'network' | 'profile' };
+
+/** A job as a `/ws` job frame or job_get gives it (what the reducer reads of one). */
+export type JobFrame = { job_id: string; status: JobStatus; stage?: string; progress?: { pct?: number; message?: string }; result?: unknown; error?: unknown };
 
 export const WIZARD_CLOSED: WizardState = {
   step: 'closed',
   port: null,
   known: null,
   network: { state: 'loading' },
+  networks: null,
+  networkName: '',
+  chip: null,
   profiles: null,
   profile: '',
   alias: '',
   aliasError: null,
   job: null,
+  build: null,
   result: null,
   online: false,
   error: null,
@@ -149,34 +193,27 @@ export function wizardError(err: ToolError): WizardError {
 }
 
 /** The input of device_provision for the current choices. */
-export function provisionInput(s: WizardState): { port: string; profile?: string; alias?: string; wait_s: number } {
+export function provisionInput(s: WizardState): { port: string; profile?: string; alias?: string; network?: string; wait_s: number } {
   const port = s.port?.usb_serial ?? s.port?.device_id ?? s.port?.path ?? '';
   const alias = s.alias.trim().toLowerCase();
-  return { port, ...(s.profile ? { profile: s.profile } : {}), ...(alias ? { alias } : {}), wait_s: 0 };
+  return { port, ...(s.profile ? { profile: s.profile } : {}), ...(alias ? { alias } : {}), ...(s.networkName ? { network: s.networkName } : {}), wait_s: 0 };
+}
+
+/** The network the board will join: the one picked, else default, else the only one (null while none is stored). */
+export function chosenNetwork(s: Pick<WizardState, 'networks' | 'networkName'>): NetworkOption | null {
+  const list = s.networks ?? [];
+  return list.find((n) => n.name === (s.networkName || 'default')) ?? (s.networkName ? null : list.length === 1 ? list[0]! : null);
+}
+
+/** Whether the job in flight (a build in front of the provision, or the provision) has not ended. */
+export function jobRunning(s: Pick<WizardState, 'job' | 'build'>): boolean {
+  const live = (j: WizardJob | null) => j !== null && !TERMINAL_JOB_STATUSES.has(j.status);
+  return live(s.job) || live(s.build);
 }
 
 /** Whether the profile step may start the job. */
 export function canSubmit(s: WizardState): boolean {
-  return s.step === 'profile' && s.port !== null && s.network.state === 'set' && s.aliasError === null && !(s.job && !TERMINAL_JOB_STATUSES.has(s.job.status));
-}
-
-export type StageStatus = 'done' | 'current' | 'failed' | 'pending';
-
-/** Each provision stage with its status, for the progress list. */
-export function stageView(s: Pick<WizardState, 'job' | 'result'>): { stage: string; status: StageStatus }[] {
-  const job = s.job;
-  const at = job?.stage ? PROVISION_STAGES.indexOf(job.stage as (typeof PROVISION_STAGES)[number]) : -1;
-  return PROVISION_STAGES.map((stage, i) => {
-    let status: StageStatus = 'pending';
-    if (job?.status === 'completed') {
-      status = 'done';
-    } else if (i < at) {
-      status = 'done';
-    } else if (i === at) {
-      status = job?.status === 'failed' || job?.status === 'cancelled' ? 'failed' : 'current';
-    }
-    return { stage, status };
-  });
+  return s.step === 'profile' && s.port !== null && s.network.state === 'set' && s.aliasError === null && !jobRunning(s);
 }
 
 /** The device id the job provisions (its result, the port's board, or the registry's). */
@@ -213,7 +250,20 @@ function afterNetwork(s: WizardState): WizardStep {
 export function wizardReducer(s: WizardState, a: WizardAction): WizardState {
   switch (a.type) {
     case 'open':
-      return { ...WIZARD_CLOSED, step: 'detect', port: a.port, known: a.known, alias: a.known?.alias ?? '', profile: a.known?.profile ?? '' };
+      return {
+        ...WIZARD_CLOSED,
+        // what the page already loaded stays: the networks and profiles do not depend on the port
+        network: s.network,
+        networks: s.networks,
+        networkName: s.networkName,
+        profiles: s.profiles,
+        step: 'detect',
+        port: a.port,
+        known: a.known,
+        chip: a.known?.chip ?? null,
+        alias: a.known?.alias ?? '',
+        profile: a.known?.profile ?? '',
+      };
     case 'close':
       return WIZARD_CLOSED;
     case 'next':
@@ -231,8 +281,8 @@ export function wizardReducer(s: WizardState, a: WizardAction): WizardState {
       if (s.step === 'network') {
         return { ...s, step: 'detect', error: null };
       }
-      if ((s.step === 'flash' || s.step === 'done') && (!s.job || TERMINAL_JOB_STATUSES.has(s.job.status))) {
-        return { ...s, step: 'profile', job: null, result: null, online: false, error: null };
+      if ((s.step === 'flash' || s.step === 'done') && !jobRunning(s)) {
+        return { ...s, step: 'profile', job: null, build: null, result: null, online: false, error: null };
       }
       return s;
     case 'network':
@@ -279,41 +329,69 @@ export function wizardReducer(s: WizardState, a: WizardAction): WizardState {
     case 'online':
       return s.step !== 'closed' && a.device_id === wizardDeviceId(s) ? { ...s, online: true } : s;
     case 'pick':
-      return { ...s, step: 'profile', profile: a.profile, job: null, result: null, error: null };
+      return { ...s, step: 'profile', profile: a.profile, job: null, build: null, result: null, error: null };
+    case 'networks': {
+      const next = { ...s, networks: a.networks };
+      const chosen = chosenNetwork(next);
+      return { ...next, network: chosen ? { state: 'set', ssid: chosen.ssid } : { state: 'missing' } };
+    }
+    case 'useNetwork': {
+      const n = (s.networks ?? []).find((x) => x.name === a.name);
+      return n ? { ...s, networkName: a.name, network: { state: 'set', ssid: n.ssid } } : s;
+    }
+    case 'chip':
+      return { ...s, chip: a.chip };
+    case 'buildSubmitted':
+      return { ...s, step: 'flash', build: null, job: null, result: null, online: false, error: null };
+    case 'build': {
+      if (s.step !== 'flash' || (s.build && s.build.job_id !== a.job.job_id) || s.job) {
+        return s;
+      }
+      const ended = TERMINAL_JOB_STATUSES.has(a.job.status);
+      if (s.build && TERMINAL_JOB_STATUSES.has(s.build.status)) {
+        const fills = !s.build.detail && ended && (a.full === true || a.job.error !== undefined || a.job.result !== undefined);
+        if (!fills) {
+          return s;
+        }
+      }
+      const stages = s.build?.stages.slice() ?? [];
+      if (a.job.stage && stages.at(-1) !== a.job.stage) {
+        stages.push(a.job.stage);
+      }
+      const build: WizardJob = {
+        job_id: a.job.job_id,
+        status: a.job.status,
+        stage: a.job.stage ?? s.build?.stage,
+        progress: a.job.progress ?? s.build?.progress,
+        stages,
+        detail: ended && (a.full === true || a.job.error !== undefined || a.job.result !== undefined),
+      };
+      if (!ended || a.job.status === 'completed') {
+        return { ...s, build };
+      }
+      const err: ToolError = isToolError(a.job.error) ? (a.job.error as ToolError) : { code: 'INTERNAL', message: `the build ${a.job.status}`, retryable: false };
+      return { ...s, build, error: wizardError(err) };
+    }
+    case 'goto': {
+      const order: WizardStep[] = ['detect', 'network', 'profile', 'flash', 'done'];
+      if (s.step === 'closed' || jobRunning(s) || order.indexOf(a.step) >= order.indexOf(s.step) || (a.step === 'profile' && s.network.state !== 'set')) {
+        return s;
+      }
+      return { ...s, step: a.step, job: null, build: null, result: null, online: false, error: null };
+    }
+    case 'resume': {
+      const target = a.job.targets?.[0];
+      const base: WizardState = { ...WIZARD_CLOSED, step: 'flash', networks: s.networks, profiles: s.profiles, port: target ? { path: target, state: 'open' } : null };
+      return wizardReducer(base, { type: 'job', job: a.job, full: true });
+    }
   }
+}
+
+/** The build job of "Build and provision" ended well and the provision job is still to start. */
+export function buildReady(s: Pick<WizardState, 'build' | 'job' | 'error' | 'step'>): boolean {
+  return s.step === 'flash' && s.build?.status === 'completed' && s.job === null && s.error === null;
 }
 
 /** The Network page's broadcast button (design c6 D16): one MSG `ping` to every node; count 1 answers at once. */
 export const BROADCAST_PING = { to: BROADCAST_ALIAS, topic: 'ping' } as const;
 
-/** Problems of a network_set form (the hub's input rules), or null. */
-export function networkProblem(f: { ssid: string; password: string; country: string; bssid: string }): string | null {
-  if (f.ssid.length < 1 || f.ssid.length > 32) {
-    return 'the SSID must be 1-32 characters';
-  }
-  if (f.password.length > 64) {
-    return 'the password is at most 64 characters';
-  }
-  if (f.country && !/^[A-Za-z]{2}$/.test(f.country)) {
-    return 'the country is a 2-letter code, e.g. US';
-  }
-  if (f.bssid && !/^([0-9a-fA-F]{2}:){5}[0-9a-fA-F]{2}$/.test(f.bssid)) {
-    return 'the BSSID is a MAC, e.g. 3c:84:6a:12:34:56';
-  }
-  return null;
-}
-
-/** network_set's input from the form: empty optional fields left out, the country upper-cased. */
-export function networkInput(f: { ssid: string; password: string; country: string; bssid: string }): {
-  ssid: string;
-  password?: string;
-  country?: string;
-  bssid?: string;
-} {
-  return {
-    ssid: f.ssid,
-    ...(f.password ? { password: f.password } : {}),
-    ...(f.country ? { country: f.country.toUpperCase() } : {}),
-    ...(f.bssid ? { bssid: f.bssid.toLowerCase() } : {}),
-  };
-}

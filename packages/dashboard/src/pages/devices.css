@@ -1,0 +1,240 @@
+/*
+ * devices.css - the Devices page (pages/devices.tsx). Tokens only. Classes `devs-`.
+ * Desktop: one row per device on an etch-1 hairline, in columns (bead, name and hardware, signal, firmware, last
+ * event, identify) under a caps header. Phone: the row stacks: bead and name, then the signal and the last event.
+ */
+
+.devs-head,
+.devs-row {
+  display: grid;
+  grid-template-columns: 14px minmax(0, 2.4fr) minmax(0, 1.3fr) minmax(0, 0.9fr) minmax(0, 1.6fr) auto;
+  column-gap: var(--sp-4);
+  align-items: baseline;
+}
+
+.devs-head {
+  padding: var(--sp-3) 0 var(--sp-2);
+  border-bottom: var(--hair) solid var(--c-etch1);
+  color: var(--c-ash);
+}
+
+.devs-head > :nth-child(5) {
+  text-align: right;
+}
+
+.devs-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.devs-row {
+  position: relative;
+  min-height: 52px;
+  padding: 12px 0 11px;
+  border-bottom: var(--hair) solid var(--c-etch1);
+  font-size: var(--fs-data);
+  line-height: 16px;
+  transition: border-color 600ms linear;
+}
+
+.devs-row:hover {
+  border-bottom-color: var(--c-etch3);
+}
+
+.devs-row[data-flash] {
+  border-bottom-color: var(--c-lumen);
+  transition: none;
+}
+
+.devs-bead {
+  align-self: center;
+  display: flex;
+}
+
+.devs-name {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 0;
+}
+
+/* the alias is the row's link; its ::after covers the row, so the whole row opens the device */
+.devs-link {
+  font-size: var(--fs-value);
+  color: var(--c-bone);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  transition: color 200ms linear;
+}
+
+.devs-link::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+}
+
+.devs-link:focus-visible {
+  outline: none;
+}
+
+.devs-link:focus-visible::after {
+  outline: 1px solid var(--c-lumen);
+  outline-offset: 2px;
+  border-radius: 2px;
+}
+
+.devs-row:hover .devs-link {
+  color: var(--c-lumen);
+}
+
+.devs-row[data-presence='offline'] .devs-link,
+.devs-row[data-presence='unknown'] .devs-link {
+  color: var(--c-ash);
+}
+
+.devs-hw {
+  font-size: var(--fs-earth);
+  color: var(--c-ash);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.devs-signal,
+.devs-fw,
+.devs-event {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.devs-fw {
+  font-size: var(--fs-earth);
+  color: var(--c-ash);
+}
+
+.devs-event {
+  text-align: right;
+}
+
+.devs-last {
+  display: inline-flex;
+  align-items: baseline;
+  gap: var(--sp-2);
+  max-width: 100%;
+}
+
+.devs-last-type {
+  color: var(--c-ash);
+  font-size: var(--fs-earth);
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* Identify sits above the row's link */
+.devs-actions {
+  position: relative;
+  z-index: 1;
+  justify-self: end;
+}
+
+.devs-filter {
+  padding: var(--sp-3) 0 var(--sp-1);
+  max-width: 320px;
+}
+
+.devs-none {
+  padding: var(--sp-3) 0;
+}
+
+/* the signal beads (shared with the device page: pages/device.css draws them too) */
+.dev-signal {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--sp-2);
+}
+
+.dev-signal svg {
+  flex: none;
+}
+
+.dev-signal circle {
+  fill: var(--c-void);
+  stroke: var(--c-etch3);
+  stroke-width: 0.8;
+}
+
+.dev-signal circle.lit {
+  fill: var(--c-lumen);
+  stroke: var(--c-lumen);
+}
+
+.dev-earth-inline {
+  margin-left: 0.6em;
+}
+
+@media (max-width: 999.98px) {
+  .devs-head,
+  .devs-row {
+    grid-template-columns: 14px minmax(0, 2fr) minmax(0, 1.2fr) minmax(0, 1.5fr) auto;
+  }
+
+  .devs-head > :nth-child(4),
+  .devs-fw {
+    display: none;
+  }
+}
+
+@media (max-width: 699.98px) {
+  .devs-head {
+    display: none;
+  }
+
+  .devs-row {
+    grid-template-columns: 14px minmax(0, 1fr) auto;
+    grid-template-areas:
+      'bead name actions'
+      '. signal event';
+    row-gap: 6px;
+    column-gap: var(--sp-3);
+    min-height: 64px;
+  }
+
+  .devs-bead {
+    grid-area: bead;
+  }
+
+  .devs-name {
+    grid-area: name;
+  }
+
+  .devs-signal {
+    grid-area: signal;
+    font-size: var(--fs-earth);
+  }
+
+  .devs-event {
+    grid-area: event;
+    font-size: var(--fs-earth);
+  }
+
+  .devs-actions {
+    grid-area: actions;
+  }
+
+  .devs-filter {
+    max-width: none;
+  }
+}
+
+/* the hub stopped answering: the rows are what it last said, drawn engraved */
+.devs-list[data-stale] .devs-row {
+  opacity: 0.45;
+}
+
+.devs-list[data-stale] .devs-actions {
+  display: none;
+}

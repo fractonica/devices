@@ -1,6 +1,7 @@
 // A row on a hairline (the LENS rows): a caps label (or a name, with a bead) on the left, the value right-aligned,
 // an optional extra line under the value and an Earth line (Earth mode only). At phone width the value wraps under
-// the label when they do not fit side by side. A row with `to` is a link (TanStack), with `onClick` a button.
+// the label when they do not fit side by side. A row with `to` is a link (TanStack), with `onClick` a button. A row of
+// things to act on carries a `sub` line under the name and its own `actions` at its end.
 
 import { Link } from '@tanstack/react-router';
 import type { ReactNode } from 'react';
@@ -21,6 +22,12 @@ export interface RowProps {
   children?: ReactNode;
   /** A smaller ash line under the value (a qualifier, a second fact). */
   extra?: ReactNode;
+  /** A smaller ash line under the label or name (what it is: a path, a profile). */
+  sub?: ReactNode;
+  /** A mark before the bead, label or name (a small ring). */
+  lead?: ReactNode;
+  /** The row's own quiet buttons, at its end (under it at phone width). Not with `to` or `onClick`. */
+  actions?: ReactNode;
   /** An Earth translation under the value: rendered only in Earth mode, led by ⊕. */
   earth?: ReactNode;
   /** A route: the whole row is a link to it. */
@@ -33,17 +40,28 @@ export interface RowProps {
   id?: string;
 }
 
-export function Row({ label, name, bead, beadLabel, value, children, extra, earth, to, params, onClick, flash, id }: RowProps) {
+export function Row({ label, name, bead, beadLabel, value, children, extra, sub, lead, actions, earth, to, params, onClick, flash, id }: RowProps) {
   const body = (
     <>
       <span className="ui-row-lead">
+        {lead ? <span className="ui-row-mark">{lead}</span> : null}
         {bead ? (
           <span className="bead-slot">
             <Bead state={bead} label={beadLabel} />
           </span>
         ) : null}
-        {label ? <span className="ui-row-label caps">{engrave(label)}</span> : null}
-        {name ? <span className="ui-row-name">{name}</span> : null}
+        {sub ? (
+          <span className="ui-row-text">
+            {label ? <span className="ui-row-label caps">{engrave(label)}</span> : null}
+            {name ? <span className="ui-row-name">{name}</span> : null}
+            <span className="ui-row-sub">{sub}</span>
+          </span>
+        ) : (
+          <>
+            {label ? <span className="ui-row-label caps">{engrave(label)}</span> : null}
+            {name ? <span className="ui-row-name">{name}</span> : null}
+          </>
+        )}
       </span>
       {value !== undefined || children !== undefined || extra || earth ? (
         <span className="ui-row-values">
@@ -59,6 +77,7 @@ export function Row({ label, name, bead, beadLabel, value, children, extra, eart
           ) : null}
         </span>
       ) : null}
+      {actions ? <span className="ui-row-actions">{actions}</span> : null}
     </>
   );
   const data = { 'data-flash': flash ? '' : undefined, 'data-row': id };
@@ -79,6 +98,20 @@ export function Row({ label, name, bead, beadLabel, value, children, extra, eart
   return (
     <div className="ui-row" {...data}>
       {body}
+    </div>
+  );
+}
+
+/** Something still being read: an idle bead and "reading <what>" in caps, on a row (one wording on every page). */
+export function Pending({ what, word = 'reading' }: { what: string; word?: string }) {
+  return (
+    <div className="ui-row" data-pending="" role="status">
+      <span className="ui-row-lead">
+        <span className="bead-slot">
+          <Bead state="idle" label={word} />
+        </span>
+        <span className="ui-row-label caps">{engrave(`${word} ${what}`)}</span>
+      </span>
     </div>
   );
 }

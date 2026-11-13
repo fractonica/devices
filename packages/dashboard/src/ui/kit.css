@@ -1,0 +1,195 @@
+/*
+ * kit.css - chips, inline code and the Line (ui/kit.tsx). Tokens only.
+ */
+
+.ui-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--sp-2);
+}
+
+.ui-chip {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  min-height: 28px;
+  max-width: 100%;
+  padding: 0 11px;
+  border: var(--hair) solid var(--c-etch2);
+  border-radius: 2px;
+  color: var(--c-ash);
+  font-family: var(--font-caps);
+  font-weight: var(--w-caps);
+  font-size: var(--fs-label);
+  letter-spacing: var(--track-caps);
+  white-space: nowrap;
+  transition:
+    border-color 200ms linear,
+    color 200ms linear;
+}
+
+/* a finger gets 44 px of height whatever the drawing */
+.ui-chip::before {
+  content: '';
+  position: absolute;
+  inset: -8px 0;
+}
+
+.ui-chip:has(.ui-bead) {
+  font-family: var(--font-reading);
+  font-weight: var(--w-value);
+  font-size: var(--fs-data);
+  letter-spacing: 0;
+}
+
+.ui-chip-word {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 22ch;
+}
+
+.ui-chip-count {
+  font-family: var(--font-reading);
+  font-weight: var(--w-value);
+  font-size: var(--fs-earth);
+  letter-spacing: 0;
+  color: var(--c-etch3);
+}
+
+.ui-chip:hover {
+  border-color: var(--c-etch3);
+  color: var(--c-bone);
+}
+
+.ui-chip[aria-pressed='true'] {
+  border-color: var(--c-lumen);
+  color: var(--c-bone);
+}
+
+.ui-chip[aria-pressed='true'] .ui-chip-count {
+  color: var(--c-lumen-mid);
+}
+
+.ui-code {
+  font-family: var(--mono);
+  font-size: 0.92em;
+  color: var(--c-bone);
+  overflow-wrap: anywhere;
+  user-select: all;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ui-chip {
+    transition: none;
+  }
+}
+
+/* ------------------------------------------------------------------ Line */
+
+.ui-line {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  padding: 10px 0 11px;
+  border-bottom: var(--hair) solid var(--c-etch1);
+  font-size: var(--fs-data);
+  line-height: 17px;
+}
+
+.ui-line-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  column-gap: var(--sp-3);
+  row-gap: 2px;
+}
+
+.ui-line-lead {
+  display: flex;
+  align-items: baseline;
+  gap: var(--sp-2);
+  margin-right: auto;
+  min-width: 0;
+}
+
+.ui-line-bead {
+  align-self: center;
+  display: flex;
+}
+
+.ui-line-label {
+  color: var(--c-ash);
+  line-height: 10px;
+}
+
+.ui-line-name {
+  font-size: var(--fs-value);
+  color: var(--c-bone);
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.ui-line-value {
+  margin-left: auto;
+  text-align: right;
+  color: var(--c-bone);
+  overflow-wrap: anywhere;
+  max-width: 100%;
+}
+
+.ui-line-detail {
+  color: var(--c-ash);
+  overflow-wrap: anywhere;
+  padding-left: 15px;
+}
+
+.ui-line-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--sp-2);
+  padding-left: 15px;
+  padding-top: 3px;
+}
+
+.ui-line:not(:has(.ui-line-bead)) .ui-line-detail,
+.ui-line:not(:has(.ui-line-bead)) .ui-line-actions {
+  padding-left: 0;
+}
+
+/* a Span's Earth duration after the span (Earth mode) */
+.ui-span-earth {
+  margin-left: 0.6em;
+}
+
+/* ------------------------------------------------------------------ a port's lend choice (pages/shared/port-actions.tsx) */
+
+.ui-lend {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--sp-2);
+}
+
+.ui-lend-q {
+  color: var(--c-bone);
+  margin-right: var(--sp-1);
+}
+
+/* ------------------------------------------------------------------ a form of fields (pages/shared/network-form.tsx) */
+
+.ui-form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-4);
+  padding: var(--sp-4) 0 var(--sp-4);
+  border-bottom: var(--hair) solid var(--c-etch1);
+}
+
+.ui-form-more {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-4);
+  padding-top: var(--sp-3);
+}

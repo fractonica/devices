@@ -1,0 +1,436 @@
+/*
+ * hub.css - the Hub page (pages/hub.tsx and pages/hub/*): the instrument beside a column (the reading, the fleet,
+ * hub health, thresholds), the banner over them. Colours only from the token properties (--c-*), faces only
+ * --font-reading and --font-caps, sizes from the scale in styles/base.css. Classes start with hub- (the instrument's
+ * SVG ink classes with i-, scoped under .hub-inst). Nothing animates but time.
+ */
+
+/* ------------------------------------------------------------- the layout */
+
+.hub-grid {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-5);
+}
+
+/* one column: the two columns' parts in reading order (instrument, reading, fleet, health) */
+.hub-col {
+  display: contents;
+}
+
+.hub-instrument {
+  order: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--sp-3);
+  width: 100%;
+  max-width: 420px;
+  margin: 0 auto;
+}
+
+.hub-present {
+  order: 2;
+}
+
+.hub-col-right > .ui-section {
+  order: 3;
+}
+
+.hub-health {
+  order: 4;
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-4);
+  min-width: 0;
+}
+
+@media (min-width: 1100px) {
+  .hub-grid {
+    display: grid;
+    grid-template-columns: minmax(340px, 440px) minmax(0, 1fr);
+    gap: var(--sp-6);
+    align-items: start;
+  }
+
+  .hub-col {
+    display: flex;
+    flex-direction: column;
+    gap: var(--sp-5);
+    min-width: 0;
+  }
+
+  .hub-instrument {
+    max-width: 440px;
+    margin: 0;
+  }
+}
+
+/* ------------------------------------------------------- the instrument */
+
+.hub-inst {
+  width: 100%;
+  margin: 0;
+}
+
+.hub-inst svg {
+  display: block;
+  width: 100%;
+  height: auto;
+  overflow: visible;
+}
+
+.hub-inst path,
+.hub-inst line,
+.hub-inst circle {
+  fill: none;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.hub-inst .i-etch2 {
+  stroke: var(--c-etch2);
+}
+
+.hub-inst .i-etch3 {
+  stroke: var(--c-etch3);
+}
+
+.hub-inst .i-bone {
+  stroke: var(--c-bone);
+}
+
+.hub-inst .i-lumen {
+  stroke: var(--c-lumen);
+}
+
+.hub-inst .i-lumen-mid {
+  stroke: var(--c-lumen-mid);
+}
+
+.hub-inst .i-lumen-dim {
+  stroke: var(--c-lumen-dim);
+}
+
+.hub-inst .i-lumen-etch {
+  stroke: var(--c-lumen-etch);
+}
+
+.hub-inst .i-lumen-ring {
+  stroke: var(--c-lumen-ring);
+}
+
+.hub-inst .i-now {
+  stroke: var(--c-now);
+}
+
+.hub-inst .i-knock {
+  stroke: var(--c-void);
+}
+
+.hub-inst circle.i-fill-lumen {
+  fill: var(--c-lumen);
+}
+
+.hub-inst circle.i-fill-lumen-mid {
+  fill: var(--c-lumen-mid);
+}
+
+.hub-inst circle.i-fill-now {
+  fill: var(--c-now);
+}
+
+.hub-inst circle.i-fill-core {
+  fill: var(--c-now-core);
+}
+
+.hub-inst circle.i-bead {
+  fill: var(--c-void);
+  stroke: var(--c-etch3);
+  transition:
+    fill 400ms linear,
+    stroke 400ms linear;
+}
+
+.hub-inst circle.i-bead.on {
+  fill: var(--c-bone);
+  stroke: var(--c-bone);
+}
+
+.hub-inst text {
+  text-anchor: middle;
+  stroke: none;
+}
+
+.hub-inst .i-letter {
+  fill: var(--c-ash);
+  font-family: var(--font-reading);
+  font-weight: var(--w-value);
+  paint-order: stroke;
+  stroke: var(--c-void);
+  stroke-width: 3.5px;
+}
+
+.hub-inst .i-letter.major {
+  fill: var(--c-major-label);
+}
+
+.hub-inst .i-word {
+  fill: var(--c-etch3);
+  font-family: var(--font-caps);
+  font-weight: var(--w-caps);
+  letter-spacing: 0.2em;
+  transition: fill 600ms linear;
+}
+
+.hub-inst .i-word.next {
+  fill: var(--c-now);
+}
+
+.hub-inst .i-glyphs path {
+  stroke: var(--c-lumen);
+}
+
+.hub-inst .i-glyphs path.dot {
+  fill: var(--c-lumen);
+  stroke: none;
+}
+
+.hub-inst .i-name {
+  fill: var(--c-bone);
+  font-family: var(--font-reading);
+  font-weight: var(--w-value);
+}
+
+.hub-inst .i-name .u {
+  fill: var(--c-ash);
+}
+
+/* ---------------------------------------------------------- the present */
+
+.hub-present {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-2);
+  padding-top: var(--sp-3);
+}
+
+.hub-words {
+  color: var(--c-bone);
+  letter-spacing: var(--track-date);
+}
+
+.hub-reading {
+  font-size: var(--fs-reading);
+  font-weight: var(--w-reading);
+  line-height: 1.12;
+  white-space: nowrap;
+  color: var(--c-bone);
+}
+
+.hub-reading .hub-fine {
+  font-size: 0.5em;
+  font-weight: var(--w-value);
+  color: var(--c-ash);
+}
+
+.hub-earth-line {
+  margin-top: calc(var(--sp-1) * -1);
+}
+
+.hub-countdowns {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--sp-3) var(--sp-6);
+  margin-top: var(--sp-3);
+}
+
+.hub-countdown {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.hub-countdown-label {
+  color: var(--c-ash);
+}
+
+.hub-countdown-label .hub-sym {
+  font-family: var(--font-reading);
+  font-weight: var(--w-value);
+  font-size: 1.3em;
+  letter-spacing: 0;
+  color: var(--c-ash);
+}
+
+.hub-countdown-span {
+  font-size: var(--fs-value);
+  font-weight: var(--w-value);
+  color: var(--c-bone);
+  line-height: 1.1;
+}
+
+.hub-beads circle {
+  fill: var(--c-void);
+  stroke: var(--c-etch3);
+}
+
+.hub-beads circle.on {
+  fill: var(--c-bone);
+  stroke: var(--c-bone);
+}
+
+/* -------------------------------------------------------------- the fleet */
+
+/* the carrier: one hairline through the beads, joined bead to bead (it wraps with them on a long fleet) */
+.hub-carrier {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  row-gap: var(--sp-3);
+  padding: var(--sp-4) 0 var(--sp-3);
+}
+
+.hub-carrier-bead {
+  position: relative;
+  display: inline-flex;
+  padding: 0 7px;
+}
+
+.hub-carrier-bead::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 50%;
+  border-top: 0.75px solid var(--c-etch2);
+}
+
+.hub-carrier-bead:first-child::before {
+  left: 50%;
+}
+
+.hub-carrier-bead .ui-bead {
+  position: relative;
+}
+
+.hub-alias {
+  color: var(--c-bone);
+}
+
+/* what a device is, after its name, smaller and in ash (one line per device, as the LENS rows) */
+.hub-kind {
+  margin-left: var(--sp-3);
+  font-size: var(--fs-earth);
+  color: var(--c-ash);
+}
+
+.hub-last {
+  color: var(--c-bone);
+}
+
+.hub-last-what {
+  color: var(--c-ash);
+}
+
+/* ------------------------------------------------------------ hub health */
+
+.hub-checks {
+  display: inline-flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 6px;
+  vertical-align: middle;
+}
+
+.hub-check-name {
+  color: var(--c-bone);
+}
+
+.hub-check-detail {
+  color: var(--c-ash);
+}
+
+.hub-fix {
+  font-family: var(--mono);
+  color: var(--c-bone);
+}
+
+.hub-thresholds {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--sp-2) var(--sp-4);
+  color: var(--c-ash);
+}
+
+.hub-threshold-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--sp-1) var(--sp-4);
+}
+
+.hub-threshold {
+  white-space: nowrap;
+}
+
+.hub-threshold-words {
+  color: var(--c-bone);
+}
+
+/* ------------------------------------------------------------- the banner */
+
+.hub-banner .ui-section-head {
+  border-bottom-color: var(--c-lumen-dim);
+}
+
+.hub-ask {
+  color: var(--c-bone);
+  white-space: normal;
+}
+
+.hub-until {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: flex-end;
+  gap: var(--sp-2);
+}
+
+.hub-banner .lumen-word {
+  color: var(--c-lumen);
+}
+
+/* -------------------------------------------------------------- phone */
+
+@media (max-width: 699.98px) {
+  /* a little smaller than the column, so the fleet starts nearer the fold */
+  .hub-instrument {
+    max-width: 330px;
+  }
+
+  .hub-present {
+    align-items: center;
+    text-align: center;
+    padding-top: 0;
+  }
+
+  .hub-countdowns {
+    justify-content: center;
+  }
+
+  .hub-countdown {
+    align-items: center;
+  }
+
+  .hub-reading {
+    white-space: normal;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .hub-inst circle.i-bead,
+  .hub-inst .i-word {
+    transition: none;
+  }
+}
