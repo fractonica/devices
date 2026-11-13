@@ -35,7 +35,9 @@ function sourceDir(cwd: string): string {
 }
 
 /**
- * `fr gen [--check]`: every committed output (C++ and TS codecs, catalog, schemas, golden vectors).
+ * `fr gen [--check]`: every committed output (C++ and TS codecs, catalog, schemas, golden vectors), and the vendored
+ * temporal core (packages/time: its files against time.lock, and against ../web when that checkout is beside this
+ * one; a write copies the web's files in and rewrites the lock).
  * With `check`, stale files make a failed Result without an error, which exits 1 like `fr doctor`.
  * Both first validate the HIL bench files (hardware/bench/*.bench.yaml, design m2-c1-hil D7) against the
  * boards and profiles: a bad bench is INVALID_SOURCE with every issue, like a bad schema, and the
@@ -46,8 +48,15 @@ export async function genAll(opts: { check: boolean; cwd: string }): Promise<Res
   try {
     const src = sourceDir(opts.cwd);
     const r = await codegen.generateAll({ sourceDir: src, check: opts.check });
-    const data = { source_dir: src, files: r.files.length, ...(opts.check ? { stale: r.stale } : { written: r.written }), benches: r.benches, warnings: r.warnings };
-    return opts.check && r.stale.length ? { ok: false, data, cursor: '' } : ok(data);
+    // The vendored temporal core (packages/time): its files against time.lock, and against ../web when it is there.
+    const { checkVendor } = await import('@fractonica/time/vendor');
+    const t = await checkVendor(src, { write: !opts.check });
+    const stale = [...r.stale, ...t.stale];
+    const time = { core: t.core, spec: t.spec, compared_with: t.web ?? 'time.lock only (no ../web checkout)' };
+    const data = opts.check
+      ? { source_dir: src, files: r.files.length, stale, benches: r.benches, time, warnings: r.warnings }
+      : { source_dir: src, files: r.files.length, written: [...r.written, ...t.written], benches: r.benches, time, warnings: [...r.warnings, ...t.stale.map((s) => `stale, not fixed: ${s}`)] };
+    return opts.check && stale.length ? { ok: false, data, cursor: '' } : ok(data);
   } catch (e) {
     return failed(e, codegen);
   }

@@ -1,0 +1,23 @@
+{
+  "schema": "fractonica.time-lock/1",
+  "core": "0.2.0",
+  "spec": "2.2.0",
+  "web": {
+    "repository": "https://github.com/fractonica/web",
+    "commit": "892997c3e6d4d15d2fa475fa13684e323797d999"
+  },
+  "files": {
+    "vendor/fractonica.wasm": {
+      "from": "public/fractonica.wasm",
+      "sha256": "fdbb6dd6369bec223ac9bde0a8fffe982d0fe85d0a72dc205bbe9c7eafd85f03"
+    },
+    "vendor/lib/fractonica.js": {
+      "from": "public/lib/fractonica.js",
+      "sha256": "0d196876b17836da429a34a0d0f42c13fea8f5e50c2f5221dea278c005017504"
+    },
+    "vendor/lib/fractonica.d.ts": {
+      "from": "public/lib/fractonica.d.ts",
+      "sha256": "578ca7f8060c9358ffd164009f4eee2e3dc988a1263124608059d1488621e81f"
+    }
+  }
+}
