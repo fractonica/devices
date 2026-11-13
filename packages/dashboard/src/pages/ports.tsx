@@ -14,28 +14,32 @@ import type { WizardKnown } from '../state/wizard.ts';
 
 const STATE_TONE: Record<string, BadgeTone> = { open: 'ok', closed: 'muted', leased: 'info', busy_external: 'warn', error: 'bad', unwatched: 'muted', ignored: 'muted' };
 
-/** The port policy's actions on one port (config.json ports): Lend it for 10 min, Ignore it, or let the hub Claim it. */
+/**
+ * The port policy's actions on one port (config.json ports): Lend it for 10 min; Ignore a port the hub may open, Stop
+ * ignoring an ignored one; Claim a port the hub leaves alone, Unclaim one it opens only because of a claim. A lent
+ * port's lease ends with its Release button (ReleaseButton).
+ */
 export function PolicyButtons({ port }: { port: PortInfo }) {
   const lend = useAct('port_lend', { done: (r) => `${r.path} lent until ${r.expires_at}`, refresh: ['port_list'] });
-  const ignore = useAct('port_ignore', { done: () => `${port.path} ignored`, refresh: ['port_list'] });
-  const claim = useAct('port_claim', { done: () => `${port.path} watched by the hub`, refresh: ['port_list'] });
+  const ignore = useAct('port_ignore', { done: (_r, input) => (input.remove ? `${port.path} no longer ignored` : `${port.path} ignored`), refresh: ['port_list'] });
+  const claim = useAct('port_claim', { done: (_r, input) => (input.remove ? `${port.path} no longer claimed` : `${port.path} watched by the hub`), refresh: ['port_list'] });
   const busy = lend.isPending || ignore.isPending || claim.isPending;
+  if (port.state === 'leased') {
+    return null;
+  }
+  const button = (action: string, label: string, run: () => void) => (
+    <Button key={action} disabled={busy} onClick={run} data-action={action}>
+      {label}
+    </Button>
+  );
   return (
     <>
-      {port.state !== 'leased' ? (
-        <Button disabled={busy} onClick={() => lend.mutate({ port: port.path, ttl_s: 600 })} data-action="lend">
-          Lend
-        </Button>
-      ) : null}
-      {port.state === 'unwatched' || port.state === 'ignored' ? (
-        <Button disabled={busy} onClick={() => claim.mutate({ port: port.path, remove: false })} data-action="claim">
-          Claim
-        </Button>
-      ) : port.state !== 'leased' ? (
-        <Button disabled={busy} onClick={() => ignore.mutate({ port: port.path, remove: false })} data-action="ignore">
-          Ignore
-        </Button>
-      ) : null}
+      {button('lend', 'Lend', () => lend.mutate({ port: port.path, ttl_s: 600 }))}
+      {port.state === 'ignored'
+        ? button('unignore', 'Stop ignoring', () => ignore.mutate({ port: port.path, remove: true }))
+        : button('ignore', 'Ignore', () => ignore.mutate({ port: port.path, remove: false }))}
+      {port.state === 'unwatched' && port.policy !== 'config_invalid' ? button('claim', 'Claim', () => claim.mutate({ port: port.path, remove: false })) : null}
+      {port.policy === 'claimed' ? button('unclaim', 'Unclaim', () => claim.mutate({ port: port.path, remove: true })) : null}
     </>
   );
 }

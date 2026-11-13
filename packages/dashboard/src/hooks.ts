@@ -35,7 +35,7 @@ export function useOp<N extends OpName>(name: N, input: OpInput<N>, opts: OpQuer
 
 export interface ActOptions<N extends OpName> {
   /** A toast for the ok answer (a string is an ok one); none when it returns undefined. */
-  done?: (data: OpOutput<N>) => string | { tone: Tone; title: string; body?: string } | undefined;
+  done?: (data: OpOutput<N>, input: OpInput<N>) => string | { tone: Tone; title: string; body?: string } | undefined;
   /** Ops to refetch after it. */
   refresh?: readonly OpName[];
 }
@@ -44,8 +44,8 @@ export interface ActOptions<N extends OpName> {
 export function useAct<N extends OpName>(name: N, opts: ActOptions<N> = {}) {
   return useMutation<OpOutput<N>, OpError, OpInput<N>>({
     mutationFn: (input) => rest.op(name, input),
-    onSuccess: (data) => {
-      const t = opts.done?.(data);
+    onSuccess: (data, input) => {
+      const t = opts.done?.(data, input);
       if (t) {
         store.getState().toast(typeof t === 'string' ? { tone: 'ok', title: t } : t, hubClock.now());
       }
