@@ -841,14 +841,19 @@ It needs no hub and no network: it works right after `pnpm install`.
 
 5. **Plan.** `fr time next η --quarter end --count 3` lists the next three Helion ends, each with its stamp and how
    far away it is; `fr time span <from> <to>` says the span between two instants (`+6ι 43λ`); `fr time sync` shows
-   the solar sync, its Pentad and drift.
+   the solar sync, its Pentad and drift. The catalogue's first and last solar syncs are partial, so inside them
+   `fr time sync` has no reading (`INVALID_ARGS`, `details.reason: partial_sync`) while the other commands read
+   normally.
 
 **Instants.** Every `--at`, `<from>`, `<to>` and `<instant>` takes `now`; Unix time in **seconds**
 (`1791460800`, `1791460800.25`; a bare number is always seconds, whatever its length), or in milliseconds or
 microseconds with a suffix (`1791460800000ms`, `1791460800000000us`); a stamp; or an ISO date
-(`2026-10-08T12:00:00Z`; one without an offset is read in the local time zone). Readings exist only inside the
-catalogue of Saros 141, from 1613 to 2857 (`α#1` to `α#18`): an instant outside it is refused
-(`INVALID_ARGS`, exit 64, "OUT OF CATALOGUE"), never extrapolated.
+(`2026-10-08T12:00:00Z`; one without an offset is read in the local time zone). Unix time before 1970 is negative
+and is written as it is, as an argument or an option value (`fr time stamp -6000000000`,
+`fr time span -6000000000000000us now`). Readings exist only inside the catalogue of Saros 141, from 1613 to 2857
+(`α#1` to `α#18`): an instant outside it is refused (`INVALID_ARGS`, exit 64, "OUT OF CATALOGUE · α#1 – α#18"),
+never extrapolated. The refusal names the Gregorian bounds only with `--earth` (marked ⊕); `--json` gives them in
+`details` as Unix µs (`first_us`, `last_us`).
 
 **`--json`** prints the standard envelope (`{ok, data, cursor}`); instants in it are Unix µs as decimal strings
 (the catalogue runs past 2^53 µs). The same answers come from the hub and from agents: the operations `time_now`,
@@ -863,3 +868,6 @@ fr wait event time.threshold --since "$(fr events --json | jq -r .data.next_curs
 α down to η (the Helion) are stored with the other events (about 20 a day); θ and ι are live only (seen by `/ws`, the
 dashboard's Live view and a wait already waiting, never stored); finer levels are not announced. Change this in
 `~/.fractonica/config.json`: `"time": {"durable_to": "δ", "live_to": "η"}`, or `"thresholds": false` for none.
+`durable_to` goes down to θ at most (θ adds about 170 rows a day, and `hub.db` keeps event rows); a deeper level is
+logged as a config problem and θ is used. `live_to` goes down to ν (the Blink). After the hub has been asleep, the
+thresholds of the last minute are announced in time order; older ones are skipped.

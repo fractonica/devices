@@ -41,7 +41,7 @@ Errors carry `remediation[]` (a `tool` with `args`, a `cli` command or a `human`
 
 ## Fractonica time
 
-The temporal core's answers, with no hub needed: `fr mcp` and `fr time` compute them locally (the hub gives the same ones over REST). Every value is the core's; never compute Fractonica numbers, names or spans yourself. An instant is `now`, Unix **seconds** (`1791460800`; a bare number is always seconds, use `1791460800000ms` or `…us` otherwise), a stamp (`α#6 β#4 γ#9 δ#3 ε#5 34η 29ι 21λ 3ν`) or an ISO date; answers give instants as Unix µs in decimal strings. Readings exist only from 1613 to 2857 (the Saros 141 catalogue): outside it is `INVALID_ARGS` with `details.reason: "out_of_catalogue"`. Pure Fractonica by default; `earth: true` adds civil translations in an `earth` block.
+The temporal core's answers, with no hub needed: `fr mcp` and `fr time` compute them locally (the hub gives the same ones over REST). Every value is the core's; never compute Fractonica numbers, names or spans yourself. An instant is `now`, Unix **seconds** (`1791460800`; a bare number is always seconds, use `1791460800000ms` or `…us` otherwise), a stamp (`α#6 β#4 γ#9 δ#3 ε#5 34η 29ι 21λ 3ν`) or an ISO date; answers give instants as Unix µs in decimal strings. Readings exist only from 1613 to 2857 (the Saros 141 catalogue): outside it is `INVALID_ARGS` with `details.reason: "out_of_catalogue"` (its bounds in `details.first_us` and `last_us`). Pure Fractonica by default; `earth: true` adds civil translations in an `earth` block.
 
 | Need | Op | CLI |
 |---|---|---|
