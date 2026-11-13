@@ -256,7 +256,9 @@ describe('dashboard against a real hub (web side)', () => {
     expect(index.status).toBe(200);
     const csp = index.headers.get('content-security-policy') ?? '';
     expect(csp).toContain("script-src 'self'");
-    expect(csp).not.toContain('unsafe-eval'); // the dashboard parses no frame with Zod (ws.ts)
+    // the dashboard parses no frame with Zod (ws.ts): no eval at all; WebAssembly only (the temporal core)
+    expect(csp).not.toMatch(/'unsafe-eval'/);
+    expect(csp).toContain("'wasm-unsafe-eval'");
     expect(csp).toContain(`ws://127.0.0.1:${h.port}`);
     expect(index.headers.get('x-frame-options')).toBe('DENY');
     const html = await index.text();

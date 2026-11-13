@@ -74,7 +74,8 @@ export function isLoopbackOrigin(origin: string): boolean {
 
 /**
  * CSP and X-Frame-Options for an HTML reply. `inlineScripts`: inline `<script>` bodies the page may run
- * (an app's `window.__FRACTONICA__` injection), allowed by hash. Inline styles are allowed (xterm sets
+ * (an app's `window.__FRACTONICA__` injection), allowed by hash; WebAssembly from the page's own files
+ * ('wasm-unsafe-eval', for the dashboard's temporal core). Inline styles are allowed (xterm sets
  * them); WebSockets go to the page's own host ('self') or the hub under its IPv4 and localhost names. CSP
  * host-sources take no IPv6 literal (browsers drop `ws://[::1]:<port>` with a console error), and a page
  * served from [::1] reaches the hub's [::1] listener through 'self'.
@@ -83,7 +84,9 @@ export function htmlSecurityHeaders(port: number, opts: { inlineScripts?: string
   const hashes = (opts.inlineScripts ?? []).map((s) => ` 'sha256-${createHash('sha256').update(s).digest('base64')}'`);
   const csp = [
     "default-src 'self'",
-    `script-src 'self'${hashes.join('')}`,
+    // 'wasm-unsafe-eval': the dashboard compiles the temporal core (fractonica.wasm, one of its own assets); it allows
+    // WebAssembly compilation only, not eval() or new Function().
+    `script-src 'self'${hashes.join('')} 'wasm-unsafe-eval'`,
     `connect-src 'self' ${hubHosts(port).filter((h) => !h.startsWith('[')).map((h) => `ws://${h}`).join(' ')}`,
     "style-src 'self' 'unsafe-inline'",
     "img-src 'self' data:",

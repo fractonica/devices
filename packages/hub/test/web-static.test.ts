@@ -46,6 +46,7 @@ function checkout(): string {
   put(join(src, 'packages/dashboard/dist/index.html'), '<!doctype html><html><head><script type="module" src="/assets/index-a1.js"></script></head><body></body></html>');
   put(join(src, 'packages/dashboard/dist/assets/index-a1.js'), 'console.log(1);\n');
   put(join(src, 'packages/dashboard/dist/favicon.svg'), '<svg xmlns="http://www.w3.org/2000/svg"/>');
+  put(join(src, 'packages/dashboard/dist/assets/fractonica-c3.wasm'), '\0asm\x01\0\0\0');
   put(join(src, 'web/demo/package.json'), JSON.stringify({ name: '@fractonica/web-demo' }));
   put(join(src, 'web/demo/dist/index.html'), '<!doctype html><html lang="en"><head data-x="1"><meta charset="utf-8"><script type="module" crossorigin src="/apps/demo/assets/main-b2.js"></script></head><body></body></html>');
   put(join(src, 'web/demo/dist/assets/main-b2.js'), 'export {};\n');
@@ -73,7 +74,9 @@ describe('the dashboard at /', () => {
     expect(index.statusCode).toBe(200);
     expect(index.headers['content-type']).toMatch(/^text\/html/);
     expect(index.headers['cache-control']).toBe('no-cache');
-    expect(index.headers['content-security-policy']).toMatch(/script-src 'self';/);
+    // WebAssembly compiles (the temporal core); nothing else is evaluated: no 'unsafe-eval', no inline script
+    expect(index.headers['content-security-policy']).toMatch(/script-src 'self' 'wasm-unsafe-eval';/);
+    expect(index.headers['content-security-policy']).not.toMatch(/'unsafe-eval'|script-src[^;]*'unsafe-inline'/);
     expect(index.headers['x-frame-options']).toBe('DENY');
     expect(index.body).toContain('/assets/index-a1.js');
     expect((await app.inject({ url: '/index.html', headers: HOST })).statusCode).toBe(200);
@@ -84,6 +87,11 @@ describe('the dashboard at /', () => {
     expect(js.headers['cache-control']).toBe('public, max-age=31536000, immutable');
     expect(js.headers['content-security-policy']).toBeUndefined();
     expect((await app.inject({ url: '/favicon.svg', headers: HOST })).statusCode).toBe(200);
+    // the core's module: application/wasm, so the browser compiles it streaming
+    const wasm = await app.inject({ url: '/assets/fractonica-c3.wasm', headers: HOST });
+    expect(wasm.statusCode).toBe(200);
+    expect(wasm.headers['content-type']).toBe('application/wasm');
+    expect(wasm.headers['cache-control']).toBe('public, max-age=31536000, immutable');
 
     for (const url of ['/.source-hash', '/missing.js', '/assets/nope.js', '/assets/../../package.json', '/assets', '/api/v1/nothing']) {
       const r = await app.inject({ url, headers: HOST });
