@@ -14,7 +14,7 @@
 //     "retention": { "jobs_days": 30, "jobs_rows": 5000 },   // finished jobs (and their logs) kept
 //     "log": { "max_bytes": 10485760, "keep": 3 },            // hub.log rotation
 //     "mcp": { "autostart": false },                          // fr mcp may start a hub when none runs
-//     "time": { "thresholds": true, "durable_to": "η", "live_to": "ι" }
+//     "time": { "thresholds": true, "durable_to": "η", "live_to": "ι" }   // durable_to at most θ, live_to at most ν
 //                     // time.threshold events: stored for α..durable_to, live only (subscribers, no row) down to live_to;
 //                     // a level is a symbol, word, unit name or depth, which the hub reads with the temporal core
 //   }

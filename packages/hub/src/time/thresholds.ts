@@ -4,7 +4,9 @@
 //
 // Which levels, and where they go (config.json `time`, re-read at each pass):
 // - α down to `durable_to` (default η, the Helion): published and stored, a row each in `events`. About 20 rows a day
-//   (the Helion's four thresholds every Helion, about 5 h; the coarser levels add one every few days).
+//   (the Helion's four thresholds every Helion, about 5 h; the coarser levels add one every few days). `durable_to`
+//   goes down to θ at most (about 190 rows a day; hub.db keeps event rows): a deeper level is logged as a
+//   config_problem and θ used, and the levels below it can still be live only.
 // - below that, down to `live_to` (default ι, the Preon): live only. Subscribers (/ws, /app, a wait already
 //   waiting) get them; no row is written, so they never fill hub.db (θ about 170 a day, ι about 690).
 // - finer levels: not announced. `live_to` goes down to ν (the Blink) at most; time_next lists any level's
@@ -14,8 +16,8 @@
 // Timing: one timer for the earliest pending threshold, never a poll: it fires at that instant (re-armed at most a
 // minute ahead, so a change of the wall clock or of the config is seen within a minute). A threshold is announced
 // once the wall clock has passed it. When the hub was asleep or the clock jumped, thresholds more than a minute
-// old are skipped, not announced late; within that minute each one passed is announced, oldest first, coarse levels
-// first at a shared instant.
+// old are skipped, not announced late; within that minute every one passed, of every level, is announced in time
+// order (oldest first, coarse levels first at a shared instant), so `at` never goes backwards within a pass.
 //
 // Fields: level (0 = α), depth (level + 1), symbol (η), unit (Helion; null for a level between units), quarter (the
 // core's word in lower case: peak, node, valley, end), cycle (the global index of the cycle whose quarter ends, as a
@@ -74,6 +76,8 @@ export interface ThresholdLevels {
 }
 
 const DEFAULTS: ThresholdConfig = { thresholds: true, durable_to: 'η', live_to: 'ι' };
+/** The deepest level stored (θ: about 170 rows a day on top of α..η's 20); deeper ones can be live only. */
+export const DURABLE_DEEPEST = 'θ';
 
 export class TimeThresholds {
   #o: ThresholdOptions;
@@ -159,7 +163,15 @@ export class TimeThresholds {
         return parseLevel(core, fallback);
       }
     };
-    const durable = Math.min(level(cfg.durable_to, DEFAULTS.durable_to, 'durable_to'), blink);
+    const deepestDurable = parseLevel(core, DURABLE_DEEPEST);
+    let durable = level(cfg.durable_to, DEFAULTS.durable_to, 'durable_to');
+    if (durable > deepestDurable) {
+      this.#log({
+        event: 'config_problem',
+        message: `config.json time.durable_to: ${cfg.durable_to} would store every threshold of that level (ι about 690 rows a day, each level below it more); ${DURABLE_DEEPEST} is the deepest stored, so using ${DURABLE_DEEPEST}; set live_to for deeper levels, live only`,
+      });
+      durable = deepestDurable;
+    }
     const live = Math.min(level(cfg.live_to, DEFAULTS.live_to, 'live_to'), blink);
     this.#levels = { durable, live: Math.max(durable, live) };
   }
@@ -215,6 +227,9 @@ export class TimeThresholds {
         this.#pending.delete(level);
       }
     }
+    // Every level's passed thresholds are gathered first, then announced in time order (coarse levels first at a
+    // shared instant): after a catch-up a subscriber never sees `at` go backwards.
+    const due: { level: number; p: Pending }[] = [];
     for (let level = 0; level <= deepest; level++) {
       let p = this.#pending.has(level) ? this.#pending.get(level)! : this.#after(level, now);
       let burst = 0;
@@ -229,7 +244,7 @@ export class TimeThresholds {
           p = this.#after(level, now);
           break;
         }
-        this.#announce(level, p);
+        due.push({ level, p });
         p = this.#after(level, p.time);
       }
       if (p) {
@@ -237,6 +252,10 @@ export class TimeThresholds {
       } else {
         this.#pending.delete(level);
       }
+    }
+    due.sort((a, b) => (a.p.time < b.p.time ? -1 : a.p.time > b.p.time ? 1 : a.level - b.level));
+    for (const { level, p } of due) {
+      this.#announce(level, p);
     }
     const next = this.nextAt();
     const waitMs = next === null ? THRESHOLD_MAX_WAIT_MS : Math.min(THRESHOLD_MAX_WAIT_MS, Math.max(1, Number((next - now + 999n) / 1000n)));

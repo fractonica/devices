@@ -43,6 +43,7 @@ function rig(config: () => ThresholdConfig = () => DEFAULT, start = A) {
   let timer: { fn: () => void; at: bigint } | null = null;
   const published: { e: Omit<HubEvent, 'cursor' | 'seq'>; durable: boolean }[] = [];
   const delays: number[] = [];
+  const logs: Record<string, unknown>[] = [];
   const t = new TimeThresholds({
     events: {
       publish: (e, opts) => {
@@ -65,13 +66,14 @@ function rig(config: () => ThresholdConfig = () => DEFAULT, start = A) {
         }
       },
     },
-    log: () => undefined,
+    log: (line) => logs.push(line),
   });
   cleanups.push(() => t.stop());
   return {
     t,
     published,
     delays,
+    logs,
     /** Moves the clock to `to`, firing the timer each time it is due on the way. */
     advanceTo(to: bigint) {
       while (timer && timer.at <= to) {
@@ -155,6 +157,47 @@ describe('time.threshold', () => {
     cfg = { thresholds: true, durable_to: 'nope', live_to: 'χ' };
     // a bad name: its default; live_to stops at ν
     expect(r.t.levels()).toEqual({ durable: 6, live: 12 });
+  });
+
+  it('stores θ at the deepest: a deeper durable_to is a config_problem, and θ is used', async () => {
+    let cfg: ThresholdConfig = { thresholds: true, durable_to: 'θ', live_to: 'ι' };
+    const r = rig(() => cfg);
+    await r.t.start();
+    expect(r.t.levels()).toEqual({ durable: 7, live: 8 });
+    expect(r.logs).toEqual([]);
+    for (const deep of ['ι', 'ν', 'Blink', '13']) {
+      cfg = { thresholds: true, durable_to: deep, live_to: 'ι' };
+      r.logs.length = 0;
+      expect(r.t.levels(), deep).toEqual({ durable: 7, live: 8 });
+      expect(r.logs, deep).toEqual([expect.objectContaining({ event: 'config_problem', message: expect.stringContaining('using θ') })]);
+    }
+    // live only below it still goes deeper
+    cfg = { thresholds: true, durable_to: 'ν', live_to: 'λ' };
+    expect(r.t.levels()).toEqual({ durable: 7, live: 10 });
+    // past θ's next threshold: θ is stored, κ and λ are live only
+    r.advanceTo(core.cat.nextThreshold(A, 7).time! + 2_000_000n);
+    expect(r.published.some((p) => fields(p).symbol === 'θ' && p.durable)).toBe(true);
+    expect(r.published.some((p) => fields(p).symbol === 'λ' && !p.durable)).toBe(true);
+    expect(r.published.every((p) => p.durable === (fields(p).level as number) <= 7)).toBe(true);
+  });
+
+  it('announces a catch-up of several levels in time order, never going back', async () => {
+    const r = rig(() => ({ thresholds: true, durable_to: 'η', live_to: 'λ' }));
+    await r.t.start();
+    // 50 s pass in one tick (within the minute's grace): κ and λ thresholds interleave
+    r.jumpTo(A + 50_000_000n);
+    const order = r.published.map((p) => [BigInt(fields(p).at as string), fields(p).level as number] as const);
+    expect(new Set(order.map(([, level]) => level)).size).toBeGreaterThan(1);
+    for (let i = 1; i < order.length; i++) {
+      const [at, level] = order[i];
+      const [atBefore, levelBefore] = order[i - 1];
+      expect(at > atBefore || (at === atBefore && level > levelBefore), `event ${i}`).toBe(true);
+    }
+    // the same thresholds as one tick per instant would give
+    const r2 = rig(() => ({ thresholds: true, durable_to: 'η', live_to: 'λ' }));
+    await r2.t.start();
+    r2.advanceTo(A + 50_000_000n);
+    expect(r2.published.map((p) => [fields(p).at, fields(p).level])).toEqual(order.map(([at, level]) => [String(at), level]));
   });
 
   it('reaches a waiting `fr wait event time.threshold`, durable or live only', async () => {

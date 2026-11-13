@@ -317,7 +317,7 @@ export const StreamEndedFields = z.looseObject({
 
 /**
  * time.threshold: a quarter boundary of a Fractonica level passed, as the temporal core places it. Stored for α down
- * to config.json time.durable_to (default η), live only below it down to time.live_to (default ι). quarter is the
+ * to config.json time.durable_to (default η, at most θ), live only below it down to time.live_to (default ι, at most ν). quarter is the
  * core's word in lower case; cycle and at are decimal strings (cycle indices and Unix µs can pass 2^53).
  */
 export const TimeThresholdFields = z.looseObject({
