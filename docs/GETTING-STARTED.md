@@ -16,7 +16,7 @@ slower or needs more than it should, this guide says so.
 | What | Why | How |
 |---|---|---|
 | macOS with Xcode command-line tools | git, a compiler for native modules | `xcode-select --install` |
-| Node 24.12 or later | the hub and `fr` | `brew install node@24` (or any manager; `.node-version` says 24.12) |
+| Node 24.12 or later | the hub and `fr` | `brew install node@24` (or any manager; `.node-version` names major version 24) |
 | pnpm 11 | the workspace | `brew install pnpm` (or `corepack enable`) |
 | uv | Python 3.12 for the esptool sidecar that flashes boards | `brew install uv`, then `uv python install 3.12` |
 | ESP-IDF v6.1 at the pinned commit | **only to build firmware** | see [Building firmware](#5-building-firmware) |
@@ -90,15 +90,21 @@ A port the hub watches is opened with an exclusive lock, so `idf.py flash` or es
 exclusively lock port". Lend it instead of stopping the hub:
 
 ```sh
-fr serial lease pad-c6 -- idf.py -p "$FR_PORT" flash monitor    # lent while the command runs, given back when it exits
+fr serial idf pad-c6 flash monitor                              # idf.py -p <port> flash monitor, in this directory, while lent
+fr serial lease pad-c6 -- esptool --port '$FR_PORT' chip-id     # any command; '$FR_PORT' in single quotes, so fr fills it in
 fr ports lend /dev/cu.usbmodem1101 --ttl 600                    # or lend it for 10 minutes to start something by hand
 ```
+
+The port is given back when the command exits. `fr serial idf` runs the `idf.py` on your `PATH` (source your
+project's ESP-IDF `export.sh` first) and passes its arguments on; put `--` before options (`fr serial idf pad-c6 --
+-C ../my-app flash`). In `fr serial lease`, write `'$FR_PORT'` in single quotes: in double quotes your shell replaces
+it with nothing before `fr` runs. `fr flash <board>` (framework firmware) leases the port by itself.
 
 Other port commands, also on the dashboard's Ports page and as MCP tools:
 
 | Command | What it does |
 |---|---|
-| `fr ports ignore <port>` | the hub never opens it, also after a re-plug. `<port>` is a path, a MAC or USB serial (follows the board), or `VID:PID` (`1a86:7523`: every port of that adapter). `--remove` undoes it |
+| `fr ports ignore <port>` | the hub never opens it, also after a re-plug. `<port>` is a registered board's name (plugged in or not: it follows the board), a path, a MAC or USB serial, or `VID:PID` (`1a86:7523`: every port of that adapter). Anything else is refused. `--remove` undoes it |
 | `fr ports claim <port>` | the hub opens a port it left alone, so an unknown board running the node firmware says HELLO and is registered. `--remove` undoes it |
 | `fr ports lend <port> [--ttl s]` | as above |
 
@@ -175,9 +181,10 @@ passwords never go through MCP. See [plugin/README.md](../plugin/README.md).
 | `fr: command not found` | `pnpm fr doctor --fix` in the checkout, then put `~/.local/bin` on `PATH` |
 | `fr hub status` warns that macOS denies the hub Local Network access, or boards stay `offline` over Wi-Fi | System Settings → Privacy & Security → Local Network: allow the app that started the hub (Terminal), then `fr hub restart` from Terminal |
 | doctor's `firewall` check fails | System Settings → Network → Firewall → Options: turn off "Block all incoming connections", or allow the Node the hub runs on |
-| `idf.py` or esptool: "Could not exclusively lock port" | the hub watches that port: `fr serial lease <board> -- idf.py -p "$FR_PORT" …`, `fr ports lend <port>`, or `fr ports ignore <port>` |
+| `idf.py` or esptool: "Could not exclusively lock port" | the hub watches that port: `fr serial idf <board> flash monitor`, `fr serial lease <board> -- <cmd> '$FR_PORT' …`, `fr ports lend <port>`, or `fr ports ignore <port>` |
 | `PORT_BUSY_EXTERNAL`: a port "is held by …" | another program has it open (a Chrome Web Serial tab, `screen`, a serial monitor): close it, or click Disconnect in the page, then retry. `fr ports` names the program |
 | A board you plugged in is `not opened` | expected for a board the hub does not know: provision it, or `fr ports claim <port>` if it already runs the node firmware |
+| `fr ports` says `not opened (config.json has no valid ports settings)` | `~/.fractonica/config.json` has had a problem since the hub started (`fr hub status` names it), so the hub opens no port: fix the file and it applies within about 2 s. A file broken while the hub runs keeps the settings read before it |
 | `HUB_VERSION_MISMATCH` after a `git pull` | `fr hub restart` (with `--force` if a job is stuck), and reconnect the MCP server in Claude Code (`/mcp`) |
 | `hub.db` is large | it is pruned by itself; `fr hub status` says when `fr hub stop && fr hub compact && fr hub start` would give space back |
 | A crash | `~/.fractonica/hub.log` (and `hub.log.1`…) has an `uncaught_exception` line with the stack; `fr hub start` starts it again |

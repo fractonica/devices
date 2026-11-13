@@ -3,15 +3,17 @@
 // that reports what it was given.
 
 import { spawn } from 'node:child_process';
+import { chmodSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { createServer, type Server } from 'node:http';
 import type { AddressInfo } from 'node:net';
-import { dirname, resolve } from 'node:path';
+import { tmpdir } from 'node:os';
+import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 
 import { REGISTRY_HASH } from '../../protocol/src/registry-hash.ts';
-import { exitStatus, substituteVars } from '../src/serial.ts';
+import { exitStatus, idfCommand, substituteVars } from '../src/serial.ts';
 
 const MAIN = resolve(dirname(fileURLToPath(import.meta.url)), '..', 'src', 'main.ts');
 const LEASE = { lease_id: 'l_0123456789ab', device_id: '1cdbd4000134', alias: 'pad-c3b', port: '1cdbd4000134', path: '/dev/cu.usbmodem2101', ttl_s: 1, expires_at: '2026-10-22T12:00:00.000Z' };
@@ -54,10 +56,10 @@ describe('fr serial (subprocess)', { timeout: 30_000 }, () => {
     replies = new Map([['serial_lease', [ok(LEASE)]], ['serial_release', [ok({ lease_id: LEASE.lease_id, port: LEASE.port, released: true })]]]);
   });
 
-  function fr(args: string[], opts: { onStdout?: (text: string, child: ReturnType<typeof spawn>) => void } = {}) {
+  function fr(args: string[], opts: { onStdout?: (text: string, child: ReturnType<typeof spawn>) => void; env?: NodeJS.ProcessEnv } = {}) {
     return new Promise<{ code: number | null; stdout: string; stderr: string; pid: number }>((res) => {
       const child = spawn(process.execPath, ['--conditions=@fractonica/source', MAIN, ...args], {
-        env: { ...process.env, FR_HUB: hubUrl },
+        env: { ...process.env, FR_HUB: hubUrl, ...opts.env },
         stdio: ['pipe', 'pipe', 'pipe'],
       });
       let stdout = '';
@@ -172,7 +174,26 @@ describe('fr serial (subprocess)', { timeout: 30_000 }, () => {
     const r = await fr(['serial', 'monitor', 'pad-new']);
     expect(r.stderr).toContain('the hub does not read /dev/cu.usbmodem1201 (unwatched)');
     expect(r.stderr).toContain('fr ports claim /dev/cu.usbmodem1201');
-    expect(r.stderr).toContain("fr serial lease /dev/cu.usbmodem1201 -- idf.py -p '$FR_PORT' monitor");
+    expect(r.stderr).toContain('fr serial idf /dev/cu.usbmodem1201 monitor');
+  });
+
+  it('idf runs idf.py -p <leased port> with its arguments (flash monitor by default) and releases after it', async () => {
+    // A stand-in idf.py on PATH that prints what it was given.
+    const bin = mkdtempSync(join(tmpdir(), 'fr-idf-test-'));
+    try {
+      writeFileSync(join(bin, 'idf.py'), `#!/bin/sh\necho "idf.py $*"\nexit 4\n`);
+      chmodSync(join(bin, 'idf.py'), 0o755);
+      const env = { PATH: `${bin}:${process.env.PATH ?? ''}` };
+      const r = await fr(['serial', 'idf', 'pad-c3b'], { env });
+      expect(r.stdout).toContain('idf.py -p /dev/cu.usbmodem2101 flash monitor');
+      expect(r.code).toBe(4);
+      expect(ops()).toEqual(['serial_lease', 'serial_release']);
+      expect(requests[0].body).toMatchObject({ device: 'pad-c3b' });
+      const opts = await fr(['serial', 'idf', 'pad-c3b', '--', '-C', 'app', 'monitor'], { env });
+      expect(opts.stdout).toContain('idf.py -p /dev/cu.usbmodem2101 -C app monitor');
+    } finally {
+      rmSync(bin, { recursive: true, force: true });
+    }
   });
 
   it('wait event --prompt-human says on stderr what the person is asked', async () => {
@@ -183,6 +204,13 @@ describe('fr serial (subprocess)', { timeout: 30_000 }, () => {
     expect(r.stderr).toContain('up to 60 s');
     expect(requests.at(-1)).toEqual({ op: 'wait_for_event', body: { types: 'boot.down', since: 'c:1.1', timeout_s: 60, prompt_human: 'Press BOOT on pad-c6' } });
     expect((await fr(['wait', 'event', 'boot.down', '--since', 'c:1.1', '--json'])).stderr).not.toContain('asking');
+  });
+});
+
+describe('idfCommand', () => {
+  it('is idf.py on the leased port, flash monitor unless given arguments', () => {
+    expect(idfCommand([])).toEqual(['idf.py', '-p', '$FR_PORT', 'flash', 'monitor']);
+    expect(idfCommand(['monitor'])).toEqual(['idf.py', '-p', '$FR_PORT', 'monitor']);
   });
 });
 

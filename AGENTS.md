@@ -17,7 +17,8 @@ read [plugin/AGENTS.md](plugin/AGENTS.md).
    holds the ports of the boards in its registry with an exclusive lock (config.json `ports.mode` `adopted`; `all`
    takes every ESP32 and USB-UART port), so `idf.py flash` on such a port fails while it runs, and starting a hub can
    take a board from the owner. Tests start private hubs on random ports with their own `FR_HOME` and fake or virtual
-   ports; keep it that way. To lend a port: `fr serial lease <dev> -- <cmd>`; `fr ports` shows who holds what.
+   ports; keep it that way. To lend a port: `fr serial lease <dev> -- <cmd> '$FR_PORT'` (single quotes) or
+   `fr serial idf <dev> flash monitor`; `fr ports` shows who holds what.
 2. **The schema is the source of truth.** Change `schema/` (or `hardware/`, `firmware/profiles/`), then run
    `pnpm fr gen`; never edit the generated directories by hand (`packages/protocol/src/gen`, `packages/sdk/src/gen`,
    `schema/vectors`, `firmware/components/fr_proto/gen`, `firmware/components/fr_caps/gen`,

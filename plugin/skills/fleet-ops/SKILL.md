@@ -40,7 +40,7 @@ The Fractonica hub (127.0.0.1:7420) owns every ESP32 node: the registry, the USB
 
 - Rename or tag: `device_update {device, alias?, tag?}` (`tag: "+poc,-old"`). The new alias reaches the node now if online, else at its next HELLO.
 - Wi-Fi network: never put a Wi-Fi password in a tool call or the chat. Ask the user to run `fr net set --ssid <ssid> --password-stdin` in Terminal.
-- Serial ports: never open `/dev/cu.*` yourself, and never run `idf.py mcp-server`. The hub holds the ports of the boards it knows (`fr ports` says which); on such a port `idf.py flash` or `idf.py monitor` fails with "Could not exclusively lock port". To hand a port to another program use `fr serial lease <dev> -- <cmd…>` in Bash: it runs the command with `FR_PORT` set and gives the port back when the command exits.
+- Serial ports: never open `/dev/cu.*` yourself, and never run `idf.py mcp-server`. The hub holds the ports of the boards it knows (`fr ports` says which); on such a port `idf.py flash` or `idf.py monitor` fails with "Could not exclusively lock port". To hand a port to another program use `fr serial lease <dev> -- <cmd…>` in Bash: it runs the command with `FR_PORT` set (and replaces a literal `'$FR_PORT'` argument: single quotes, never double) and gives the port back when the command exits. `fr serial idf <dev> flash monitor` does that for idf.py.
 
 ## Recovery by error code
 

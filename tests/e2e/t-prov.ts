@@ -10,7 +10,7 @@
 //
 // Phases, per board:
 //   provision: with --allow-erase the whole flash is erased first, through a serial lease: `fr serial lease
-//      <dev> --ttl 300 -- <pytools python> -m esptool --port $FR_PORT erase-flash` (the hub's pytools venv,
+//      <dev> --ttl 300 -- <pytools python> -m esptool --port '$FR_PORT' erase-flash` (the hub's pytools venv,
 //      FR_HOME/pytools/bin/python, or --python). Then device_provision {port, alias: the same}. Pass: wifi
 //      joined within 60 s of the call (C4: 12.3 s C3 #1, 14.6 s C6); the registry identity reused (device id,
 //      addr, alias); epoch_floor above the board's last epoch (C4: 28) and the new boot's epoch after it; the

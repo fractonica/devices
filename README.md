@@ -45,13 +45,16 @@ spike notes and personal data were left out; they stay in the archived `fractoni
 Checked at the merge, on the owner's Mac:
 
 - typecheck (root, dashboard, web/bench): clean. vitest, one package at a time: 2,432 of 2,432 passed in the seven
-  packages, and web/bench's 8. That is with the virtual-fleet binary built (`node tools/host-test.mjs --fleet`;
-  without it 20 fleet tests skip) and a local `hardware/bench/lab.bench.yaml` (not committed; copy
-  `bench.example.yaml`; without it the HIL interop suite and the T-HIL dry run skip 10 more). Timing-sensitive cases
-  can fail under heavy machine load and pass when re-run alone. On a fresh checkout the first CLI run fetches LVGL and
-  builds the desktop renderer (about a minute here). `fr gen --check`: 195 files, 0 stale. Host C++ suite (ASan +
-  UBSan): 975 tests, of which `sim_node_strand_runs_its_jobs_in_post_order_one_at_a_time` is a known timing race that
-  passes alone.
+  packages, and web/bench's 8. Timing-sensitive cases can fail under heavy machine load and pass when re-run alone.
+  On a fresh checkout the first CLI run fetches LVGL and builds the desktop renderer (about a minute here).
+  `fr gen --check`: 195 files, 0 stale. Host C++ suite (ASan + UBSan): 975 tests, all passing since stage 2 fixed a
+  race in `sim_node_strand_runs_its_jobs_in_post_order_one_at_a_time` (it then passed 20 runs in a row).
+- The hub's full count needs three things a fresh checkout does not have, or tests skip (everything else runs):
+  `build/host-tests/fr_net_node` (built by `node tools/host-test.mjs`) for the interop suites;
+  `build/host-fleet/fr_fleet` (built only by `node tools/host-test.mjs --fleet`; the plain run's
+  `build/host-tests/fr_fleet` is not the one used) for `fleet-hub.test.ts` and `fleet-gateway.test.ts`, 20 tests;
+  and a local `hardware/bench/lab.bench.yaml` (git-ignored; copy `bench.example.yaml`) for the HIL interop suite and
+  the T-HIL dry run, 10 tests. A fresh clone without any of them ran 1,409 hub tests and skipped 105.
 - ESP-IDF 6.1 build of profile `c6w-scale` (debug): 1,744,992 bytes, 0 compiler warnings, 11 % of its slot free.
 - The clock: `cd clock/sim && make test` passes (140 golden images, 943 firmware-loop checks); the ESP-IDF 5.5.1
   build for the ESP32-C6 + GC9A01 is 273,344 bytes, 0 warnings.
@@ -59,7 +62,9 @@ Checked at the merge, on the owner's Mac:
   to `idf.py`, esptool or a browser (`fr ports`, with lend, ignore and claim); it logs crashes and survives a failing
   timer loop; it prunes finished jobs, keeps per-frame camera telemetry out of `hub.db`, rotates `hub.log` and
   compacts on request (`fr hub compact`); `fr mcp` starts no hub unless asked and marks destructive tools; `fr` runs
-  from any directory through `packages/cli/bin/fr.mjs`. Setup is in [docs/GETTING-STARTED.md](docs/GETTING-STARTED.md).
+  from any directory through `packages/cli/bin/fr.mjs`; `fr serial idf <board>` runs `idf.py flash monitor` on a lent
+  port. A broken hand edit of `config.json` keeps the settings read before it. Setup is in
+  [docs/GETTING-STARTED.md](docs/GETTING-STARTED.md).
 - Not done yet (stages 3 to 6 of the plan): the dashboard redesign, the temporal core in the CLI and hub, the clock
   on the framework, a setup command with prebuilt firmware images (a first board still needs ESP-IDF 6.1 and a
   build), CI.

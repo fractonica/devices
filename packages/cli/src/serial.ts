@@ -6,7 +6,9 @@
 // (single-quoted, so the shell left them alone): `fr serial lease pad-c6 -- idf.py -p '$FR_PORT' monitor`.
 // Should this process die, the hub's sweeper releases the lease within 2 s (holder_gone). Without a
 // command it is a TTL-only lease, for `fr serial renew` and `fr serial release`, which stay generated
-// from their ops. `fr serial monitor` is `fr logs <dev> --follow`. Also here: the `--prompt-human`
+// from their ops. `fr serial idf <dev> [args…]` is that lease around `idf.py -p <port> <args…>` (default
+// `flash monitor`), for an ESP-IDF project of one's own: the idf.py on PATH runs, in the current directory.
+// `fr serial monitor` is `fr logs <dev> --follow`. Also here: the `--prompt-human`
 // notice of `fr wait event` (design c6 D3).
 
 import { spawn } from 'node:child_process';
@@ -49,6 +51,11 @@ async function checkHub(kit: CliKit, op: string): Promise<void> {
 /** `$FR_PORT`, `${FR_PORT}` (and FR_LEASE, FR_DEVICE) written literally in an argument, replaced. */
 export function substituteVars(args: string[], vars: Record<string, string>): string[] {
   return args.map((a) => a.replace(/\$\{?(FR_PORT|FR_LEASE|FR_DEVICE)\}?/g, (m, name: string) => vars[name] ?? m));
+}
+
+/** `fr serial idf`'s command: idf.py on the leased port (substituted by leaseAndRun), `flash monitor` by default. */
+export function idfCommand(args: string[]): string[] {
+  return ['idf.py', '-p', '$FR_PORT', ...(args.length ? args : ['flash', 'monitor'])];
 }
 
 /** The exit status of a command that ended with `code` or by `signal`, as a shell reports it. */
@@ -146,7 +153,7 @@ async function monitor(kit: CliKit, device: string): Promise<never> {
     : undefined;
   if (port && (port.state === 'unwatched' || port.state === 'ignored')) {
     process.stderr.write(
-      `fr: the hub does not read ${port.path} (${port.state}); nothing new is logged until \`fr ports claim ${port.path}\`, or run a monitor of your own: fr serial lease ${port.path} -- idf.py -p '$FR_PORT' monitor\n`,
+      `fr: the hub does not read ${port.path} (${port.state}); nothing new is logged until \`fr ports claim ${port.path}\`, or run a monitor of your own: fr serial idf ${port.path} monitor\n`,
     );
   }
   const print = (res: Result) => {
@@ -194,6 +201,18 @@ export function addSerialCommands(serial: Command, kit: CliKit): void {
     .action(async (device: string, cmd: string[], opts: { ttl?: number }) => {
       const input = { device, ...(opts.ttl !== undefined ? { ttl_s: opts.ttl } : {}) };
       return cmd.length ? leaseAndRun(kit, input, cmd) : kit.run('serial_lease', input);
+    });
+  serial
+    .command('idf')
+    .description(
+      "Run idf.py on a device's port while the hub lends it: idf.py -p <port> <args…> (default: flash monitor), from the current directory, with the idf.py on PATH. The lease is renewed while it runs and released when it exits",
+    )
+    .argument('<device>', 'the device or port: alias, id:<12hex>, MAC, USB serial or /dev path')
+    .argument('[args...]', 'idf.py arguments (default: flash monitor); put -- before options such as -C <dir>')
+    .option('--ttl <s>', 'seconds until the lease ends unless renewed (default 120, max 1800)', parseTtl)
+    .action(async (device: string, args: string[], opts: { ttl?: number }) => {
+      const input = { device, ...(opts.ttl !== undefined ? { ttl_s: opts.ttl } : {}) };
+      return leaseAndRun(kit, input, idfCommand(args));
     });
   serial
     .command('monitor')

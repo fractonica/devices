@@ -410,7 +410,7 @@ export interface EraseResult {
 
 /**
  * Erases the whole flash of `device` (an alias, id:, or the USB serial of a board the registry does not
- * know) under a serial lease: `fr serial lease <device> --ttl 300 -- <python> -m esptool --port $FR_PORT
+ * know) under a serial lease: `fr serial lease <device> --ttl 300 -- <python> -m esptool --port '$FR_PORT'
  * erase-flash`. The CLI names itself the lease holder, renews it while esptool runs and releases it when
  * esptool exits (the hub reopens the port). A cancelled run sends SIGTERM, which the CLI passes on to
  * esptool before it releases the lease.

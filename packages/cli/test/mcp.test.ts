@@ -175,7 +175,14 @@ describe('tools (09 §9.6)', () => {
     const deps: McpDeps = { call: async (op) => (calls.push(op), { ok: true, cursor: '', data: {} }), health: async () => healthy, log: () => undefined };
     const r = await callTool('network_set', { ssid: 'lab', password: 'hunter2' }, {}, new HubGate(deps), deps);
     expect(r.isError).toBe(true);
-    expect(r.structuredContent).toMatchObject({ ok: false, error: { code: 'INVALID_ARGS', remediation: [{ cli: 'fr net set --password-stdin' }] } });
+    // The command to give the person carries the call's other arguments, the required --ssid included.
+    expect(r.structuredContent).toMatchObject({ ok: false, error: { code: 'INVALID_ARGS', remediation: [{ cli: 'fr net set --ssid lab --password-stdin' }] } });
+    const named = await callTool('network_set', { name: '5ghz', ssid: "lab's 5G", band: '5g', password: 'x' }, {}, new HubGate(deps), deps);
+    expect((named.structuredContent as { error: { remediation: { cli: string }[] } }).error.remediation[0].cli).toBe(
+      "fr net set --name 5ghz --ssid 'lab'\\''s 5G' --band 5g --password-stdin",
+    );
+    const bare = await callTool('network_set', { password: 'x' }, {}, new HubGate(deps), deps);
+    expect((bare.structuredContent as { error: { remediation: { cli: string }[] } }).error.remediation[0].cli).toBe('fr net set --ssid <ssid> --password-stdin');
     expect(JSON.stringify(r)).not.toContain('hunter2');
     expect(calls).toEqual([]);
     expect((await callTool('network_set', { ssid: 'lab' }, {}, new HubGate(deps), deps)).isError).toBe(false);

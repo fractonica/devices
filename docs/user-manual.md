@@ -1,6 +1,6 @@
 # Fractonica user manual
 
-Fractonica runs a network of ESP32 boards from your Mac. A **hub** on the Mac owns every board: it builds and flashes firmware, updates boards over Wi-Fi, collects their logs and events, and lets you, your apps and AI agents drive them. Each board runs the same **node firmware**, assembled from a **profile** that lists its **capabilities** (a button, an LED, a display, a microphone, a camera, …).
+Fractonica runs a network of ESP32 boards from your Mac. A **hub** on the Mac runs the boards you register with it: it builds and flashes firmware, updates boards over Wi-Fi, collects their logs and events, and lets you, your apps and AI agents drive them. Each board runs the same **node firmware**, assembled from a **profile** that lists its **capabilities** (a button, an LED, a display, a microphone, a camera, …).
 
 This manual is task-first: every section is a set of steps you can follow at the bench, with what you should see. The design notes in [`design/`](design/) and the spec in [`spec/`](spec/README.md) have the full detail.
 
@@ -75,8 +75,9 @@ first board and troubleshooting.
 7. **Know which ports the hub takes.** It opens only the USB ports of boards it knows (registered ones); the others
    stay free for `idf.py`, esptool or a browser. `fr ports` shows each port as watched by the hub, lent, held by
    another program, ignored, or not opened. To use a watched port from another program, lend it:
-   `fr serial lease <board> -- idf.py -p "$FR_PORT" flash monitor`. `fr ports ignore <port>` keeps the hub off a port
-   for good; `fr ports claim <port>` lets it read a board it does not know yet.
+   `fr serial idf <board> flash monitor` runs `idf.py -p <port> flash monitor` while the port is lent, and
+   `fr serial lease <board> -- <command> '$FR_PORT'` does the same for any command (single quotes, so `fr` fills the
+   port in, not your shell). `fr ports ignore <port>` keeps the hub off a port for good; `fr ports claim <port>` lets it read a board it does not know yet.
 
 ---
 
@@ -732,7 +733,7 @@ Every `fr` command is also an MCP tool, served by `fr mcp`.
 | You see | Do this |
 |---|---|
 | `fr` says no hub is running | `fr hub start` from Terminal. |
-| `idf.py` or esptool: "Could not exclusively lock port" | The hub watches that port: `fr serial lease <board> -- idf.py -p "$FR_PORT" flash monitor`, or `fr ports lend <port>`, or `fr ports ignore <port>`. |
+| `idf.py` or esptool: "Could not exclusively lock port" | The hub watches that port: `fr serial idf <board> flash monitor`, or `fr serial lease <board> -- <command> '$FR_PORT'`, or `fr ports lend <port>`, or `fr ports ignore <port>`. |
 | A board you plugged in shows `not opened` in `fr ports` | The hub does not know it yet: provision it (section 13), or `fr ports claim <port>` if it already runs the node firmware. |
 | A board is `offline` | Check its power and `fr logs <board>`; reset it with `fr devices reset <board>` if it is on USB. |
 | `HUB_VERSION_MISMATCH` after pulling code | `fr hub restart` (`--force` if it refuses), then reconnect the MCP server in Claude Code (`/mcp`). |
