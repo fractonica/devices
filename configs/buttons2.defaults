@@ -1,0 +1,2 @@
+# Two buttons: A = NEXT (hold = PREV), B = SELECT (hold = LONG).
+CONFIG_FRACTONICA_INPUT_BUTTONS_2=y

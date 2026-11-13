@@ -1,0 +1,443 @@
+# Every hardware choice of the Fractonica clock. `idf.py menuconfig` -> "Fractonica clock".
+#
+# The owner named no hardware, so every default here is an ASSUMPTION: the
+# common development kit of each chip, wired as README.md, "Wiring" shows.
+# A different board is a file of overrides (see configs/ and AGENTS.md,
+# "Add a board"); nothing in the C code holds a pin number.
+#
+# Naming: CONFIG_FRACTONICA_*. components/fractonica_hal/include/fhal_board.h
+# is the one place that turns these into the constants the drivers use.
+
+menu "Fractonica clock"
+
+    # ----------------------------------------------------------------- display
+    choice FRACTONICA_DISPLAY
+        prompt "Display"
+        default FRACTONICA_DISPLAY_GC9A01
+        help
+            One display is built in. The face (what is drawn where) follows
+            from it: the round face on the GC9A01, the rectangular faces on
+            the ST7789, the one-bit face on the SSD1306.
+
+        config FRACTONICA_DISPLAY_GC9A01
+            bool "GC9A01 240 x 240 round colour (SPI)"
+        config FRACTONICA_DISPLAY_ST7789_240X240
+            bool "ST7789 240 x 240 colour (SPI)"
+        config FRACTONICA_DISPLAY_ST7789_240X320
+            bool "ST7789 240 x 320 colour (SPI)"
+        config FRACTONICA_DISPLAY_SSD1306
+            bool "SSD1306 128 x 64 one-bit (I2C)"
+    endchoice
+
+    config FRACTONICA_DISPLAY_SPI
+        bool
+        default y if FRACTONICA_DISPLAY_GC9A01 || FRACTONICA_DISPLAY_ST7789_240X240 || FRACTONICA_DISPLAY_ST7789_240X320
+
+    choice FRACTONICA_DISPLAY_ROTATION
+        prompt "Display rotation"
+        default FRACTONICA_DISPLAY_ROTATION_0
+        help
+            Clockwise rotation of the picture on the glass. The 240 x 320
+            panel and the SSD1306 take 0 or 180 only (the faces are upright).
+
+        config FRACTONICA_DISPLAY_ROTATION_0
+            bool "0"
+        config FRACTONICA_DISPLAY_ROTATION_90
+            bool "90"
+            depends on FRACTONICA_DISPLAY_GC9A01 || FRACTONICA_DISPLAY_ST7789_240X240
+        config FRACTONICA_DISPLAY_ROTATION_180
+            bool "180"
+        config FRACTONICA_DISPLAY_ROTATION_270
+            bool "270"
+            depends on FRACTONICA_DISPLAY_GC9A01 || FRACTONICA_DISPLAY_ST7789_240X240
+    endchoice
+
+    config FRACTONICA_DISPLAY_ROTATION
+        int
+        default 1 if FRACTONICA_DISPLAY_ROTATION_90
+        default 2 if FRACTONICA_DISPLAY_ROTATION_180
+        default 3 if FRACTONICA_DISPLAY_ROTATION_270
+        default 0
+
+    config FRACTONICA_DISPLAY_MIRROR_X
+        bool "Mirror the picture left to right"
+        default y if FRACTONICA_DISPLAY_GC9A01
+        default y if FRACTONICA_DISPLAY_SSD1306
+        default n
+        help
+            Applied on top of the rotation. The usual GC9A01 round modules
+            scan right to left and want this on; the usual SSD1306 modules
+            want both mirrors on. If text reads mirrored, toggle it.
+
+    config FRACTONICA_DISPLAY_MIRROR_Y
+        bool "Mirror the picture top to bottom"
+        default y if FRACTONICA_DISPLAY_SSD1306
+        default n
+
+    menu "SPI display wiring"
+        depends on FRACTONICA_DISPLAY_SPI
+
+        config FRACTONICA_SPI_HOST
+            int "SPI host (2 = SPI2_HOST, 3 = SPI3_HOST)"
+            range 2 2 if IDF_TARGET_ESP32C3
+            range 2 3
+            default 3 if IDF_TARGET_ESP32
+            default 2
+            help
+                ESP32: 3 is VSPI (the default pins below), 2 is HSPI.
+                ESP32-S3: 2 is FSPI. ESP32-C3 has SPI2 only.
+
+        config FRACTONICA_PIN_SCLK
+            int "SCLK (SCL on the module) GPIO"
+            default 18 if IDF_TARGET_ESP32
+            default 12 if IDF_TARGET_ESP32S3
+            default 6
+        config FRACTONICA_PIN_MOSI
+            int "MOSI (SDA on the module) GPIO"
+            default 23 if IDF_TARGET_ESP32
+            default 11 if IDF_TARGET_ESP32S3
+            default 7
+        config FRACTONICA_PIN_CS
+            int "CS GPIO (-1: tied to ground on the module)"
+            default 5 if IDF_TARGET_ESP32
+            default 10
+        config FRACTONICA_PIN_DC
+            int "DC GPIO"
+            default 16 if IDF_TARGET_ESP32
+            default 13 if IDF_TARGET_ESP32S3
+            default 3
+        config FRACTONICA_PIN_RST
+            int "RST GPIO (-1: not wired, a software reset is sent)"
+            default 17 if IDF_TARGET_ESP32
+            default 14 if IDF_TARGET_ESP32S3
+            default 4
+        config FRACTONICA_PIN_BL
+            int "Backlight GPIO (-1: always on)"
+            default 4 if IDF_TARGET_ESP32
+            default 21 if IDF_TARGET_ESP32S3
+            default 5
+        config FRACTONICA_BL_ACTIVE_HIGH
+            bool "Backlight is on when the pin is high"
+            default y
+        config FRACTONICA_BL_PWM
+            bool "Dim the backlight with PWM (LEDC)"
+            default y
+            depends on !FRACTONICA_LIGHT_SLEEP
+            help
+                Off: the pin is a plain on / off output (brightness 0 = off,
+                anything else = on). PWM stops in light sleep, so the light
+                sleep option turns this off.
+        config FRACTONICA_SPI_HZ
+            int "SPI clock, Hz"
+            default 40000000
+            help
+                40 MHz suits a module on short wires. Lower it (20000000) on
+                a breadboard if the picture shows noise.
+        config FRACTONICA_DISPLAY_INVERT
+            bool "Invert colours (IPS panels)"
+            default y
+            help
+                The round GC9A01 modules and the IPS ST7789 modules need the
+                inversion command to show black as black.
+        config FRACTONICA_DISPLAY_BGR
+            bool "Panel is wired blue-green-red"
+            default y if FRACTONICA_DISPLAY_GC9A01
+            default n
+            help
+                If red and blue are exchanged on your module, toggle this.
+        config FRACTONICA_DISPLAY_GAP_X
+            int "Extra column offset of the glass in the controller's memory"
+            default 0
+        config FRACTONICA_DISPLAY_GAP_Y
+            int "Extra row offset of the glass in the controller's memory"
+            default 0
+            help
+                The 80-row offset of a rotated 240 x 240 ST7789 is applied by
+                the driver already; this is for modules that differ.
+        config FRACTONICA_GC9A01_VENDOR_INIT
+            bool "GC9A01: send the panel maker's timing registers too"
+            default y
+            depends on FRACTONICA_DISPLAY_GC9A01
+            help
+                On: the reference power-on sequence of the 1.28 inch round
+                modules, which includes registers the public datasheet does
+                not describe. Off: only the documented commands.
+    endmenu
+
+    menu "I2C display wiring"
+        depends on FRACTONICA_DISPLAY_SSD1306
+
+        config FRACTONICA_I2C_PORT
+            int "I2C port"
+            range 0 0 if IDF_TARGET_ESP32C3
+            range 0 1
+            default 0
+        config FRACTONICA_PIN_SDA
+            int "SDA GPIO"
+            default 21 if IDF_TARGET_ESP32
+            default 8 if IDF_TARGET_ESP32S3
+            default 4
+        config FRACTONICA_PIN_SCL
+            int "SCL GPIO"
+            default 22 if IDF_TARGET_ESP32
+            default 9 if IDF_TARGET_ESP32S3
+            default 5
+        config FRACTONICA_I2C_ADDR
+            hex "I2C address"
+            default 0x3C
+        config FRACTONICA_I2C_HZ
+            int "I2C clock, Hz"
+            default 400000
+        config FRACTONICA_I2C_PULLUPS
+            bool "Use the chip's internal pull-ups"
+            default y
+            help
+                Most modules carry their own; the internal ones do no harm.
+        config FRACTONICA_PIN_OLED_RST
+            int "RST GPIO (-1: the module has none)"
+            default -1
+    endmenu
+
+    config FRACTONICA_BRIGHTNESS
+        int "Brightness at first start, 0..100"
+        range 0 100
+        default 80
+        help
+            Backlight duty of the colour panels, contrast of the SSD1306.
+            The `bright` console command changes it and it is remembered.
+
+    config FRACTONICA_FB_BAND_ROWS
+        int "Colour frame buffer: rows per band (0 = the whole frame)"
+        range 0 320
+        default 40 if IDF_TARGET_ESP32 && (FRACTONICA_DISPLAY_ST7789_240X320 || FRACTONICA_WIFI_SNTP)
+        default 0
+        depends on FRACTONICA_DISPLAY_SPI
+        help
+            0 keeps the whole frame in RAM (115,200 bytes at 240 x 240,
+            153,600 at 240 x 320): one drawing pass per redraw.
+            N > 0 keeps N rows (480 bytes each) and draws a redraw band by
+            band: less RAM, the scene is rasterised once per band.
+            The default is the whole frame, except on the classic ESP32,
+            whose data segment is 180 kB, in two cases: the 240 x 320 panel
+            (a 153.6 kB frame would fill the segment to the last kilobyte)
+            and Wi-Fi (a 115.2 kB frame plus the Wi-Fi stack's own static
+            data leaves it 16 kB of that segment). See README.md, "Memory".
+
+    # ------------------------------------------------------------------- input
+    choice FRACTONICA_INPUT
+        prompt "Input"
+        default FRACTONICA_INPUT_ENCODER
+
+        config FRACTONICA_INPUT_ENCODER
+            bool "Rotary encoder with push (turn = NEXT / PREV, push = SELECT, hold = LONG)"
+            depends on !FRACTONICA_LIGHT_SLEEP
+        config FRACTONICA_INPUT_BUTTONS_3
+            bool "Three buttons (PREV, SELECT, NEXT; hold SELECT = LONG)"
+        config FRACTONICA_INPUT_BUTTONS_2
+            bool "Two buttons (A: NEXT, hold = PREV; B: SELECT, hold = LONG)"
+        config FRACTONICA_INPUT_BUTTON_1
+            bool "One button (click = NEXT, double click = SELECT, hold = LONG)"
+        config FRACTONICA_INPUT_NONE
+            bool "None (the serial console only)"
+    endchoice
+
+    menu "Input wiring"
+        depends on !FRACTONICA_INPUT_NONE
+
+        config FRACTONICA_PIN_ENC_A
+            int "Encoder A (CLK) GPIO"
+            depends on FRACTONICA_INPUT_ENCODER
+            default 32 if IDF_TARGET_ESP32
+            default 4 if IDF_TARGET_ESP32S3
+            default 0
+        config FRACTONICA_PIN_ENC_B
+            int "Encoder B (DT) GPIO"
+            depends on FRACTONICA_INPUT_ENCODER
+            default 33 if IDF_TARGET_ESP32
+            default 5 if IDF_TARGET_ESP32S3
+            default 1
+        config FRACTONICA_ENC_COUNTS
+            int "Encoder: quadrature counts per detent"
+            depends on FRACTONICA_INPUT_ENCODER
+            range 1 16
+            default 4
+            help
+                4 for the common EC11 (one full quadrature cycle per click),
+                2 for half-step encoders.
+        config FRACTONICA_ENC_REVERSE
+            bool "Encoder: exchange the directions"
+            depends on FRACTONICA_INPUT_ENCODER
+            default n
+        config FRACTONICA_ENC_PCNT
+            bool "Encoder: count with the pulse counter (PCNT)"
+            depends on FRACTONICA_INPUT_ENCODER && SOC_PCNT_SUPPORTED
+            default y
+            help
+                Hardware quadrature decoding with a glitch filter. Chips
+                without PCNT (ESP32-C3) decode in a GPIO interrupt instead.
+        config FRACTONICA_PIN_BTN_A
+            int "Button A GPIO (encoder push / SELECT of three / NEXT of two / the one button)"
+            default 25 if IDF_TARGET_ESP32
+            default 6 if IDF_TARGET_ESP32S3
+            default 9
+            help
+                The ESP32-C3 default is GPIO 9, the BOOT button of the
+                development kits: do not hold it while the chip resets.
+        config FRACTONICA_PIN_BTN_B
+            int "Button B GPIO (NEXT of three / SELECT of two)"
+            depends on FRACTONICA_INPUT_BUTTONS_3 || FRACTONICA_INPUT_BUTTONS_2
+            default 26 if IDF_TARGET_ESP32
+            default 7 if IDF_TARGET_ESP32S3
+            default 1
+        config FRACTONICA_PIN_BTN_C
+            int "Button C GPIO (PREV of three)"
+            depends on FRACTONICA_INPUT_BUTTONS_3
+            default 27 if IDF_TARGET_ESP32
+            default 15 if IDF_TARGET_ESP32S3
+            default 0
+        config FRACTONICA_BTN_ACTIVE_LOW
+            bool "Buttons connect the pin to ground (internal pull-up)"
+            default y
+            help
+                Off: the buttons connect the pin to 3.3 V (internal pull-down).
+        config FRACTONICA_DEBOUNCE_MS
+            int "Debounce time, ms"
+            range 1 100
+            default 15
+        config FRACTONICA_LONG_MS
+            int "Hold time of a long press, ms"
+            range 200 3000
+            default 600
+        config FRACTONICA_DOUBLE_MS
+            int "Longest gap of a double click, ms (one button)"
+            range 100 1000
+            default 300
+    endmenu
+
+    # -------------------------------------------------------------------- time
+    config FRACTONICA_WIFI_SNTP
+        bool "Set the time over Wi-Fi (SNTP)"
+        default n
+        help
+            Joins the network, asks the time server, turns Wi-Fi off again
+            and repeats after the interval below. Off: the Wi-Fi stack is not
+            linked and the time comes from the console (`time <unix seconds>`).
+
+    config FRACTONICA_WIFI_SSID
+        string "Wi-Fi network name"
+        depends on FRACTONICA_WIFI_SNTP
+        default ""
+        help
+            Empty: Wi-Fi stays off and the boot log says it is not
+            configured (the time then comes from the console or the demo
+            instant).
+    config FRACTONICA_WIFI_PASSWORD
+        string "Wi-Fi password (empty: an open network)"
+        depends on FRACTONICA_WIFI_SNTP
+        default ""
+        help
+            Stored in sdkconfig, which .gitignore keeps out of the repository.
+            With a password the clock joins only WPA2-PSK or stronger
+            networks: an open or WEP network that takes the same name could
+            otherwise hand it a DNS and a time server of its choosing.
+    config FRACTONICA_SNTP_SERVER
+        string "SNTP server"
+        depends on FRACTONICA_WIFI_SNTP
+        default "pool.ntp.org"
+    config FRACTONICA_SNTP_INTERVAL_MIN
+        int "Minutes between two synchronisations"
+        depends on FRACTONICA_WIFI_SNTP
+        range 5 10080
+        default 360
+
+    config FRACTONICA_UTC_OFFSET_MIN
+        int "EARTH mode: fixed UTC offset at first start, minutes east"
+        range -720 840
+        default 0
+        help
+            The clock has no time-zone database (design ruling 6). 120 is
+            UTC+2. The `utc` console command changes it and it is remembered.
+            PURE mode has no zone.
+
+    config FRACTONICA_DEMO_TIME
+        string "Demo instant, Unix seconds (empty: none)"
+        default ""
+        help
+            For showcases without a network: when the clock does not know the
+            time at start-up it starts from this instant, and says so in
+            `info` ("demo"). 1791460800 is SPEC test vector A,
+            2026-10-08T12:00:00Z. Empty: the clock shows TIME NOT SET until
+            it is told the time.
+
+    # --------------------------------------------------------- start-up state
+    choice FRACTONICA_DEFAULT_MODE
+        prompt "Mode at first start"
+        default FRACTONICA_DEFAULT_MODE_PURE
+        help
+            Used until the user changes it (a long press); the choice is
+            then remembered in NVS.
+
+        config FRACTONICA_DEFAULT_MODE_PURE
+            bool "PURE (only Fractonica units)"
+        config FRACTONICA_DEFAULT_MODE_EARTH
+            bool "EARTH (adds the Gregorian translation)"
+    endchoice
+
+    config FRACTONICA_DEFAULT_FOCUS
+        int "Focus at first start, level 0..13"
+        range 0 13
+        default 6
+        help
+            6 is the Helion (depth 7), the scale the design was drawn for.
+
+    config FRACTONICA_MIN_FRAME_MS
+        int "Shortest time between two redraws, ms (0 = 100 colour, 50 one-bit)"
+        range 0 5000
+        default 0
+        help
+            The UI task sleeps until the clock next changes something on the
+            face. From focus 9 (kappa) down that is more often than a small
+            panel can usefully show, so redraws are held this far apart: the
+            default is 10 frames a second on the colour panels (a whole
+            240 x 240 frame is 115 kB on the SPI bus) and 20 on the SSD1306.
+            A larger value trades smoothness at a fine focus for fewer
+            wake-ups; the Helion face (153 redraws an hour) does not notice.
+
+    # ------------------------------------------------------------------- tasks
+    config FRACTONICA_UI_STACK
+        int "UI task stack, bytes"
+        range 4096 32768
+        default 6144
+        help
+            The deepest chain of this project's own frames is 2,080 bytes
+            (tools/stack-report.py, from the compiler's -fstack-usage); the
+            platform's share under it (an NVS write, vsnprintf, an interrupt
+            frame) is allowed about 1 kB more. 6,144 is twice that sum,
+            because no board has confirmed it yet: `info` on the console
+            prints the measured high-water mark, and once you have it,
+            high-water mark + 25 % is enough. See README.md, "Memory".
+
+    config FRACTONICA_CONSOLE_STACK
+        int "Console task stack, bytes"
+        range 2048 16384
+        default 3072
+
+    config FRACTONICA_LIGHT_SLEEP
+        bool "Light sleep between redraws (experimental)"
+        default n
+        depends on !ESP_CONSOLE_USB_SERIAL_JTAG
+        select PM_ENABLE
+        select FREERTOS_USE_TICKLESS_IDLE
+        help
+            The chip sleeps whenever the UI task waits. Buttons wake it (not
+            a rotary encoder: its pulses are lost asleep, so the encoder
+            choice disappears); the backlight is on / off, not dimmed; the
+            UART console stays awake for a minute after start-up and after
+            each line, and the first key after that wakes the chip and is
+            lost. Not offered with a USB-Serial-JTAG console (its reader
+            cannot wake the chip). On the ESP32-C3 / S3, ESP-IDF isolates
+            every GPIO in light sleep; the display drivers exempt the pins
+            they own (fhal_power_keep_pin) so the panel's RST, CS, DC, bus
+            and backlight stay driven. Not verified on hardware.
+
+endmenu

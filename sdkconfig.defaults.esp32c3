@@ -1,0 +1,5 @@
+# ESP32-C3, e.g. ESP32-C3-DevKitM-1. Pins: main/Kconfig.projbuild defaults
+# (SPI2: SCLK 6, MOSI 7, CS 10; DC 3, RST 4, BL 5; I2C 4 / 5;
+# encoder 0 / 1, push 9 = the BOOT button). The chip has no pulse counter:
+# the encoder is decoded in a GPIO interrupt. Single core, 400 kB of RAM.
+CONFIG_ESP_DEFAULT_CPU_FREQ_MHZ_160=y

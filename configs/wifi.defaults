@@ -1,0 +1,7 @@
+# Time over Wi-Fi (SNTP). Put your network into sdkconfig with menuconfig
+# ("Fractonica clock" -> "Wi-Fi network name" / "password"), or copy this
+# file, fill it in and keep the copy out of the repository. Left empty, the
+# Wi-Fi stack is linked but stays off ("not configured" in the boot log).
+CONFIG_FRACTONICA_WIFI_SNTP=y
+CONFIG_FRACTONICA_WIFI_SSID=""
+CONFIG_FRACTONICA_WIFI_PASSWORD=""

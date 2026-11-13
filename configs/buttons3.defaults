@@ -1,0 +1,2 @@
+# Three buttons instead of the encoder: C = PREV, A = SELECT (hold = LONG), B = NEXT.
+CONFIG_FRACTONICA_INPUT_BUTTONS_3=y

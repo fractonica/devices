@@ -1,0 +1,2 @@
+# SSD1306 128 x 64 one-bit panel on I2C: the one-bit face.
+CONFIG_FRACTONICA_DISPLAY_SSD1306=y

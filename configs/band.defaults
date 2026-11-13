@@ -1,0 +1,3 @@
+# Band rendering: keep 40 rows of the colour frame in RAM (19,200 bytes
+# instead of 115,200 / 153,600) and draw each redraw strip by strip.
+CONFIG_FRACTONICA_FB_BAND_ROWS=40

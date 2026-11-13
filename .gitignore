@@ -1,0 +1,27 @@
+# host simulator
+sim/build/
+sim/out/
+
+# ESP-IDF
+build/
+sdkconfig
+sdkconfig.old
+managed_components/
+dependencies.lock
+
+# PlatformIO
+.pio/
+
+# editors, OS
+.vscode/
+.idea/
+*.swp
+.DS_Store
+__pycache__/
+
+# PlatformIO writes one sdkconfig per environment beside platformio.ini
+sdkconfig.esp32*
+!sdkconfig.defaults*
+
+# screenshots taken with tools/shot.py
+*.shot.png

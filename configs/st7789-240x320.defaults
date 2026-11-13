@@ -1,0 +1,2 @@
+# ST7789 240 x 320 colour panel on SPI: the tall rectangular face.
+CONFIG_FRACTONICA_DISPLAY_ST7789_240X320=y

@@ -1,0 +1,4 @@
+# Light sleep between redraws (experimental, see Kconfig.projbuild). Needs
+# buttons: an encoder's pulses are lost while the chip sleeps.
+CONFIG_FRACTONICA_LIGHT_SLEEP=y
+CONFIG_FRACTONICA_INPUT_BUTTONS_3=y

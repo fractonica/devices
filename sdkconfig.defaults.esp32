@@ -1,0 +1,5 @@
+# ESP32 (classic), e.g. ESP32-DevKitC. Pins: main/Kconfig.projbuild defaults
+# (VSPI: SCLK 18, MOSI 23, CS 5; DC 16, RST 17, BL 4; I2C 21 / 22;
+# encoder 32 / 33, push 25). GPIO 34..39 are input-only WITHOUT pull-ups:
+# do not move buttons there unless they have their own resistors.
+CONFIG_ESP_DEFAULT_CPU_FREQ_MHZ_160=y

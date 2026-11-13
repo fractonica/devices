@@ -1,0 +1,5 @@
+# ESP32-S3, e.g. ESP32-S3-DevKitC-1. Pins: main/Kconfig.projbuild defaults
+# (FSPI: SCLK 12, MOSI 11, CS 10; DC 13, RST 14, BL 21; I2C 8 / 9;
+# encoder 4 / 5, push 6). The console is UART0 (the kit's "UART" USB port);
+# choose USB-Serial-JTAG in menuconfig to use the other port.
+CONFIG_ESP_DEFAULT_CPU_FREQ_MHZ_160=y

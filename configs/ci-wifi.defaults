@@ -1,0 +1,7 @@
+# BUILD MATRIX ONLY (tools/build-all.sh): a network name, so that the Wi-Fi
+# rows link the Wi-Fi stack. With the empty default the firmware knows at
+# compile time that no network is configured, and the linker drops Wi-Fi
+# altogether, which would leave that code unbuilt. Not a real network: a
+# clock built with this file looks for it and does not find it.
+CONFIG_FRACTONICA_WIFI_SSID="fractonica-ci-placeholder"
+CONFIG_FRACTONICA_WIFI_PASSWORD="placeholder-password"
