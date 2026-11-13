@@ -1,0 +1,27 @@
+# Capability id allocations (spec 07 §7.2). Ids are never reused.
+standard:
+  0x0001: fr.button
+  0x0002: fr.led
+  0x0003: fr.display
+  0x0004: fr.audio_out     # 1.0 since audio-a1 (design audio-a1 D2)
+  0x0005: fr.analog_in
+  0x0006: fr.fixture       # test_only: the HIL fixture's lines (design m2-c1-hil D3)
+  0x0007: fr.audio_in      # design audio-a1 D1
+  0x0008: fr.touch         # design m2-c5-display D4
+  0x0009: fr.csi           # design csi-c1 D7
+  0x000A: fr.radio_tx      # design csi-c1 D9
+  0x000B: fr.camera        # design camera-c1 D7
+  0x000C: fr.scale         # design scale-round-c1 D6
+  0x000D: fr.battery       # design power-p1 D2
+  0x000E: fr.haptic        # design power-p1 D6
+  0x000F: fr.storage       # design lcd-clock-c1 D5
+  0x0010: fr.clock         # design lcd-clock-c1 D7
+system:
+  0x00F0: fr.node
+  0x00F1: fr.ota
+  0x00F2: fr.diag
+planned: [fr.encoder]
+ranges:
+  standard: [0x0001, 0x00EF]
+  system: [0x00F0, 0x00FF]
+  project: [0x8000, 0xFFFE]

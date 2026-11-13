@@ -1,0 +1,24 @@
+# Framework-wide defaults (layer 1, spec 03 §3.7).
+CONFIG_PARTITION_TABLE_CUSTOM=y
+CONFIG_PARTITION_TABLE_OFFSET=0x8000
+CONFIG_BOOTLOADER_APP_ROLLBACK_ENABLE=y
+CONFIG_ESP_COREDUMP_ENABLE_TO_FLASH=y
+CONFIG_APP_REPRODUCIBLE_BUILD=y
+CONFIG_ESP_WIFI_ESPNOW_MAX_ENCRYPT_NUM=0
+CONFIG_LWIP_TCP_TMR_INTERVAL=50
+CONFIG_LWIP_TCP_RTO_TIME=300
+# CONFIG_LOG_COLORS is not set
+# C++ exceptions and RTTI stay at the IDF default (off).
+# Hub link (design c3 §3). The Wi-Fi driver keeps no configuration in NVS: credentials live only in fr_ident
+# and nvs:fr_net2 (fr_net also sets WIFI_STORAGE_RAM).
+# CONFIG_ESP_WIFI_NVS_ENABLED is not set
+# mDNS only resolves hub_host: no console commands (no IDF console on the node, spec 05 §5.12.3), no
+# browsing, no soft-AP interface.
+# CONFIG_MDNS_ENABLE_CONSOLE_CLI is not set
+# CONFIG_MDNS_ENABLE_BROWSE is not set
+# CONFIG_MDNS_PREDEF_NETIF_AP is not set
+# Dev Wi-Fi for UNASSIGNED nodes (CONFIG_FR_DEV_WIFI_SSID/PASS, CONFIG_FR_DEV_HUB_HOST) goes only in the
+# git-ignored firmware/config/sdkconfig.local.
+# OTA pulls the image over plain HTTP from the hub's node port (L0, spec 06 §6.5, 06 §6.9) with fr_ota's
+# own GET over lwIP sockets: esp_http_client, tcp_transport, esp-tls and the mbedTLS SSL layer are not in
+# the build (design c4 §4), so there is no HTTP client option to set here.

@@ -1,0 +1,32 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:fractonica:schema:fr.node.binding_fired.event",
+  "title": "fr.node.binding_fired event",
+  "type": "object",
+  "properties": {
+    "slot": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 255
+    },
+    "target_status": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 255,
+      "description": "the target's RESULT/ACK status for reliable sends; 0 for fast, MSG and broadcast; FAILED after the last attempt; BUSY with no path"
+    },
+    "rtt_us": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 4294967295,
+      "description": "trigger -> target RESULT; 0 for fast commands"
+    },
+    "path": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 255,
+      "description": "0 espnow, 1 hub, 2 flood, 3 local (the node itself)"
+    }
+  },
+  "additionalProperties": false
+}

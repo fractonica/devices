@@ -1,0 +1,314 @@
+// Long-running work (build, flash, reset) as durable jobs with FIFO locks (spec 09 §9.2).
+
+import { AsyncLocalStorage } from 'node:async_hooks';
+import { randomBytes } from 'node:crypto';
+
+import { FrError, type Job, type JobOrigin } from '@fractonica/protocol';
+
+import type { Db } from './db.ts';
+
+export interface JobCtx {
+  readonly jobId: string;
+  readonly signal: AbortSignal;
+  log(text: string, stream?: 'out' | 'err' | 'event'): void;
+  stage(name: string): void;
+  progress(pct: number, message?: string): void;
+}
+
+type JobFn = (ctx: JobCtx) => Promise<unknown>;
+
+/**
+ * The client an API call came from (design c6 D18): http.ts runs each op inside it, from the request's
+ * X-Fr-Client header, so start() records it as the job's origin however deep in a handler the job starts.
+ * A job started by a job (its fn runs in the same context) keeps the origin.
+ */
+export const requestClient = new AsyncLocalStorage<JobOrigin>();
+
+const TERMINAL = new Set(['completed', 'failed', 'cancelled']);
+
+/** What changed in a job (onChange): its status (queued, working, an end), its stage, or its progress. */
+export type JobChange = 'status' | 'stage' | 'progress';
+
+function now(): string {
+  return new Date().toISOString();
+}
+
+export class JobRunner {
+  #db: Db;
+  #jobs = new Map<string, Job>();
+  #aborts = new Map<string, AbortController>();
+  #lineNo = new Map<string, number>();
+  #waiters = new Map<string, Set<() => void>>();
+  #lockTails = new Map<string, Promise<void>>();
+  #lockHolders = new Map<string, string>();
+  /** job id -> the lock key it is queued on. */
+  #queuedOn = new Map<string, string>();
+  #changeListeners = new Set<(job: Job, change: JobChange) => void>();
+
+  constructor(db: Db) {
+    this.#db = db;
+    // Jobs that were running when the hub stopped cannot be resumed.
+    const stale = db.prepare("SELECT json FROM jobs WHERE status IN ('queued', 'working')").all() as { json: string }[];
+    for (const row of stale) {
+      const job = JSON.parse(row.json) as Job;
+      job.status = 'failed';
+      job.ended_at = now();
+      job.error = new FrError('HUB_RESTARTED', 'the hub restarted while this job was running').toToolError();
+      this.#persist(job);
+    }
+  }
+
+  /** `origin`: who started it (default: the client of the API call this runs in, if it named one). */
+  start(kind: Job['kind'], targets: string[], locks: string[], fn: JobFn, origin: JobOrigin | undefined = requestClient.getStore()): Job {
+    const job: Job = { job_id: 'j_' + randomBytes(6).toString('hex'), kind, status: 'queued', targets, ...(origin ? { origin } : {}), created_at: now() };
+    const abort = new AbortController();
+    this.#jobs.set(job.job_id, job);
+    this.#aborts.set(job.job_id, abort);
+    this.#persist(job);
+    this.#changed(job, 'status');
+    void this.#run(job, abort, locks, fn);
+    return { ...job };
+  }
+
+  /**
+   * Calls `fn` with a copy of the job whenever its status, stage or progress changes, synchronously
+   * (design c6 §5: job.state events and `/ws` job frames, web/feeds.ts and web/ws.ts). Returns the
+   * unsubscribe.
+   */
+  onChange(fn: (job: Job, change: JobChange) => void): () => void {
+    this.#changeListeners.add(fn);
+    return () => this.#changeListeners.delete(fn);
+  }
+
+  #changed(job: Job, change: JobChange): void {
+    for (const fn of this.#changeListeners) {
+      try {
+        fn({ ...job }, change);
+      } catch (err) {
+        // A failing listener must not fail the job.
+        console.error(JSON.stringify({ event: 'job_listener_failed', job_id: job.job_id, message: (err as Error).message }));
+      }
+    }
+  }
+
+  async #run(job: Job, abort: AbortController, locks: string[], fn: JobFn): Promise<void> {
+    let release = () => {};
+    try {
+      release = await this.#acquire(job, [...new Set(locks)].sort(), abort.signal);
+      if (abort.signal.aborted) {
+        throw new FrError('INTERNAL', 'cancelled before start');
+      }
+      job.status = 'working';
+      job.started_at = now();
+      delete job.blocked_by;
+      this.#persist(job);
+      this.#changed(job, 'status');
+      const ctx: JobCtx = {
+        jobId: job.job_id,
+        signal: abort.signal,
+        log: (text, stream = 'out') => this.#log(job.job_id, text, stream),
+        stage: (name) => {
+          job.stage = name;
+          this.#log(job.job_id, `stage: ${name}`, 'event');
+          this.#persist(job);
+          this.#changed(job, 'stage');
+        },
+        progress: (pct, message) => {
+          job.progress = { pct, ...(message ? { message } : {}) };
+          this.#changed(job, 'progress');
+        },
+      };
+      job.result = await fn(ctx);
+      job.status = 'completed';
+      job.progress = { pct: 100 }; // a no-op ninja run never prints its last [n/n] step
+    } catch (err) {
+      job.status = abort.signal.aborted ? 'cancelled' : 'failed';
+      job.error = err instanceof FrError ? err.toToolError() : { code: 'INTERNAL', message: String(err), retryable: false };
+    } finally {
+      release();
+      delete job.blocked_by;
+      job.ended_at = now();
+      this.#persist(job);
+      this.#changed(job, 'status');
+      for (const w of this.#waiters.get(job.job_id) ?? []) {
+        w();
+      }
+      this.#waiters.delete(job.job_id);
+    }
+  }
+
+  /**
+   * FIFO per lock key: each job chains behind the previous holder of every key it needs.
+   * A cancel while queued gives up the job's places at once: jobs behind it chain through `prev`,
+   * so they still wait for the earlier holder.
+   */
+  async #acquire(job: Job, keys: string[], signal: AbortSignal): Promise<() => void> {
+    const releases: Array<() => void> = [];
+    const releaseAll = () => releases.forEach((r) => r());
+    for (const key of keys) {
+      const prev = this.#lockTails.get(key) ?? Promise.resolve();
+      let releaseFn!: () => void;
+      const mine = new Promise<void>((r) => (releaseFn = r));
+      this.#lockTails.set(key, prev.then(() => mine));
+      const holder = this.#lockHolders.get(key);
+      if (holder) {
+        job.blocked_by = { lock: key, holder_job: holder };
+        this.#persist(job);
+      }
+      this.#queuedOn.set(job.job_id, key);
+      try {
+        await unlessCancelled(prev, signal);
+      } catch (err) {
+        releaseFn();
+        releaseAll();
+        throw err;
+      } finally {
+        this.#queuedOn.delete(job.job_id);
+      }
+      this.#lockHolders.set(key, job.job_id);
+      this.#retarget(key, job.job_id);
+      releases.push(() => {
+        if (this.#lockHolders.get(key) === job.job_id) {
+          this.#lockHolders.delete(key);
+        }
+        releaseFn();
+      });
+    }
+    return releaseAll;
+  }
+
+  /** Points the jobs queued on `key` at its new holder, so `job_wait(blocked_by.holder_job)` waits for the right job. */
+  #retarget(key: string, holder: string): void {
+    for (const [jobId, queuedOn] of this.#queuedOn) {
+      const j = this.#jobs.get(jobId);
+      if (queuedOn === key && j) {
+        j.blocked_by = { lock: key, holder_job: holder };
+        this.#persist(j);
+      }
+    }
+  }
+
+  #log(jobId: string, text: string, stream: string): void {
+    const line = (this.#lineNo.get(jobId) ?? 0) + 1;
+    this.#lineNo.set(jobId, line);
+    this.#db.prepare('INSERT INTO job_logs (job_id, line, ts, stream, text) VALUES (?, ?, ?, ?, ?)').run(jobId, line, now(), stream, text);
+  }
+
+  #persist(job: Job): void {
+    this.#db
+      .prepare(
+        'INSERT INTO jobs (job_id, kind, status, created_at, origin, json) VALUES (?, ?, ?, ?, ?, ?) ON CONFLICT(job_id) DO UPDATE SET status = excluded.status, json = excluded.json',
+      )
+      .run(job.job_id, job.kind, job.status, job.created_at, job.origin ?? null, JSON.stringify(job));
+  }
+
+  get(jobId: string): Job {
+    const live = this.#jobs.get(jobId);
+    if (live) {
+      return { ...live };
+    }
+    const row = this.#db.prepare('SELECT json FROM jobs WHERE job_id = ?').get(jobId) as { json: string } | undefined;
+    if (!row) {
+      throw new FrError('NOT_FOUND', `no job ${jobId}`, { remediation: [{ tool: 'job_list', cli: 'fr jobs ls' }] });
+    }
+    return JSON.parse(row.json) as Job;
+  }
+
+  /** Waits until the job ends or timeout_s passes; never throws for a timeout (status stays "working"). */
+  async wait(jobId: string, timeoutS: number): Promise<Job> {
+    const job = this.get(jobId);
+    if (TERMINAL.has(job.status) || timeoutS <= 0) {
+      return job;
+    }
+    await new Promise<void>((resolve) => {
+      const t = setTimeout(done, timeoutS * 1000);
+      const set = this.#waiters.get(jobId) ?? new Set();
+      this.#waiters.set(jobId, set);
+      set.add(done);
+      function done() {
+        clearTimeout(t);
+        set.delete(done);
+        resolve();
+      }
+    });
+    return this.get(jobId);
+  }
+
+  logs(jobId: string, afterLine: number, maxLines: number, errorsOnly: boolean) {
+    this.get(jobId);
+    const rows = this.#db
+      .prepare('SELECT line, ts, stream, text FROM job_logs WHERE job_id = ? AND line > ? ORDER BY line LIMIT ?')
+      .all(jobId, afterLine, errorsOnly ? 100000 : maxLines) as { line: number; ts: string; stream: string; text: string }[];
+    const lines = errorsOnly ? rows.filter((r) => isErrorLine(r.text)).slice(0, maxLines) : rows;
+    const last = lines.length ? lines[lines.length - 1].line : afterLine;
+    return { lines, next_line: last, truncated: lines.length === maxLines };
+  }
+
+  /** Newest first; `origin` keeps the jobs one kind of client started (design c6 D18). */
+  list(limit: number, origin?: JobOrigin): Job[] {
+    const rows = (
+      origin
+        ? this.#db.prepare('SELECT json FROM jobs WHERE origin = ? ORDER BY created_at DESC LIMIT ?').all(origin, limit)
+        : this.#db.prepare('SELECT json FROM jobs ORDER BY created_at DESC LIMIT ?').all(limit)
+    ) as { json: string }[];
+    return rows.map((r) => this.#jobs.get((JSON.parse(r.json) as Job).job_id) ?? (JSON.parse(r.json) as Job));
+  }
+
+  /**
+   * Aborts the job's signal; the reason is an FrError, so `ctx.signal.throwIfAborted()` fails the job
+   * as cancelled. A queued job leaves its queue at once and is returned already "cancelled".
+   */
+  async cancel(jobId: string): Promise<Job> {
+    const job = this.get(jobId);
+    if (!TERMINAL.has(job.status)) {
+      this.#aborts.get(jobId)?.abort(new FrError('INTERNAL', 'cancelled'));
+      if (job.status === 'queued') {
+        return this.wait(jobId, 1);
+      }
+    }
+    return this.get(jobId);
+  }
+
+  /** Hub shutdown: aborts every job that has not ended, so its children are signalled and it ends "cancelled". */
+  cancelAll(): void {
+    for (const [jobId, abort] of this.#aborts) {
+      const job = this.#jobs.get(jobId);
+      if (job && !TERMINAL.has(job.status)) {
+        abort.abort(new FrError('INTERNAL', 'cancelled: the hub is stopping'));
+      }
+    }
+  }
+
+  counts(): Record<string, number> {
+    const counts: Record<string, number> = { queued: 0, working: 0 };
+    for (const j of this.#jobs.values()) {
+      if (j.status in counts) {
+        counts[j.status]++;
+      }
+    }
+    return counts;
+  }
+}
+
+/** Resolves with `p`, or rejects as soon as the job is cancelled. */
+function unlessCancelled(p: Promise<void>, signal: AbortSignal): Promise<void> {
+  return new Promise((resolve, reject) => {
+    const onAbort = () => reject(new FrError('INTERNAL', 'cancelled before start'));
+    if (signal.aborted) {
+      return onAbort();
+    }
+    signal.addEventListener('abort', onAbort, { once: true });
+    void p.then(() => {
+      signal.removeEventListener('abort', onAbort);
+      resolve();
+    });
+  });
+}
+
+// Compiler/ninja/idf.py failure lines. Not "stream === err": idf.py prints Kconfig notes to stderr,
+// and not a bare /error/: every compile command line carries -Werror.
+const ERROR_LINE_RE = /(fatal error|error):|^FAILED:|^ninja: build stopped|^Compilation failed because|^However, |^To fix this|failed with exit code|^CMake Error|undefined reference/;
+
+export function isErrorLine(text: string): boolean {
+  return ERROR_LINE_RE.test(text);
+}

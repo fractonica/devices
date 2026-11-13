@@ -1,0 +1,27 @@
+{
+  "name": "fractonica",
+  "private": true,
+  "type": "module",
+  "packageManager": "pnpm@11.15.1",
+  "engines": {
+    "node": ">=24.12"
+  },
+  "scripts": {
+    "fr": "node --conditions=@fractonica/source packages/cli/src/main.ts",
+    "hub": "node --conditions=@fractonica/source packages/hub/src/main.ts --foreground",
+    "typecheck": "tsc -p tsconfig.json && tsc -p packages/dashboard && tsc -p web/demo && tsc -p web/csi && tsc -p web/cam && tsc -p web/scale && tsc -p web/force && tsc -p web/power && tsc -p web/bench",
+    "test": "vitest run",
+    "test:host": "node tools/host-test.mjs",
+    "test:fuzz": "mkdir -p build && rm -f build/fuzz-digests.ts.txt && FR_FUZZ_N=1000000 FR_FUZZ_DIGESTS=\"$PWD/build/fuzz-digests.ts.txt\" vitest run fuzz.test && node tools/host-test.mjs --fuzz 1000000 --expect build/fuzz-digests.ts.txt"
+  },
+  "devDependencies": {
+    "@fractonica/protocol": "workspace:*",
+    "@fractonica/sdk": "workspace:*",
+    "@types/better-sqlite3": "9.6.0",
+    "@types/node": "26.6.5",
+    "@types/ws": "8.18.2",
+    "typescript": "7.0.2",
+    "vitest": "5.0.5",
+    "yaml": "2.9.1"
+  }
+}
