@@ -141,7 +141,7 @@
 }
 
 .bench-guide-name {
-  font-size: 22px;
+  font-size: var(--fs-title);
   font-weight: var(--w-value);
   line-height: 1.25;
   color: var(--c-bone);
@@ -271,7 +271,7 @@
   padding: 1px 7px;
   border: var(--hair) solid var(--c-etch2);
   border-radius: 2px;
-  font-size: 12px;
+  font-size: var(--fs-earth);
   color: var(--c-bone);
 }
 
@@ -370,12 +370,12 @@
 
 .bench-diagram .t,
 .bench-diagram .th {
-  font-size: 14px;
+  font-size: var(--fs-data);
   fill: var(--c-bone);
 }
 
 .bench-diagram .ts {
-  font-size: 12px;
+  font-size: var(--fs-earth);
   fill: var(--c-ash);
 }
 
@@ -490,4 +490,24 @@
   .bench-tick .dot {
     transition: none;
   }
+}
+
+/* a text whose values pure mode leaves out (pages/bench/said.tsx): where to find them */
+.bench-earth-hint {
+  margin-left: var(--sp-2);
+  font-size: var(--fs-micro);
+  color: var(--c-etch3);
+  white-space: nowrap;
+}
+
+/* pure mode: once per page, where the parts' values went (pages/bench/said.tsx) */
+.bench-pure-note {
+  margin: var(--sp-3) 0 0;
+  color: var(--c-ash);
+  font-size: var(--fs-earth);
+}
+
+.bench-pure-note .caps {
+  font-size: var(--fs-label);
+  color: var(--c-etch3);
 }

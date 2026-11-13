@@ -9,6 +9,9 @@
 
 import type { HubEvent } from '@fractonica/protocol/client';
 
+import { fieldWords, impliedUnit } from './device-units.ts';
+import { pureSafe, pureText } from './pure-text.ts';
+
 /** The device key of the hub's own events (no device): its chip in the device filter. */
 export const HUB_KEY = 'hub';
 
@@ -150,13 +153,47 @@ export function timeKey(key: string): { name: string; us: number } | null {
 }
 
 export interface SummaryOptions {
-  /** Pure mode: a field in an Earth unit of time is said as a span (`spanOf`), under its bare name. */
+  /** Pure mode: only Fractonica units (a duration as a span, an instant in Fractonica notation, no Earth unit). */
   pure: boolean;
   /** A duration in µs as a Fractonica span ("0.048ν", "1ι 12λ"); without it the raw value stays. */
   spanOf?: (us: bigint) => string;
+  /** An ISO instant as the page says it (Fractonica notation, ⊕ civil time in Earth mode); without it pure mode leaves it out. */
+  instant?: (iso: string) => string;
+  /** A number in an Earth unit (mV, mg, Hz) in the mode's words (device-units valueText bound to the core). */
+  unitValue?: (v: number, unit: string) => { text: string; earth: string | null };
+  /** A text of the hub's or a device's in the mode's units (ui/kit.tsx useHubText). */
+  say?: (text: string) => string;
   /** Characters at most (default 160). */
   max?: number;
 }
+
+const ISO = /^(?:19|20)\d{2}-\d{2}-\d{2}T[\d:.]+(?:Z|[+-]\d{2}:?\d{2})?$/;
+
+/** One field as people read it: its name in words (no Earth unit in it) and its value in the mode's units. */
+export function fieldEntry(key: string, v: unknown, opts: Omit<SummaryOptions, 'max'>): [string, string] {
+  const t = timeKey(key);
+  if (t && typeof v === 'number' && Number.isFinite(v)) {
+    const civil = `${v} ${key.endsWith('_us') ? 'µs' : key.endsWith('_ms') ? 'ms' : 's'}`;
+    const name = t.name.replace(/_/g, ' ');
+    if (opts.spanOf) {
+      const span = `${v < 0 ? '−' : ''}${opts.spanOf(BigInt(Math.round(Math.abs(v) * t.us)))}`;
+      return [name, opts.pure ? span : `${span} ⊕ ${civil}`];
+    }
+    return opts.pure ? [name, String(v)] : [name, `⊕ ${civil}`];
+  }
+  const unit = typeof v === 'number' ? impliedUnit(key) : undefined;
+  if (unit && typeof v === 'number' && Number.isFinite(v)) {
+    const u = opts.unitValue?.(v, unit) ?? { text: String(v), earth: `${v} ${unit}` };
+    return [fieldWords(key), opts.pure || !u.earth ? u.text || '·' : `${u.text} ⊕ ${u.earth}`];
+  }
+  if (typeof v === 'string' && ISO.test(v)) {
+    const name = key.replace(/_at$/, '').replace(/_/g, ' ');
+    return [name, opts.instant ? opts.instant(v) : opts.pure ? '–' : `⊕ ${v}`];
+  }
+  const text = valueText(v);
+  return [fieldWords(key), typeof v === 'string' && opts.say ? opts.say(text) : opts.pure && !pureSafe(text) ? pureText(text, opts.spanOf) : text];
+}
+
 
 function valueText(v: unknown): string {
   if (typeof v === 'string') {
@@ -189,14 +226,8 @@ export function summary(fields: Record<string, unknown> | undefined, opts: Summa
   const max = opts.max ?? 160;
   const parts: string[] = [];
   for (const [k, v] of Object.entries(fields)) {
-    const t = opts.pure ? timeKey(k) : null;
-    if (t && typeof v === 'number' && Number.isFinite(v) && opts.spanOf) {
-      parts.push(`${t.name} ${opts.spanOf(BigInt(Math.round(Math.abs(v) * t.us)))}`);
-    } else if (t && opts.pure) {
-      parts.push(`${t.name} ${valueText(v)}`);
-    } else {
-      parts.push(`${k} ${valueText(v)}`);
-    }
+    const [name, text] = fieldEntry(k, v, opts);
+    parts.push(`${name} ${text}`);
   }
   const s = parts.join(' · ');
   return s.length > max ? `${s.slice(0, max - 1)}…` : s;
@@ -209,14 +240,14 @@ export function fieldsText(fields: Record<string, unknown> | undefined, opts: Om
   }
   const out: Record<string, unknown> = {};
   for (const [k, v] of Object.entries(fields)) {
-    const t = opts.pure ? timeKey(k) : null;
-    if (t && typeof v === 'number' && Number.isFinite(v) && opts.spanOf) {
-      out[t.name] = opts.spanOf(BigInt(Math.round(Math.abs(v) * t.us)));
-    } else if (t && opts.pure) {
-      out[t.name] = v;
-    } else {
+    // a value with no unit and no text of an Earth measure stays as JSON has it (a number, a list, an object)
+    const plain = typeof v !== 'string' && !timeKey(k) && !(typeof v === 'number' && impliedUnit(k)) && (!opts.pure || pureSafe(JSON.stringify(v) ?? ''));
+    if (plain) {
       out[k] = v;
+      continue;
     }
+    const [name, text] = fieldEntry(k, v, opts);
+    out[name] = text;
   }
   return JSON.stringify(out, null, 2);
 }

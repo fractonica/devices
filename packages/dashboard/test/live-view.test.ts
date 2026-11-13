@@ -133,7 +133,13 @@ describe('the fields line', () => {
   it('writes key value pairs; durations become spans under their bare name in pure mode only', () => {
     const f = { link: 'tcp', up: true, p99_ms: 14.95, n: 3, nested: { a: 1 }, none: null };
     expect(summary(f, { pure: true, spanOf })).toBe('link tcp · up yes · p99 <14950µs> · n 3 · nested {"a":1} · none –');
-    expect(summary(f, { pure: false, spanOf })).toBe('link tcp · up yes · p99_ms 14.95 · n 3 · nested {"a":1} · none –');
+    // Earth mode keeps the span and adds the Earth value after ⊕
+    expect(summary(f, { pure: false, spanOf })).toBe('link tcp · up yes · p99 <14950µs> ⊕ 14.95 ms · n 3 · nested {"a":1} · none –');
+    // names in words; an instant a field carries never as a date in pure mode; a measure without its unit
+    expect(summary({ reset_reason: 1, expires_at: '2026-11-13T20:07:04.171Z', supply_mv: 3712 }, { pure: true, spanOf })).toBe('reset reason 1 · expires – · supply voltage 3712');
+    expect(summary({ expires_at: '2026-11-13T20:07:04.171Z' }, { pure: true, instant: () => 'in 3λ' })).toBe('expires in 3λ');
+    expect(summary({ supply_mv: 3712 }, { pure: false })).toBe('supply voltage 3712 ⊕ 3712 mV');
+    expect(summary({ message: 'timed out after 500 ms' }, { pure: true, say: (t) => t.replace(' after 500 ms', '') })).toBe('message timed out');
     // no core yet: the bare name, never the Earth unit, in pure mode
     expect(summary({ rtt_ms: 9 }, { pure: true })).toBe('rtt 9');
     expect(summary(undefined, { pure: true })).toBe('');
@@ -147,7 +153,8 @@ describe('the fields line', () => {
 
   it('writes the open row as JSON, durations as spans in pure mode', () => {
     expect(JSON.parse(fieldsText({ held_ms: 400, code: 'x' }, { pure: true, spanOf }))).toEqual({ held: '<400000µs>', code: 'x' });
-    expect(JSON.parse(fieldsText({ held_ms: 400 }, { pure: false, spanOf }))).toEqual({ held_ms: 400 });
+    expect(JSON.parse(fieldsText({ held_ms: 400 }, { pure: false, spanOf }))).toEqual({ held: '<400000µs> ⊕ 400 ms' });
+    expect(JSON.parse(fieldsText({ expires_at: '2026-11-13T20:07:04.171Z', n: 2 }, { pure: true, spanOf }))).toEqual({ expires: '–', n: 2 });
     expect(fieldsText({}, { pure: true })).toBe('');
   });
 });

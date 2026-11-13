@@ -6,10 +6,10 @@ import { useState } from 'react';
 
 import { useAct, useOp } from '../../hooks.ts';
 import { parseQty, partMatches } from '../../state/bench-view.ts';
-import { pureDurations } from '../../state/pure-text.ts';
-import { Button, ButtonRow, Caps, Code, EmptyState, engrave, ErrorLine, Line, Pending, Row, Section, Select, TextField, useMode, useSpanOf } from '../../ui/index.ts';
+import { Button, ButtonRow, Caps, Code, EmptyState, engrave, ErrorLine, Line, Pending, Row, Section, Select, TextField, useHubText, useMode } from '../../ui/index.ts';
 import { Refused } from './guides.tsx';
 import { BenchLink } from './link.tsx';
+import { Said } from './said.tsx';
 
 /** Remembered per viewer: the parts search (a convenience; nothing breaks without storage). */
 const QUERY_KEY = 'fractonica.bench.q';
@@ -29,9 +29,7 @@ function store(q: string): void {
 }
 
 function useSay(): (t: string) => string {
-  const { earth } = useMode();
-  const spanOf = useSpanOf();
-  return (t) => (earth || !spanOf ? t : pureDurations(t, spanOf));
+  return useHubText();
 }
 
 export function PartsView() {
@@ -80,9 +78,9 @@ export function PartsView() {
                 <Line
                   bead={p.have > 0 ? 'online' : 'idle'}
                   beadLabel={p.have > 0 ? `${p.have} on hand` : 'none on hand'}
-                  name={p.name}
+                  name={<Said text={p.name} />}
                   value={p.have > 0 ? `${p.have} on hand` : <span className="ash">none on hand</span>}
-                  detail={`${p.summary}${p.values.length ? ` · ${p.values.join(', ')}` : ''}`}
+                  detail={<Said text={`${p.summary}${p.values.length ? ` · ${p.values.join(', ')}` : ''}`} />}
                 />
               </BenchLink>
             ))}
@@ -112,7 +110,7 @@ function Stock({ part }: { part: { id: string; values: string[]; stock: { value:
       {part.stock.length ? (
         <div>
           {part.stock.map((s) => (
-            <Row key={s.value ?? ''} label={s.value ?? 'count'} value={`${s.qty}`} extra={[s.location ? `in ${s.location}` : null, s.note].filter(Boolean).join(' · ') || undefined} />
+            <Row key={s.value ?? ''} name={s.value ? <Said text={s.value} /> : undefined} label={s.value ? undefined : 'count'} value={`${s.qty}`} extra={[s.location ? `in ${s.location}` : null, s.note].filter(Boolean).join(' · ') || undefined} />
           ))}
         </div>
       ) : (
@@ -173,30 +171,32 @@ export function PartView({ id }: { id: string }) {
     <>
       {back}
       <header className="bench-part-head">
-        <h2 className="bench-guide-name">{p.name}</h2>
+        <h2 className="bench-guide-name">
+          <Said text={p.name} />
+        </h2>
         <p className="bench-part-cat caps">{engrave(`${p.category} · ${p.id}`)}</p>
-        <p className="bench-guide-about">{say(p.summary)}</p>
-        {p.image ? <img className="bench-part-image" src={p.image} alt={p.name} /> : null}
+        <p className="bench-guide-about"><Said text={p.summary} /></p>
+        {p.image ? <img className="bench-part-image" src={p.image} alt={say(p.name)} /> : null}
       </header>
       {specs.length ? (
         <Section title="Specs">
           {specs.map(([k, v]) => (
-            <Row key={k} bead={inferred.has(k) ? 'waiting' : undefined} beadLabel={inferred.has(k) ? 'inferred' : undefined} label={k.replace(/_/g, ' ')} value={say(v)} extra={inferred.has(k) ? 'inferred: not read in a datasheet or on the bench' : undefined} />
+            <Row key={k} bead={inferred.has(k) ? 'waiting' : undefined} beadLabel={inferred.has(k) ? 'inferred' : undefined} label={k.replace(/_/g, ' ')} value={<Said text={v} />} extra={inferred.has(k) ? 'inferred: not read in a datasheet or on the bench' : undefined} />
           ))}
         </Section>
       ) : null}
       {p.pins.length || p.pinout ? (
         <Section title="Pins">
-          {p.pinout ? <p className="bench-say">{say(p.pinout)}</p> : null}
+          {p.pinout ? <p className="bench-say"><Said text={p.pinout} /></p> : null}
           {p.pins.map((x) => (
-            <Row key={x.name} name={<Code>{x.name}</Code>} value={x.desc ? say(x.desc) : ''} />
+            <Row key={x.name} name={<Code>{x.name}</Code>} value={x.desc ? <Said text={x.desc} /> : ''} />
           ))}
         </Section>
       ) : null}
       {p.notes.length ? (
         <Section title="Notes">
           {p.notes.map((n) => (
-            <Line key={n} name={<span className="bench-line-text">{say(n)}</span>} />
+            <Line key={n} name={<span className="bench-line-text"><Said text={n} /></span>} />
           ))}
         </Section>
       ) : null}
@@ -219,7 +219,7 @@ export function PartView({ id }: { id: string }) {
         <Section title="Used by">
           {p.used_by.map((u) => (
             <BenchLink key={`${u.guide}:${u.value ?? ''}`} to={{ view: 'guide', id: u.guide }} className="bench-rowlink">
-              <Line name={u.title} value={`${u.qty}${u.value ? ` × ${u.value}` : ''}`} />
+              <Line name={<Said text={u.title} />} value={<Said text={`${u.qty}${u.value ? ` × ${u.value}` : ''}`} />} />
             </BenchLink>
           ))}
         </Section>
@@ -246,7 +246,7 @@ export function ShoppingView() {
           <Line
             bead={l.missing > 0 ? 'waiting' : 'online'}
             beadLabel={l.missing > 0 ? 'to buy' : 'on hand'}
-            name={`${l.name}${l.value ? ` ${l.value}` : ''}`}
+            name={<Said text={`${l.name}${l.value ? ` ${l.value}` : ''}`} />}
             value={l.missing > 0 ? <span className="bench-buy">buy {l.missing}</span> : <span className="ash">on hand</span>}
             detail={`needs ${l.need} · ${l.have} on hand · for ${l.guides.join(', ')}`}
           />

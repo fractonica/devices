@@ -4,6 +4,9 @@
 // counted (5 of 12 steps) and drawn as light; it is never a percentage. Pure, so the tests run in node.
 
 import type { WiringConnection, WiringShow } from '@fractonica/protocol/client';
+import type { Core } from '@fractonica/time/browser';
+
+import { fieldWords, impliedUnit, valueText } from './device-units.ts';
 
 export type BenchRoute = { view: 'guides' } | { view: 'guide'; id: string } | { view: 'parts' } | { view: 'part'; id: string } | { view: 'shopping' };
 
@@ -37,24 +40,99 @@ export function benchTab(r: BenchRoute): 'guides' | 'parts' | 'shopping' {
   return r.view === 'guide' ? 'guides' : r.view === 'part' ? 'parts' : r.view;
 }
 
+/** SVG elements a wiring diagram may hold (drawing and text only: no script, foreignObject, animation or link). */
+const SVG_ELEMENTS = new Set([
+  'svg', 'g', 'defs', 'symbol', 'use', 'title', 'desc', 'path', 'rect', 'circle', 'ellipse', 'line', 'polyline', 'polygon',
+  'text', 'tspan', 'textpath', 'marker', 'lineargradient', 'radialgradient', 'stop', 'clippath', 'mask', 'pattern',
+]);
+/** Attributes it may keep; anything else (every on*, style, a link out) goes. */
+const SVG_ATTRS = new Set([
+  'id', 'class', 'viewbox', 'width', 'height', 'x', 'y', 'x1', 'y1', 'x2', 'y2', 'cx', 'cy', 'r', 'rx', 'ry', 'd', 'points',
+  'transform', 'fill', 'stroke', 'stroke-width', 'stroke-linecap', 'stroke-linejoin', 'stroke-dasharray', 'stroke-dashoffset',
+  'opacity', 'fill-opacity', 'stroke-opacity', 'fill-rule', 'clip-rule', 'font-size', 'font-family', 'font-weight', 'text-anchor',
+  'dominant-baseline', 'dx', 'dy', 'rotate', 'textlength', 'lengthadjust', 'marker-start', 'marker-mid', 'marker-end',
+  'markerwidth', 'markerheight', 'refx', 'refy', 'orient', 'markerunits', 'preserveaspectratio', 'offset', 'stop-color',
+  'stop-opacity', 'gradientunits', 'gradienttransform', 'patternunits', 'clip-path', 'mask', 'href', 'xlink:href',
+  'startoffset', 'xmlns', 'xmlns:xlink', 'version', 'role', 'aria-label', 'aria-hidden', 'vector-effect', 'data-ink',
+]);
+
+/** A diagram's own colour (a hex fill or stroke) becomes a mark the page inks from the tokens (bench.css). */
+function inkOf(name: string, value: string): string | null {
+  return (name === 'fill' || name === 'stroke') && /^#[0-9a-f]{3,8}$/i.test(value.trim()) ? name : null;
+}
+
+/** A reference inside the file only: "#id", "url(#id)". */
+function insideRef(value: string): boolean {
+  const v = value.trim();
+  return v.startsWith('#') || (/^url\(/i.test(v) && /^url\(\s*['"]?#/i.test(v));
+}
+
 /**
- * An SVG the page may inline: the hub refuses scripts and external references already (catalog.ts svgProblem); this
- * strips what is left that could run or reach out (script and foreignObject elements, on* handlers such as a chat
- * diagram's onclick, javascript: URLs) and the XML prolog, so innerHTML of the result is inert. It also drops the
- * diagram's own colours (a fill or stroke written as a hex value or a chat colour class's variable), so the page draws
- * it in the hub's engraving: every colour then comes from the tokens (bench.css).
+ * An SVG the page may inline: parsed (DOMParser) and rebuilt from an allowlist of drawing elements and attributes, so
+ * no script, handler, animation, foreignObject, style or reference outside the file survives, whatever its spelling;
+ * the hub refuses the worst already (catalog.ts svgProblem). The diagram's own colours (a hex fill or stroke) are
+ * dropped, so the page draws it in the hub's engraving: every colour then comes from the tokens (bench.css). Without a
+ * DOM (the tests in node) a stricter text pass does the same.
  */
-export function sanitizeSvg(svg: string): string {
-  return svg
-    .replace(/<\?xml[^>]*\?>/gi, '')
-    .replace(/<!DOCTYPE[^>]*>/gi, '')
-    .replace(/<script[\s\S]*?<\/script\s*>/gi, '')
-    .replace(/<script[^>]*\/>/gi, '')
-    .replace(/<foreignObject[\s\S]*?<\/foreignObject\s*>/gi, '')
-    .replace(/\son[a-z]+\s*=\s*("[^"]*"|'[^']*'|[^\s>]+)/gi, '')
-    .replace(/javascript:/gi, '')
+export function sanitizeSvg(svg: string, parser: { parseFromString(s: string, type: 'image/svg+xml'): Document } | null = typeof DOMParser === 'undefined' ? null : new DOMParser()): string {
+  if (!parser) {
+    return sanitizeSvgText(svg);
+  }
+  const doc = parser.parseFromString(svg, 'image/svg+xml');
+  const root = doc.documentElement;
+  if (!root || root.localName.toLowerCase() !== 'svg' || doc.getElementsByTagName('parsererror').length) {
+    return '';
+  }
+  const walk = (el: Element): void => {
+    for (const child of [...el.children]) {
+      if (!SVG_ELEMENTS.has(child.localName.toLowerCase())) {
+        child.remove();
+        continue;
+      }
+      walk(child);
+    }
+    for (const attr of [...el.attributes]) {
+      const name = attr.name.toLowerCase();
+      const ink = inkOf(name, attr.value);
+      if (ink) {
+        el.removeAttribute(attr.name);
+        el.setAttribute('data-ink', ink);
+        continue;
+      }
+      const ref = name === 'href' || name === 'xlink:href' || attr.value.includes('url(');
+      if (!SVG_ATTRS.has(name) || name.startsWith('on') || (ref && !insideRef(attr.value))) {
+        el.removeAttribute(attr.name);
+      }
+    }
+  };
+  walk(root);
+  return new XMLSerializer().serializeToString(root);
+}
+
+/** The text pass: what must go, removed until nothing more changes (a nested "javajavascript:script:" included). */
+export function sanitizeSvgText(svg: string): string {
+  let t = svg
+    .replace(/&#x([0-9a-f]+);?/gi, (_m, h: string) => String.fromCodePoint(parseInt(h, 16)))
+    .replace(/&#(\d+);?/g, (_m, d: string) => String.fromCodePoint(Number(d)));
+  for (let i = 0; i < 8; i++) {
+    const before = t;
+    t = t
+      .replace(/<\?xml[^>]*\?>/gi, '')
+      .replace(/<!DOCTYPE[^>]*>/gi, '')
+      .replace(/<(script|foreignObject|style|animate\w*|set|iframe|object|embed)\b[\s\S]*?<\/\1\s*>/gi, '')
+      .replace(/<(script|foreignObject|style|animate\w*|set|iframe|object|embed)\b[^>]*>/gi, '')
+      .replace(/(^|[\s/"'])on[a-z]+\s*=\s*("[^"]*"|'[^']*'|[^\s>]+)/gi, '$1')
+      .replace(/j\s*a\s*v\s*a\s*s\s*c\s*r\s*i\s*p\s*t\s*:/gi, '')
+      .replace(/\s(?:xlink:)?href\s*=\s*("(?!#)[^"]*"|'(?!#)[^']*'|(?!["'#])[^\s>]+)/gi, '')
+      .replace(/\sstyle\s*=\s*("[^"]*"|'[^']*'|[^\s>]+)/gi, '');
+    if (t === before) {
+      break;
+    }
+  }
+  return t
     .replace(/\s(fill|stroke)\s*=\s*"#[0-9a-f]{3,8}"/gi, (_m, attr: string) => ` data-ink="${attr.toLowerCase()}"`)
-    .replace(/\sstyle\s*=\s*("[^"]*"|'[^']*')/gi, '')
+    .replace(/(<[^<>]*?)\s+(\/?>)/g, '$1$2')
+    .replace(/(<[^<>]*?\S)\s{2,}/g, '$1 ')
     .trim();
 }
 
@@ -69,19 +147,25 @@ export function pinInstances(connections: readonly Pick<WiringConnection, 'pin' 
   return m;
 }
 
-/** One live value as a short text: numbers as they are (mV as volts), booleans on/off, names as they are. */
-export function liveText(member: string, v: unknown): string {
+/**
+ * One live value as a short text, in the mode's units (state/device-units.ts): a member's words without an Earth unit
+ * ("mv" → "voltage"), a number as the core says it (a time as a span, a physical quantity as the bare count), and in
+ * Earth mode its value in its unit after ⊕ ("voltage 3 912 ⊕ 3 912 mV"); booleans on or off, names as they are.
+ */
+export function liveText(core: Core | null, member: string, v: unknown, earth = false): string {
+  const words = fieldWords(member);
   if (typeof v === 'number') {
-    return member.endsWith('mv') ? `${(v / 1000).toFixed(2)} V` : String(Math.round(v * 100) / 100);
+    const t = valueText(core, Math.round(v * 100) / 100, impliedUnit(member));
+    return `${words} ${t.text || '·'}${earth && t.earth ? ` ⊕ ${t.earth}` : ''}`;
   }
   if (typeof v === 'boolean') {
-    return v ? 'on' : 'off';
+    return `${words} ${v ? 'on' : 'off'}`;
   }
-  return typeof v === 'string' ? v : JSON.stringify(v);
+  return `${words} ${typeof v === 'string' ? v : JSON.stringify(v)}`;
 }
 
-/** The live values of one instance from a device's mirror (`<instance>.<member>` -> value), as `member value` texts. */
-export function instanceLive(properties: Record<string, unknown> | null | undefined, instance: string, max = 3): string[] {
+/** The live values of one instance from a device's mirror (`<instance>.<member>` -> value), as texts (liveText). */
+export function instanceLive(properties: Record<string, unknown> | null | undefined, instance: string, max = 3, say: (member: string, v: unknown) => string = (m, v) => liveText(null, m, v)): string[] {
   if (!properties) {
     return [];
   }
@@ -91,7 +175,7 @@ export function instanceLive(properties: Record<string, unknown> | null | undefi
       const member = k.slice(instance.length + 1);
       // the live store keeps {value, t_hub_us}; device_get's router mirror keeps the value itself
       const v = raw && typeof raw === 'object' && 'value' in (raw as object) && 't_hub_us' in (raw as object) ? (raw as { value: unknown }).value : raw;
-      out.push(`${member} ${liveText(member, v)}`);
+      out.push(say(member, v));
     }
   }
   return out;

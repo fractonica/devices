@@ -9,21 +9,19 @@ import { useMemo } from 'react';
 import type { WiringShow } from '@fractonica/protocol/client';
 
 import { useAct, useLive, useOp } from '../../hooks.ts';
-import { instanceLive, missingText, nextStep, pinInstances, stepsText } from '../../state/bench-view.ts';
-import { Bead, type BeadState, Button, ButtonRow, Caps, Code, EmptyState, engrave, ErrorLine, Line, Pending, presenceBead, Row, Section, useMode, useSpanOf } from '../../ui/index.ts';
-import { pureDurations } from '../../state/pure-text.ts';
+import { instanceLive, liveText, missingText, nextStep, pinInstances, stepsText } from '../../state/bench-view.ts';
+import { Bead, type BeadState, Button, ButtonRow, Caps, Code, EmptyState, engrave, ErrorLine, Line, Pending, presenceBead, Row, Section, useFractonica, useHubText, useMode } from '../../ui/index.ts';
 import { Diagram } from './diagram.tsx';
 import { BenchLink } from './link.tsx';
+import { Said } from './said.tsx';
 import { StepRing } from './step-ring.tsx';
 
 const REFRESH = ['wiring_show', 'wiring_list', 'wiring_shopping'] as const;
 const CONN_BEAD: Record<string, BeadState> = { ok: 'online', warning: 'waiting', failed: 'fault', unchecked: 'idle' };
 
-/** The page's text in the mode's units (a guide's prose may say "for 2 s"). */
+/** The page's text in the mode's units (said.tsx: a guide's prose may say "for 2 s" or "3.3 V"). */
 function useSay(): (t: string) => string {
-  const { earth } = useMode();
-  const spanOf = useSpanOf();
-  return (t) => (earth || !spanOf ? t : pureDurations(t, spanOf));
+  return useHubText();
 }
 
 function Step({ g, step, pinInst, live, online }: { g: WiringShow; step: WiringShow['sections'][number]['steps'][number]; pinInst: Map<string, string>; live: (inst: string) => string[]; online: boolean }) {
@@ -48,7 +46,7 @@ function Step({ g, step, pinInst, live, online }: { g: WiringShow; step: WiringS
           <circle r="6.5" className="ring" />
           <circle r="3.4" className="dot" />
         </svg>
-        <span className="bench-step-text">{say(step.text)}</span>
+        <span className="bench-step-text"><Said text={step.text} hint /></span>
       </button>
       {step.pins.length ? (
         <span className="bench-pins">
@@ -64,10 +62,10 @@ function Step({ g, step, pinInst, live, online }: { g: WiringShow; step: WiringS
           })}
         </span>
       ) : null}
-      {step.note ? <p className="bench-step-note">{say(step.note)}</p> : null}
+      {step.note ? <p className="bench-step-note"><Said text={step.note} hint /></p> : null}
       {step.check ? (
         <p className="bench-step-check">
-          <Caps>check</Caps> {say(step.check)}
+          <Caps>check</Caps> <Said text={step.check} hint />
         </p>
       ) : null}
       {d ? <Diagram title={d.title} url={d.url} /> : null}
@@ -85,7 +83,9 @@ export function GuideView({ id }: { id: string }) {
   const props = useLive((s) => (device ? s.properties[device.device_id] : undefined));
   const pinInst = useMemo(() => pinInstances(g?.connections ?? []), [g]);
   const online = device?.presence === 'online';
-  const live = (inst: string) => instanceLive(props as Record<string, unknown> | undefined, inst);
+  const core = useFractonica();
+  const { earth } = useMode();
+  const live = (inst: string) => instanceLive(props as Record<string, unknown> | undefined, inst, 3, (m, v) => liveText(core, m, v, earth));
 
   if (q.error) {
     return (
@@ -113,7 +113,7 @@ export function GuideView({ id }: { id: string }) {
         <StepRing steps={steps} size={132} showCount failed={g.check === 'failed'} label={g.title} />
         <div className="bench-guide-intro">
           <h2 className="bench-guide-name">{g.title}</h2>
-          <p className="bench-guide-about">{say(g.summary)}</p>
+          <p className="bench-guide-about"><Said text={g.summary} /></p>
           <p className="bench-guide-progress">
             {stepsText(g.done, g.steps)}
             {next ? (
@@ -154,10 +154,10 @@ export function GuideView({ id }: { id: string }) {
         <Section title={g.check === 'failed' ? 'The guide disagrees with its profile' : 'Look at these first'} aside={<Bead state={g.check === 'failed' ? 'fault' : 'waiting'} />}>
           {g.check === 'failed' ? <p className="bench-say">Fix the guide or the profile before wiring.</p> : null}
           {g.errors.map((e) => (
-            <Line key={e} bead="fault" beadLabel="error" name={<span className="bench-line-text">{say(e)}</span>} />
+            <Line key={e} bead="fault" beadLabel="error" name={<span className="bench-line-text"><Said text={e} /></span>} />
           ))}
           {g.warnings.map((w) => (
-            <Line key={w} bead="waiting" beadLabel="warning" name={<span className="bench-line-text">{say(w)}</span>} />
+            <Line key={w} bead="waiting" beadLabel="warning" name={<span className="bench-line-text"><Said text={w} /></span>} />
           ))}
         </Section>
       ) : null}
@@ -165,7 +165,7 @@ export function GuideView({ id }: { id: string }) {
       {g.safety.length ? (
         <Section title="Safety first">
           {g.safety.map((s) => (
-            <Line key={s} bead="waiting" beadLabel="safety" name={<span className="bench-line-text">{say(s)}</span>} />
+            <Line key={s} bead="waiting" beadLabel="safety" name={<span className="bench-line-text"><Said text={s} /></span>} />
           ))}
         </Section>
       ) : null}
@@ -194,7 +194,7 @@ export function GuideView({ id }: { id: string }) {
             <div className={`bench-section${d ? ' bench-section-drawn' : ''}`}>
               {d ? <Diagram title={d.title} url={d.url} /> : null}
               <div className="bench-section-steps">
-                {s.intro ? <p className="bench-say">{say(s.intro)}</p> : null}
+                {s.intro ? <p className="bench-say"><Said text={s.intro} /></p> : null}
                 <ol className="bench-steps">
                   {s.steps.map((st) => (
                     <Step key={st.id} g={g} step={st} pinInst={pinInst} live={live} online={online} />

@@ -35,7 +35,8 @@ import {
   toggled,
   waitingCount,
 } from '../state/live-view.ts';
-import { Bead, type BeadState, Button, ButtonRow, Caps, Chip, ChipRow, CopyButton, Disclosure, EmptyState, engrave, ErrorLine, FTime, Page, presenceBead, Row, Section, TextField, useMode, useSpanOf } from '../ui/index.ts';
+import { Bead, type BeadState, Button, ButtonRow, Caps, Chip, ChipRow, CopyButton, Disclosure, EmptyState, engrave, ErrorLine, FTime, fTimeText, instantOf, Page, presenceBead, Row, Section, TextField, useFractonica, useHubText, useMode, useSpanOf } from '../ui/index.ts';
+import { valueText as unitValueText } from '../state/device-units.ts';
 
 interface History {
   from: string;
@@ -47,6 +48,9 @@ interface History {
 interface RowCtx {
   pure: boolean;
   spanOf?: (us: bigint) => string;
+  instant?: (iso: string) => string;
+  unitValue?: (v: number, unit: string) => { text: string; earth: string | null };
+  say?: (text: string) => string;
   beadOf: (key: string) => BeadState | undefined;
 }
 
@@ -73,7 +77,7 @@ const EventLine = memo(function EventLine({ e, open, onToggle, onReadFrom, ctx }
   const key = deviceKey(e);
   const who = e.alias ?? e.device ?? 'hub';
   const bead = key === HUB_KEY ? undefined : ctx.beadOf(key);
-  const text = summary(e.fields, { pure: ctx.pure, spanOf: ctx.spanOf });
+  const text = summary(e.fields, ctx);
   return (
     <div className="live-event" data-open={open ? '' : undefined} data-type={e.type} data-device={e.alias ?? ''}>
       <button type="button" className="live-line" aria-expanded={open} onClick={() => onToggle(e.cursor)}>
@@ -93,7 +97,7 @@ const EventLine = memo(function EventLine({ e, open, onToggle, onReadFrom, ctx }
       </button>
       {open ? (
         <div className="live-open">
-          {e.fields && Object.keys(e.fields).length ? <pre className="live-json">{fieldsText(e.fields, { pure: ctx.pure, spanOf: ctx.spanOf })}</pre> : <p className="live-none">No fields.</p>}
+          {e.fields && Object.keys(e.fields).length ? <pre className="live-json">{fieldsText(e.fields, ctx)}</pre> : <p className="live-none">No fields.</p>}
           <ButtonRow>
             <CopyButton text={e.cursor} label="Copy cursor" what={e.type} />
             <Button variant="quiet" onClick={() => onReadFrom(e.cursor)}>
@@ -167,7 +171,32 @@ export function LivePage() {
 
   const list = useMemo(() => devices.data?.devices ?? [], [devices.data]);
   const presence = useMemo(() => new Map(list.map((d) => [d.device_id, presenceBead(d.presence)])), [list]);
-  const ctx = useMemo<RowCtx>(() => ({ pure: !earth, spanOf, beadOf: (k) => presence.get(k) }), [earth, spanOf, presence]);
+  const core = useFractonica();
+  const say = useHubText();
+  const ctx = useMemo<RowCtx>(
+    () => ({
+      pure: !earth,
+      spanOf,
+      say,
+      ...(core
+        ? {
+            // an instant a field carries (a lease's expires_at): when, from now, in Fractonica notation; ⊕ civil in Earth mode
+            instant: (iso: string) => {
+              const t = instantOf(iso);
+              if (t === null) {
+                return '–';
+              }
+              const { text, civil } = fTimeText(core, t, core.frc.now(), { form: 'relative', earthMode: earth });
+              return civil ? `${text} ⊕ ${civil}` : text;
+            },
+            unitValue: (v: number, unit: string) => unitValueText(core, v, unit),
+          }
+        : {}),
+      beadOf: (k) => presence.get(k),
+    }),
+    // say changes with the mode and the core, as the rest
+    [earth, spanOf, presence, core],
+  );
   const keep = useMemo(() => liveKeep(filter), [filter]);
   const source = history ? history.events : ring;
   const shown = useMemo(() => (history ? history.events.filter(keep) : shownEvents(ring, pausedAt, keep)), [history, ring, pausedAt, keep]);

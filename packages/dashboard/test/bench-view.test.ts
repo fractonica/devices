@@ -5,6 +5,7 @@
 import { describe, expect, it } from 'vitest';
 
 import { benchRoute, benchSearch, benchTab, instanceLive, liveText, missingText, nextStep, parseQty, partMatches, pinInstances, sanitizeSvg, stepsText } from '../src/state/bench-view.ts';
+import { pureSafe } from '../src/state/pure-text.ts';
 
 describe('routes', () => {
   it('reads the view from the search; guides by default', () => {
@@ -56,8 +57,21 @@ describe('the SVG sanitiser', () => {
   it('drops scripts, foreignObject, handlers, javascript: and the prolog; keeps the drawing', () => {
     const svg = `<?xml version="1.0"?><!DOCTYPE svg><svg viewBox="0 0 1 1"><script>alert(1)</script><script src="x"/><foreignObject><div/></foreignObject><g class="node c-teal" onclick="sendPrompt('x')" onmouseover='y()'><rect x="1"/></g><a href="javascript:alert(1)"/></svg>`;
     const out = sanitizeSvg(svg);
-    expect(out).toBe(`<svg viewBox="0 0 1 1"><g class="node c-teal"><rect x="1"/></g><a href="alert(1)"/></svg>`);
+    expect(out).toBe(`<svg viewBox="0 0 1 1"><g class="node c-teal"><rect x="1"/></g><a/></svg>`);
     expect(out).not.toMatch(/script|onclick|onmouseover|foreignObject|javascript/i);
+  });
+
+  it('drops a handler after a slash, an unquoted link out, a nested or encoded scheme, and animation', () => {
+    for (const bad of [
+      '<svg><image href=x /onerror=document.documentElement.dataset.xss=1 /></svg>',
+      '<svg><a href="javajavascript:script:alert(1)"/></svg>',
+      '<svg><a href="&#106;avascript:alert(1)"/></svg>',
+      '<svg><set attributeName="href" to="javascript:alert(1)"/><animate onbegin="x()"/></svg>',
+    ]) {
+      const out = sanitizeSvg(bad);
+      expect(out, bad).not.toMatch(/onerror|onbegin|javascript|<set|<animate|href=x/i);
+    }
+    expect(sanitizeSvg('<svg><use href="#a"/></svg>')).toBe('<svg><use href="#a"/></svg>');
   });
 
   it("drops the drawing's own colours and inline styles, so the tokens draw it", () => {
@@ -79,16 +93,21 @@ describe('live chips', () => {
       ['gpio.5', 'kick'],
     ]);
     const props = { 'battery.mv': 3912, 'battery.charger': 'charging', 'battery.load_on': false, 'battery.level': 'ok', 'cap.mv': 4100 };
-    expect(instanceLive(props, 'battery')).toEqual(['mv 3.91 V', 'charger charging', 'load_on off']);
-    expect(instanceLive(props, 'cap', 5)).toEqual(['mv 4.10 V']);
+    // pure mode: no volt anywhere, the member's words and the bare count; Earth mode adds the value in its unit after ⊕
+    expect(instanceLive(props, 'battery')).toEqual(['voltage 3912', 'charger charging', 'load on off']);
+    expect(instanceLive(props, 'cap', 5)).toEqual(['voltage 4100']);
+    expect(instanceLive(props, 'cap', 5, (m, v) => liveText(null, m, v, true))).toEqual(['voltage 4100 ⊕ 4\u202f100 mV']);
     expect(instanceLive(undefined, 'battery')).toEqual([]);
-    expect(liveText('ratio', 57.123)).toBe('57.12');
-    expect(liveText('x', { a: 1 })).toBe('{"a":1}');
+    expect(liveText(null, 'ratio', 57.123)).toBe('ratio 57.12');
+    expect(liveText(null, 'x', { a: 1 })).toBe('x {"a":1}');
+    for (const t of instanceLive(props, 'battery')) {
+      expect(pureSafe(t), t).toBe(true);
+    }
   });
 
   it("reads the live store's mirror ({value, t_hub_us}) as well as plain values", () => {
     const mirror = { 'battery.mv': { value: 3700, t_hub_us: 1 }, 'battery.charger': { value: 'full', t_hub_us: 2 } };
-    expect(instanceLive(mirror, 'battery')).toEqual(['mv 3.70 V', 'charger full']);
+    expect(instanceLive(mirror, 'battery')).toEqual(['voltage 3700', 'charger full']);
   });
 });
 

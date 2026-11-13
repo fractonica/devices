@@ -106,8 +106,8 @@ html[data-mode='earth'] .live-line {
 }
 
 .live-type {
-  font-family: var(--mono);
-  font-size: 12px;
+  font-family: var(--font-reading);
+  font-size: var(--fs-data);
   color: var(--c-bone);
   overflow: hidden;
   text-overflow: ellipsis;
@@ -146,7 +146,7 @@ html[data-mode='earth'] .live-open {
   max-height: 320px;
   overflow: auto;
   font-family: var(--mono);
-  font-size: 12px;
+  font-size: var(--fs-earth);
   line-height: 17px;
   color: var(--c-ash);
   white-space: pre-wrap;

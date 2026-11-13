@@ -16,7 +16,7 @@ import { Link, useSearch } from '@tanstack/react-router';
 
 import { useAct } from '../hooks.ts';
 import { type BenchRoute, benchRoute, benchSearch, benchTab } from '../state/bench-view.ts';
-import { Button, engrave, Page } from '../ui/index.ts';
+import { Button, engrave, Page, useMode } from '../ui/index.ts';
 import { clearDiagrams } from './bench/diagram.tsx';
 import { GuideView } from './bench/guide.tsx';
 import { GuidesView } from './bench/guides.tsx';
@@ -47,6 +47,7 @@ function Tabs({ current }: { current: ReturnType<typeof benchTab> }) {
 }
 
 export function BenchPage() {
+  const { earth } = useMode();
   const search = useSearch({ strict: false }) as Record<string, unknown>;
   const route = benchRoute(search);
   const tab = benchTab(route);
@@ -73,6 +74,11 @@ export function BenchPage() {
       }
     >
       <Tabs current={tab} />
+      {earth ? null : (
+        <p className="bench-pure-note">
+          <span className="caps">{engrave('pure')}</span> leaves out the ratings, sizes and values parts are sold by; <span className="caps">{engrave('earth')}</span> shows them.
+        </p>
+      )}
       <div className="bench-body" data-view={route.view}>
         {route.view === 'guides' ? <GuidesView /> : null}
         {route.view === 'guide' ? <GuideView key={route.id} id={route.id} /> : null}

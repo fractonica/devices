@@ -6,6 +6,7 @@ import { stepsText } from '../../state/bench-view.ts';
 import type { WiringLoadError } from '@fractonica/protocol/client';
 import { Bead, Caps, Code, EmptyState, ErrorLine, Pending, Row, Section } from '../../ui/index.ts';
 import { BenchLink } from './link.tsx';
+import { Said } from './said.tsx';
 import { StepRing } from './step-ring.tsx';
 
 export function Refused({ refused }: { refused: readonly WiringLoadError[] }) {
@@ -43,7 +44,9 @@ export function GuidesView() {
               </span>
               <span className="bench-guide-text">
                 <span className="bench-guide-title">{g.title}</span>
-                <span className="bench-guide-summary">{g.summary}</span>
+                <span className="bench-guide-summary">
+                  <Said text={g.summary} />
+                </span>
               </span>
               <span className="bench-guide-facts">
                 <span>{stepsText(g.done, g.steps)}</span>
