@@ -44,10 +44,14 @@ spike notes and personal data were left out; they stay in the archived `fractoni
 
 Checked at the merge, on the owner's Mac:
 
-- typecheck (root, dashboard, web/bench): clean. vitest, one package at a time: 2,432 tests and web/bench's 8, all
-  passing; two timing-sensitive cases fail under heavy machine load and pass when re-run alone.
-  `fr gen --check`: 195 files, 0 stale. Host C++ suite (ASan + UBSan): 975 tests, of which
-  `sim_node_strand_runs_its_jobs_in_post_order_one_at_a_time` is a known timing race that passes alone.
+- typecheck (root, dashboard, web/bench): clean. vitest, one package at a time: 2,432 of 2,432 passed in the seven
+  packages, and web/bench's 8. That is with the virtual-fleet binary built (`node tools/host-test.mjs --fleet`;
+  without it 20 fleet tests skip) and a local `hardware/bench/lab.bench.yaml` (not committed; copy
+  `bench.example.yaml`; without it the HIL interop suite and the T-HIL dry run skip 10 more). Timing-sensitive cases
+  can fail under heavy machine load and pass when re-run alone. On a fresh checkout the first CLI run fetches LVGL and
+  builds the desktop renderer (about a minute here). `fr gen --check`: 195 files, 0 stale. Host C++ suite (ASan +
+  UBSan): 975 tests, of which `sim_node_strand_runs_its_jobs_in_post_order_one_at_a_time` is a known timing race that
+  passes alone.
 - ESP-IDF 6.1 build of profile `c6w-scale` (debug): 1,744,992 bytes, 0 compiler warnings, 11 % of its slot free.
 - The clock: `cd clock/sim && make test` passes (140 golden images, 943 firmware-loop checks); the ESP-IDF 5.5.1
   build for the ESP32-C6 + GC9A01 is 273,344 bytes, 0 warnings.
