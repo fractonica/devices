@@ -43,7 +43,7 @@ in `firmware/idf-version.lock` (`~/esp/v6.1/esp-idf`).
 
 ```sh
 pnpm install
-pnpm fr doctor --fix     # host checks; writes the fr shim to ~/.local/bin, builds the dashboard and web/bench
+pnpm fr doctor --fix     # host checks; writes the fr shim to ~/.local/bin, builds the dashboard
 ```
 
 Everything TypeScript runs from source (`node --conditions=@fractonica/source`); the `dist/` exports are not built.
@@ -55,7 +55,7 @@ environment (`packages/host/src/idf.ts`), or put the uv Python 3.12 first on PAT
 ## 3. Checks (run before saying something works)
 
 ```sh
-pnpm typecheck                         # tsc: root, packages/dashboard, web/bench
+pnpm typecheck                         # tsc: root, packages/dashboard
 pnpm test                              # vitest (no boards needed); under load run one area at a time:
 pnpm vitest run packages/hub           #   packages/{protocol,codegen,sdk,host,hub,cli,dashboard,time}
 node tools/host-test.mjs               # host C++ suite (ASan + UBSan); builds build/host-tests/fr_net_node,
@@ -76,9 +76,22 @@ person or the HIL fixture: run them only when asked.
 
 The clock: `cd clock/sim && make test`, and its own ESP-IDF 5.5 builds (`clock/AGENTS.md`).
 
-The dashboard (`packages/dashboard`, stage 4): styled only from the site's tokens (`src/design/tokens.js`, vendored
-and locked like the core; `fr gen` refreshes it), with the primitives in `src/ui` (their README) and one file per page
-in `src/pages`. To see it with simulated devices and never a board or the lab hub:
+The dashboard (`packages/dashboard`, stage 4) is drawn in the site's Astrolabe language:
+
+- **The token rule.** Colours only from the site's token table, `src/design/tokens.js` (vendored byte for byte and
+  locked by `tokens.lock`, like the core; `fr gen` refreshes it) plus the hub's one extension, the `fault` colour, in
+  `src/design/hub-tokens.ts`: `var(--c-*)` in CSS, never a hex, `rgb()` or colour name. Dark only, no bold, nothing
+  that pulses or blinks, no bars or percentages. `test/design-rules.test.ts` fails on any of it.
+- **Pure mode** shows only Fractonica units (no clock time, date, zone, Hz, metre or per cent, also in `aria-label`);
+  Earth mode adds them after ⊕. A hub text goes through `useHubText()` (`src/state/pure-text.ts`).
+- **Layout.** `src/ui`: the primitives (Page, Section, Row, Bead, Button, StageRing, ErrorLine, Pending, FTime, Span,
+  …; their README). `src/pages/<page>.tsx` and `<page>.css` (classes prefixed with the page's name), the page's parts
+  in `src/pages/<page>/`, components two pages share in `src/pages/shared/` (a port's actions, the network form).
+  `src/state/*`: pure logic, tested in node (`words.ts` is the one vocabulary for states, `checks.ts` the doctor
+  checks, `ports.ts` the ports). `src/api`, `runtime.ts`, `hooks.ts`: the tested plumbing (reconnect, resume, jobs).
+  `src/app.tsx`: the routes (hash history; old paths redirect).
+
+To see it with simulated devices and never a board or the lab hub:
 
 ```sh
 node tools/host-test.mjs --fleet                                    # once: build/host-fleet/fr_fleet
@@ -101,17 +114,17 @@ node tools/dash-shoot.mjs --url "$(cat /tmp/hub.url)" --out <dir> /=hub /devices
 | `packages/hub` | the daemon (serial, links, registry, jobs, OTA, bench modules: camera, audio, CSI, scale, power, fixture, app host) |
 | `packages/cli` | `fr` and `fr mcp`; `packages/host`: doctor, IDF env, pytools; `packages/sdk`; `packages/dashboard` |
 | `packages/time` | the temporal core (vendored wasm and binding, `time.lock`), its readings and layouts: `fr time`, the `time_*` ops |
-| `web/bench` | the bench app the hub serves at `/apps/bench/` |
 | `tests/` | `e2e/` gate scenarios, `sim/` virtual fleet, `spikes/` |
 | `docs/` | `spec/` (start at its README), `design/`, `user-manual.md` |
 | `clock/` | the clock firmware; its own AGENTS.md |
 
 ## 5. Known gaps
 
-The review's findings still open (the dashboard design, the clock on the framework, a setup command with prebuilt
-images, CI) are its stages 4 to 6; stage 2 (port policy, crash handling, `hub.db` growth, MCP safety, `fr` from
-anywhere) and stage 3 (the temporal core in the CLI and hub: `packages/time`, `fr time`, the `time_*` ops,
-`time.threshold` events, the SDK's `HubError`) are done. Left for stage 5 with the clock: pushing time to devices
-(`time_push`), devices reporting their core version, `fr clock` → `fr rtc`, and a scheduler on thresholds. The docs under `docs/spec` and
-`docs/design` still cite `docs/research`, `docs/spikes` and `hosts/`, which are not in this repository (they stay
-in the archived `fractonica/hardware`); the docs rewrite is stage 6.
+The review's findings still open (the clock on the framework, a setup command with prebuilt images, CI) are its
+stages 5 and 6. Stage 2 (port policy, crash handling, `hub.db` growth, MCP safety, `fr` from anywhere), stage 3 (the
+temporal core in the CLI and hub: `packages/time`, `fr time`, the `time_*` ops, `time.threshold` events, the SDK's
+`HubError`) and stage 4 (the dashboard in the site's language) are done. Left for stage 5 with the clock: pushing time
+to devices (`time_push`), devices reporting their core version, `fr clock` → `fr rtc`, a scheduler on thresholds, and
+the dashboard's face mirror (`pages/device/face.tsx`, for an `fr.face` instance). The docs under `docs/spec` and
+`docs/design` still cite `docs/research`, `docs/spikes` and `hosts/`, which are not in this repository (they stay in
+the archived `fractonica/hardware`); the docs rewrite is stage 6.

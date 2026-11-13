@@ -26,6 +26,7 @@ Contents:
 18. [Troubleshooting](#18-troubleshooting)
 19. [The bench](#19-the-bench)
 20. [Fractonica time](#20-fractonica-time)
+21. [The dashboard](#21-the-dashboard)
 
 `fr` runs from any directory once `fr doctor --fix` has written its shim (section 1); commands that build use the checkout around the current directory, or else the one the shim points at. Add `--json` to any of them for machine-readable output, and `--help` to see all options.
 
@@ -71,7 +72,9 @@ first board and troubleshooting.
 
    A second network, for example a 5 GHz one, gets its own name: `fr net set --name 5ghz --ssid "<network>" --band 5g --password-stdin`.
 
-6. **Open the dashboard** at <http://127.0.0.1:7420/>. Its pages are Devices, Live, Ports, Network, Builds and OTA, and Agents.
+6. **Open the dashboard** at <http://127.0.0.1:7420/>. Its rail has six pages: Hub, Devices, Provision, Live, Bench and
+   Settings ([section 21](#21-the-dashboard)). To set up a new board without the command line, open **Provision** and
+   plug the board in.
 
 7. **Know which ports the hub takes.** It opens only the USB ports of boards it knows (registered ones); the others
    stay free for `idf.py`, esptool or a browser. `fr ports` shows each port as watched by the hub, lent, held by
@@ -344,7 +347,7 @@ Keep content inside the circle: the corners of the 240×240 frame are not on the
 
 ## 5. LCD board, micro-SD card and clock
 
-**The board:** lcd-c6, a **Waveshare ESP32-C6-LCD-1.47** (ESP32-C6FH4, 4 MB flash, no PSRAM) with its own **1.47" ST7789 display**, 172×320 (the `screen` instance, `fr.display`), a **micro-SD (TF) slot** on the display's SPI bus (the `card` instance, `fr.storage`) and an RGB LED. A **DS3231 real-time clock** module is wired to it: SDA to GPIO18, SCL to GPIO19, VCC to 3.3 V, GND (the `clock` instance, `fr.clock`). The wiring guide is in the bench app: <http://127.0.0.1:7420/apps/bench/>, guide `clock-lcd-c6`.
+**The board:** lcd-c6, a **Waveshare ESP32-C6-LCD-1.47** (ESP32-C6FH4, 4 MB flash, no PSRAM) with its own **1.47" ST7789 display**, 172×320 (the `screen` instance, `fr.display`), a **micro-SD (TF) slot** on the display's SPI bus (the `card` instance, `fr.storage`) and an RGB LED. A **DS3231 real-time clock** module is wired to it: SDA to GPIO18, SCL to GPIO19, VCC to 3.3 V, GND (the `clock` instance, `fr.clock`). The wiring guide is on the dashboard's Bench page: <http://127.0.0.1:7420/#/bench>, guide `clock-lcd-c6`.
 
 **What it does:** layouts and drawing on the display (its backlight is capped at half, as Waveshare advises: full brightness overheats the panel), files to and from the card, a clock that keeps time on its coin cell through power cuts, set from the Mac to the second boundary, and a drift measurement against the Mac.
 
@@ -648,6 +651,8 @@ csi-c5 joins the hub's `5ghz` network. Its source can also be a second board tra
 
 5. **Check it came online:** `fr devices get cam-esp32`.
 
+The dashboard does the same without a command: **Provision** › New board ([section 21](#21-the-dashboard)).
+
 For an ESP32-CAM, take the SD card out before provisioning (see 3.4).
 
 ---
@@ -664,7 +669,8 @@ For an ESP32-CAM, take the SD card out before provisioning (see 3.4).
 | Flash over USB (a board that lost its firmware) | `fr flash cam-esp32 --plan full` |
 | List built firmware | `fr artifacts ls` |
 
-An update that fails its health check after reboot rolls back to the previous firmware on its own.
+An update that fails its health check after reboot rolls back to the previous firmware on its own. On the dashboard,
+**Provision** › Over the air previews an update (what each device would do) and then deploys it, with a ring per device.
 
 ---
 
@@ -742,7 +748,7 @@ Every `fr` command is also an MCP tool, served by `fr mcp`.
 | `fr hub restart` refuses: a job is working | Wait, or cancel it (`fr jobs ls`, `fr jobs cancel <id>`). An open CSI or camera app page keeps its stream job alive: close the page, or use `fr hub restart --force`. |
 | A flash fails to connect | Reset into download mode: `fr devices reset <port> --mode bootloader`, or hold BOOT and tap RST, then flash again. |
 | A board joined the wrong Wi-Fi | `fr net ls`, then `fr flash <board> --plan identity --network <name>`. |
-| The dashboard looks out of date | `fr doctor --fix` rebuilds it. |
+| The dashboard looks out of date | `fr doctor --fix` rebuilds it (or `pnpm -C packages/dashboard build` in the checkout). |
 
 ---
 
@@ -871,3 +877,44 @@ dashboard's Live view and a wait already waiting, never stored); finer levels ar
 `durable_to` goes down to θ at most (θ adds about 170 rows a day, and `hub.db` keeps event rows); a deeper level is
 logged as a config problem and θ is used. `live_to` goes down to ν (the Blink). After the hub has been asleep, the
 thresholds of the last minute are announced in time order; older ones are skipped.
+
+---
+
+## 21. The dashboard
+
+The hub serves the dashboard at <http://127.0.0.1:7420/>. It is drawn in the same instrument language as
+[fractonica.com](https://fractonica.com): dark, hairline rows, engraved capitals, light for progress (never a bar or a
+percentage), and nothing that blinks. The rail (left on a computer, along the bottom on a phone) has six pages; the
+switch at its top is **PURE / EARTH**, as on the site: pure mode shows only Fractonica units, Earth mode adds the
+clock time, dates and physical units after a ⊕.
+
+| Page | What it is for |
+|---|---|
+| **Hub** | The present moment as a small instrument computed by the temporal core, the fleet as beads (one per device, lit when online) with each device's last word, one line of hub health with the checks that need something done, and a banner for anything waiting on you (an agent's prompt, a lent port, a job running). |
+| **Devices** | Every registered board on one line: presence, profile and chip, signal, firmware, its last event, Identify. **PROVISION A BOARD** starts a new one. |
+| **Device** (open one) | Its capabilities as controls generated from the catalog (switches, sliders, colour wells, command forms), a sparkline per number, its recent events, its log on demand, and on the right its link, clock sync, running state, build and registry facts. **Engineering** (folded) holds diagnostics, bindings, OTA history and the raw record. |
+| **Provision** | **New board**: six steps (plug in · network · board · name · flash · done), with a ring of nine arcs that light as the hub's stages complete; the flash arc fills with the bytes written. **Firmware**: profiles with Build, the builds kept, recent jobs. **Over the air**: preview, then deploy. A job page, `#/provision/<job>`, survives a reload. |
+| **Live** | The event stream as rows, newest first, with Fractonica times (⊕ the clock time in Earth mode). Filter by device and by type; Pause holds the list while events keep coming. |
+| **Bench** | The wiring guides step by step (tick each step off; the hub remembers), the parts catalogue with what is on hand, and a shopping list. Old links to `/apps/bench/` land here. |
+| **Settings** | **Health** (`fr doctor`'s checks with their fixes to copy), **Networks** (Wi-Fi for the nodes, add or change one; a password is never shown again), **Ports** (every USB port and who holds it), **Agents** (prompts, leases, agent jobs), **Storage** (`hub.db`), **About** (versions and what this build is pinned to). |
+
+**Provisioning a board, step by step.**
+
+1. Open **Provision** and plug the board in with a USB cable that carries data. It appears within a moment, lit; a
+   board you plug in while the page is open is chosen for you. If something else holds the port (a serial monitor, a
+   Web Serial tab), or the port is lent or ignored, the page says so and offers the fix (Release, Stop ignoring,
+   Check again) before anything starts.
+2. **Network:** pick one of the stored Wi-Fi networks, or **Add a network** in place.
+3. **Board:** the profiles for the board's chip come first, built ones before the rest; **Automatic** lets the hub
+   choose. An unbuilt profile offers **Build and provision**.
+4. **Name:** checked as you type (31 characters at most, letters, digits and hyphens; not one another board has).
+5. **Provision:** the ring lights stage by stage. **Cancel** asks once more in place. The job's output is folded under
+   the steps.
+6. **Done:** the board's name, profile, Wi-Fi and whether it reached the hub, with **Open device** and **Identify**.
+
+**Ports on the dashboard.** Each port says what it is to the hub: *watched by the hub*, *lent* (with when the lease
+ends), *in use by a job*, *held by* another program, *ignored* or *not watched*. **Lend** hands it to another program
+for a span you pick (30λ to 3ι, the lease cap of 30 minutes); **Release** takes it back; **Ignore** and **Stop
+ignoring**, **Claim** and **Unclaim** change the port policy. The same words and buttons are on Provision's first step
+and in Settings › Ports. The dashboard never opens a port itself.
+

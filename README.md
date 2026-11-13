@@ -27,8 +27,8 @@ clock firmware that is to become one of them.
 firmware/    ESP-IDF 6.1: apps (node, gateway, hwprobe), components fr_*, profiles, partitions, host C++ tests
 hardware/    boards, drivers, parts, wiring guides; bench/bench.example.yaml (an example HIL bench)
 schema/      protocol, registry and capabilities (the source of truth), golden vectors (generated)
-packages/    TypeScript: protocol, codegen, sdk, host, hub, cli, dashboard, time (the temporal core's wasm build)
-web/bench/   the hub-served bench app (wiring guides, parts)
+packages/    TypeScript: protocol, codegen, sdk, host, hub, cli, dashboard (with the Bench page: wiring guides,
+             parts), time (the temporal core's wasm build)
 apps/        example apps for a Linux hub (fr app deploy)
 tests/       e2e and HIL gate scenarios (opt-in, need boards), the virtual-fleet sim
 tools/       host-test.mjs (host C++ suite), pytools (esptool sidecar)
@@ -74,7 +74,13 @@ Checked at the merge, on the owner's Mac:
   serves `time_now`, `time_convert`, `time_ladder` and `time_next` (which `fr mcp` also answers itself) and publishes
   `time.threshold` events. Its tests pin SPEC vectors A, B, C and the anchor. The SDK's `FractonicaError` is now
   `HubError` (the old name stays as a deprecated alias).
-- Not done yet (stages 4 to 6 of the plan): the dashboard redesign, the clock on the framework (with pushing time to
+- Stage 4 of the plan: the dashboard redrawn in the site's Astrolabe language (fractonica.com), styled only from the
+  site's token table (vendored and locked like the core; no Tailwind), with the temporal core in the browser. Six
+  pages on a rail: Hub (the present as a small instrument, the fleet as beads, the hub's health), Devices and Device
+  (controls generated from the catalog), Provision (a new board in six steps around a ring of stage arcs, builds,
+  preview-then-deploy OTA), Live, Bench (the old `web/bench` app, folded in) and Settings. PURE / EARTH as on the
+  site: pure mode shows only Fractonica units.
+- Not done yet (stages 5 and 6 of the plan): the clock on the framework (with pushing time to
   devices, devices reporting their core version, and `fr clock` becoming `fr rtc`), a setup command with prebuilt
   firmware images (a first board still needs ESP-IDF 6.1 and a build), CI.
 

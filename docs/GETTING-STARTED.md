@@ -40,7 +40,7 @@ pnpm fr doctor --fix
 - writes the `fr` shim to `~/.local/bin/fr`, which runs this checkout's CLI with the Node it was written with. If
   `~/.local/bin` is not on your `PATH`, doctor says so: add `export PATH="$HOME/.local/bin:$PATH"` to `~/.zshrc`.
 - installs the esptool sidecar into `~/.fractonica/pytools` (with uv's Python 3.12),
-- builds the dashboard and the bench app the hub serves,
+- builds the dashboard the hub serves (`packages/dashboard/dist`; its Bench page has the wiring guides),
 - checks Node, ESP-IDF, the macOS firewall, the LAN route and the serial ports, and prints what it could not fix.
 
 Doctor exits 1 while ESP-IDF is missing; that is expected until you build firmware. After a `git pull` that moved
@@ -65,7 +65,9 @@ fr hub status
 ```
 
 The first start makes macOS ask whether Terminal may find devices on the local network: allow it. `fr hub status`
-shows the version, the ports and devices, and any warnings. The dashboard is at <http://127.0.0.1:7420/>.
+shows the version, the ports and devices, and any warnings. The dashboard is at <http://127.0.0.1:7420/>: its rail has
+Hub (the present moment, the fleet, the hub's health), Devices, Provision, Live, Bench and Settings, and the PURE /
+EARTH switch at its top, as on fractonica.com (user manual, section 21).
 
 Store the Wi-Fi network your boards join. You type the password at a prompt that does not echo it; it is kept in
 `~/.fractonica/secrets.json` (mode 0600) and never printed:
@@ -106,7 +108,7 @@ project's ESP-IDF `export.sh` first) and passes its arguments on; put `--` befor
 -C ../my-app flash`). In `fr serial lease`, write `'$FR_PORT'` in single quotes: in double quotes your shell replaces
 it with nothing before `fr` runs. `fr flash <board>` (framework firmware) leases the port by itself.
 
-Other port commands, also on the dashboard's Ports page and as MCP tools:
+Other port commands, also on the dashboard (Settings › Ports, and Provision's first step) and as MCP tools:
 
 | Command | What it does |
 |---|---|
@@ -160,8 +162,10 @@ fr build --profile c6-pad
    fr devices provision --port /dev/cu.usbmodem1201 --profile c6-pad --alias pad-c6
    ```
 
-   Or on the dashboard: **Ports**, then **Provision** on the port. Pick a profile that is already built: the wizard
-   lists every profile, and an unbuilt one fails after the probe with the `fr build` command to run.
+   Or on the dashboard, with no command at all: open **Provision** and plug the board in. Six steps (plug in,
+   network, board, name, flash, done) and a ring of nine arcs that light as the hub's stages complete. The board's
+   chip picks the profiles to offer, built ones first; an unbuilt one offers **Build and provision**. A port held by
+   another program, lent or ignored is said before anything starts, with the fix.
 4. From now on the hub watches the board's port, also after it resets or is re-plugged. Check it:
 
    ```sh

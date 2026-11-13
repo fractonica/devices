@@ -1,11 +1,11 @@
 ---
 name: wiring
-description: Write and maintain wiring guides and the parts catalogue that the Fractonica hub serves at /apps/bench/ (hardware/wiring/<id>/guide.yaml with SVG diagrams, hardware/parts/*.part.yaml), check a guide's pin table against its device profile, track the user's progress and parts on hand, and build a shopping list. Use whenever a change asks the user to connect, solder or wire anything, when the user asks how something is wired or what to buy, or when a part's pinout, value or quirk is learned at the bench.
+description: Write and maintain wiring guides and the parts catalogue that the Fractonica hub shows on its dashboard's Bench page, /#/bench (hardware/wiring/<id>/guide.yaml with SVG diagrams, hardware/parts/*.part.yaml), check a guide's pin table against its device profile, track the user's progress and parts on hand, and build a shopping list. Use whenever a change asks the user to connect, solder or wire anything, when the user asks how something is wired or what to buy, or when a part's pinout, value or quirk is learned at the bench.
 ---
 
 # Fractonica wiring guides and parts
 
-Wiring lives in the repo and the hub, never only in the chat (design wiring-w1). The user wires from the hub's **bench app** (`http://127.0.0.1:7420/apps/bench/`), ticks steps off there, and the agent sees the ticks.
+Wiring lives in the repo and the hub, never only in the chat (design wiring-w1). The user wires from the dashboard's **Bench** page (`http://127.0.0.1:7420/#/bench`; the old `/apps/bench/` redirects there), ticks steps off there, and the agent sees the ticks.
 
 ## The rule
 
@@ -23,7 +23,7 @@ Every change that asks a person to connect anything ships, **in the same change 
    - sections of steps a person can do one at a time. Each step names one physical action; `pins` lists the pins it touches; `check` says what a multimeter (or the app) should show when it is right.
 3. **Diagrams:** one SVG per section in the chat's drawing vocabulary (classes `t`/`ts`/`th`, `c-gray`/`c-teal`/`c-amber`/`c-coral`/`c-purple`/`c-blue`, vars `--p`/`--s`/`--t`, an `arrow` marker; 680 wide, no scripts, no external references). A diagram drawn for the chat drops in unchanged. Include an overview map when there are more than three connections.
 4. **`fr wiring check <id>` passes** before committing (`pnpm test` runs it on every guide).
-5. **Point the user at the guide's page** in the bench app instead of pasting tables into the chat, and alert them for the physical step (`sk alarm attention …`).
+5. **Point the user at the guide's page** (`/#/bench?v=guide&id=<guide>`) instead of pasting tables into the chat, and alert them for the physical step (`sk alarm attention …`).
 
 When a wiring change moves a pin, change the profile, the guide's connections and the diagram together; a guide whose check fails shows a banner in the app until it is fixed.
 
