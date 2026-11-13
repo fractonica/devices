@@ -94,7 +94,9 @@ function checkout(files: Record<string, string>): string {
   return dir;
 }
 
-describe('the bench file', () => {
+// checkBench loads every board and profile, and bench_get's offline case waits for the router to time two nodes out:
+// fractions of a second to two seconds on a quiet Mac, many more under load, so these get more than vitest's 5 s.
+describe('the bench file', { timeout: 30_000 }, () => {
   it('loads hardware/bench/<name>.bench.yaml of a checkout with BenchSchema (wired defaults to true)', () => {
     const dir = checkout({ 'hardware/bench/lab.bench.yaml': LAB_YAML });
     const r = loadBench(dir);
@@ -212,7 +214,7 @@ describe('the bench file', () => {
   });
 });
 
-describe('bench_get', () => {
+describe('bench_get', { timeout: 30_000 }, () => {
   it('reports the fixture, its clock, every wired line idle, the reserved line, and the DUTs', async () => {
     const b = await rig();
     const s = BenchStatusSchema.parse(await b.call('bench_get', {}));
@@ -292,12 +294,12 @@ describe('bench_get', () => {
     expect(s.problems).toEqual([expect.stringMatching(/^fix-s3: runs 00112233aabbccdd, not the bench's pinned fw_id/)]);
     // pad-c3 goes away, and had not been up since the fixture booted (as after a fixture power loss).
     b.c3.close();
-    await until(() => b.r.router.presence(C3.mac) === 'offline', 5000, 'pad-c3 offline');
+    await until(() => b.r.router.presence(C3.mac) === 'offline', 12_000, 'pad-c3 offline');
     s = await b.call('bench_get', {});
     expect(s.duts.find((d: any) => d.device === C3.mac)).toMatchObject({ presence: 'offline', problem: 'offline' });
     expect(s.problems).toContain('pad-c3: offline');
     b.fixture.close();
-    await until(() => b.r.router.presence(FIX.mac) === 'offline', 5000, 'fixture offline');
+    await until(() => b.r.router.presence(FIX.mac) === 'offline', 12_000, 'fixture offline');
     s = await b.call('bench_get', {});
     expect(s.fixture.presence).toBe('offline');
     expect(s.lines.every((l: any) => l.level === null)).toBe(true);

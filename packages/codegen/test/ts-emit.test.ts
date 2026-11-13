@@ -139,7 +139,9 @@ describe('emitTs', () => {
   });
 });
 
-describe('generateAll', () => {
+// Each test runs the whole generator (every TS, C++ and vector output) one to six times: about a second apiece on a
+// quiet Mac, many more under load, so these get far more than vitest's 5 s.
+describe('generateAll', { timeout: 120_000 }, () => {
   const tmp = mkdtempSync(join(tmpdir(), 'fr-gen-'));
   afterAll(() => rmSync(tmp, { recursive: true, force: true }));
 

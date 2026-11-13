@@ -2089,18 +2089,18 @@ describe.skipIf(!existsSync(BIN) || !LAB_BENCH)('T-HIL on a real loopback hub wi
   // hub's serial bridge (virtual-usb.ts), every line wired by loopback datagrams. T-HIL runs against it through
   // REST as on the bench; the lab bench's fixture.fw_id is not pinned yet (§5.3 step 2), hence --any-fixture-fw.
   // The pads are host processes: their LED timers are fr_net_node's poll() (ms, woken late by macOS), and a
-  // loaded Mac (the full suite runs files in parallel) wakes one up to ~15 ms after its wire's edge. So the
-  // timing gates widen here (a down after its edge and blink widths 25 ms, a STATE to its reading and effect_done
-  // 15 ms, with LED commands 60 ms apart so that a reading still pairs with its own STATE); what this run proves
-  // is that the pieces meet, every phase measured and judged. interop-hil.test.ts holds the 2 ms and 5 ms rules
-  // (at the median) on this same rig.
+  // loaded Mac (the full suite runs files in parallel, other work runs beside it) wakes one tens of ms after its
+  // wire's edge: 15 ms was seen often, over 25 ms at a load average past 10. So the timing gates widen here (a down
+  // after its edge and blink widths 60 ms, a STATE to its reading and effect_done 40 ms, with LED commands 120 ms
+  // apart so that a reading still pairs with its own STATE); what this run proves is that the pieces meet, every
+  // phase measured and judged. interop-hil.test.ts holds the 2 ms and 5 ms rules (at the median) on this same rig.
   const DRY: THilOptions = {
     ...FAST,
     anyFixtureFw: true,
     wiringWaitMs: 3000,
-    ledGapMs: 60,
-    trial: { ...FAST.trial, downMaxUs: 25_000 },
-    led: { ...FAST.led, blinkTolMs: 25, tolUs: 15_000 },
+    ledGapMs: 120,
+    trial: { ...FAST.trial, downMaxUs: 60_000 },
+    led: { ...FAST.led, blinkTolMs: 60, tolUs: 40_000 },
   };
 
   it('runs every phase against fr_net_node pads and the serial-only virtual fixture: pass, full gate, cleanup ok, no hub.prompt', async () => {

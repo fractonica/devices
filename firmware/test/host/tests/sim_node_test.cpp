@@ -288,6 +288,22 @@ TEST(sim_node_strand_runs_its_jobs_in_post_order_one_at_a_time)
         std::atomic<int> overlap{0};
     } seen;
     std::atomic<bool> other_ran{false};
+    // A first job holds the strand until released, and is in flight (taken off the queue) before the eight are
+    // posted: so the queue holds exactly fr::worker::kQueueDepth when the ninth comes, however soon a pool thread
+    // would otherwise have taken job 0 off it (the race that refused or took the ninth by luck).
+    std::atomic<bool> gate_running{false};
+    std::atomic<bool> gate_open{false};
+    CHECK(s.post([&] {
+        gate_running = true;
+        while (!gate_open.load()) {
+            std::this_thread::sleep_for(std::chrono::milliseconds(1));
+        }
+    }));
+    const auto started = std::chrono::steady_clock::now() + std::chrono::seconds(5);
+    while (!gate_running.load() && std::chrono::steady_clock::now() < started) {
+        std::this_thread::sleep_for(std::chrono::milliseconds(1));
+    }
+    REQUIRE(gate_running.load());
     for (int i = 0; i < 8; ++i) {
         Seen *p = &seen;
         CHECK(s.post([p, i] {
@@ -304,6 +320,7 @@ TEST(sim_node_strand_runs_its_jobs_in_post_order_one_at_a_time)
     }
     CHECK(!s.post([] {}));  // fr::worker::kQueueDepth (8) queued: refused, as fr_worker's queue
     CHECK(other.post([&] { other_ran = true; }));  // another node's strand is not held up behind it
+    gate_open = true;
     const auto end = std::chrono::steady_clock::now() + std::chrono::seconds(5);
     while (!s.idle() && std::chrono::steady_clock::now() < end) {
         std::this_thread::sleep_for(std::chrono::milliseconds(2));
@@ -312,7 +329,7 @@ TEST(sim_node_strand_runs_its_jobs_in_post_order_one_at_a_time)
     CHECK(other_ran.load());
     CHECK((seen.order == std::vector<int>{0, 1, 2, 3, 4, 5, 6, 7}));
     CHECK_EQ(seen.overlap.load(), 0);
-    CHECK_EQ(s.stats().run, 8u);
+    CHECK_EQ(s.stats().run, 9u);
     CHECK_EQ(s.stats().refused, 1u);
 }
 

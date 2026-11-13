@@ -6,7 +6,7 @@ import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { z } from 'zod';
 
 import { callTimeoutMs, toResult } from '../src/client.ts';
@@ -109,8 +109,9 @@ describe('fr (subprocess)', { timeout: 20_000 }, () => {
   /** The X-Fr-Client header of each op call (design c6 D18). */
   const clients: (string | undefined)[] = [];
   const replies = new Map<string, { status: number; body: unknown }>();
-  // The fake hub reports this pid, so a stop that wrongly went ahead would only kill a sleep.
-  const decoy = spawn('sleep', ['60'], { stdio: 'ignore' });
+  // The fake hub reports this pid, so a stop that wrongly went ahead would only kill a sleep. It must outlive the
+  // suite (killed in afterAll): one that ended under a slow run would leave a pid the system may give to anything.
+  const decoy = spawn('sleep', ['3600'], { stdio: 'ignore' });
 
   beforeAll(async () => {
     server = createServer((req, res) => {
@@ -131,6 +132,12 @@ describe('fr (subprocess)', { timeout: 20_000 }, () => {
     });
     await new Promise<void>((r) => server.listen(0, '127.0.0.1', r));
     hubUrl = `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
+  });
+  // Each test sees only its own requests and replies: one that sent nothing must not find another test's last call.
+  beforeEach(() => {
+    requests.length = 0;
+    clients.length = 0;
+    replies.clear();
   });
   afterAll(async () => {
     decoy.kill();

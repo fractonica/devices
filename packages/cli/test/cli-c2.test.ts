@@ -100,12 +100,16 @@ describe('fr gen', () => {
     expect(exitCodeForResult(r)).toBe(64);
   });
 
-  it('needs a checkout', async () => {
+  it("outside a checkout works on the CLI's own checkout, and says so on stderr", async () => {
     const outside = mkdtempSync(join(tmpdir(), 'fr-gen-'));
+    const err = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
     try {
-      expect(await genAll({ check: true, cwd: outside })).toMatchObject({ ok: false, error: { code: 'INVALID_SOURCE' } });
-      expect(h.all).toEqual([]);
+      expect(await genAll({ check: true, cwd: outside })).toMatchObject({ ok: true });
+      const own = resolve(dirname(fileURLToPath(import.meta.url)), '..', '..', '..');
+      expect(h.all.map((c) => c.sourceDir)).toEqual([own]);
+      expect(err.mock.calls.map((c) => String(c[0])).join('')).toContain(`is not inside a Fractonica checkout; using ${own}`);
     } finally {
+      err.mockRestore();
       rmSync(outside, { recursive: true, force: true });
     }
   });
