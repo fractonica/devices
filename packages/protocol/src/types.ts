@@ -12,8 +12,7 @@ export const JOB_KINDS = ['build', 'flash', 'reset', 'provision', 'ota', 'deploy
  */
 export const JOB_ORIGINS = ['cli', 'mcp', 'dashboard', 'app'] as const;
 export type JobOrigin = (typeof JOB_ORIGINS)[number];
-/** The request header naming the client (lower case, as Node delivers headers). */
-export const CLIENT_HEADER = 'x-fr-client';
+export { CLIENT_HEADER } from './constants.ts';
 
 export const JobSchema = z.object({
   job_id: z.string(),

@@ -12,8 +12,7 @@ const selector = z.string().min(1).describe('device selector (alias, id:<12hex>,
 // The CLI passes JSON text; REST and MCP callers pass the value itself.
 const jsonObject = z.union([z.record(z.string(), z.unknown()), z.string()]);
 
-/** `"broadcast"`: the reserved alias message_send and binding targets use for every node (09 §9.4). */
-export const BROADCAST_ALIAS = 'broadcast';
+export { BROADCAST_ALIAS } from '../constants.ts';
 
 /** p50 / p99 / max of the samples in a window, in ms; null without samples (the hub's router/latency.ts). */
 const Percentiles = z.looseObject({ n: z.number().int(), p50_ms: z.number().nullable(), p99_ms: z.number().nullable(), max_ms: z.number().nullable() });

@@ -12,13 +12,7 @@ import { cursor } from './ops/common.ts';
 import { ERROR_CODES } from './result.ts';
 import { JOB_KINDS, JOB_STATUSES, JobSchema, LOG_LEVELS, LogLineSchema } from './types.ts';
 
-/**
- * The protocol's name and path (port 7420, 08 §8.10). The name is not a WebSocket subprotocol: `/` is not
- * an RFC 7230 token character, so `new WebSocket(url, 'fr-ws/1')` throws. Clients request none; the path
- * and `hello.v` identify fr-ws/1.
- */
-export const WS_PROTOCOL = 'fr-ws/1';
-export const WS_PATH = '/ws';
+export { WS_PATH, WS_PROTOCOL } from './constants.ts';
 
 /** Delivery limits (D6). */
 export const WS_LIMITS = {

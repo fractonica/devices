@@ -314,6 +314,26 @@ describe('the browser entry (@fractonica/protocol/browser)', () => {
     expect(browser.aliasProblem).toBe(aliasProblem);
   });
 
+  it('has a client entry for the dashboard bundle that loads neither zod nor a builtin', async () => {
+    const script = `
+      import { registerHooks } from 'node:module';
+      const seen = new Set();
+      registerHooks({ resolve(s, c, next) { seen.add(s); return next(s, c); } });
+      await import('@fractonica/protocol/client');
+      console.log(JSON.stringify([...seen]));`;
+    const r = spawnSync(process.execPath, ['--conditions=@fractonica/source', '--input-type=module', '-e', script], { cwd: REPO, encoding: 'utf8' });
+    expect(r.status, r.stderr).toBe(0);
+    const loaded = JSON.parse(r.stdout.trim().split('\n').at(-1)!) as string[];
+    expect(loaded.filter((s) => s === 'zod' || s.startsWith('zod/') || s.startsWith('node:'))).toEqual([]);
+    const client = await import('@fractonica/protocol/client');
+    const browser = await import('@fractonica/protocol/browser');
+    for (const name of ['CLIENT_HEADER', 'WS_PATH', 'WS_PROTOCOL', 'parseCursor', 'formatCursor', 'matchType', 'aliasProblem', 'BROADCAST_ALIAS', 'RESERVED_ALIASES']) {
+      expect(client, name).toHaveProperty(name);
+      expect((client as Record<string, unknown>)[name], name).toBe((browser as Record<string, unknown>)[name]);
+    }
+    expect(client).not.toHaveProperty('OPS');
+  }, 30_000);
+
   it('keeps the alias rules the hub had (moved from hub registry/names.ts)', () => {
     expect(aliasProblem('pad-red-1')).toBeNull();
     expect(aliasProblem('1cdbd4000134')).toMatch(/device id/);
