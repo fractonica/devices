@@ -10,11 +10,12 @@ import { type ReactNode, useEffect, useMemo, useRef, useState } from 'react';
 import { type Core } from '@fractonica/time/browser';
 
 import { earthDuration, spanText as spanAgo } from '../state/device-units.ts';
-import { pureText } from '../state/pure-text.ts';
+import { earthText, pureText } from '../state/pure-text.ts';
 import { type BeadState, Bead } from './bead.tsx';
 import { useMode } from '../shell/mode.ts';
 import { Earth, engrave, Reading } from './text.tsx';
 import { useFractonica } from '../time/hooks.ts';
+import { useMoreRight } from './overflow.ts';
 
 /** A duration in µs as the core's span ("0.048ν", "1ι 12λ"); a negative one with a minus. */
 export function spanText(core: Core, us: bigint | number, parts = 2): string {
@@ -28,13 +29,13 @@ export function useSpanOf(): ((us: bigint) => string) | undefined {
 }
 
 /**
- * A text of the hub's in the mode's units (state/pure-text.ts): Earth mode shows it whole; pure mode says its
- * durations as spans and leaves out a clause that states another Earth measure.
+ * A text of the hub's in the mode's units (state/pure-text.ts): pure mode says its durations as spans and leaves out a
+ * clause that states another Earth measure; Earth mode keeps the spans and adds each Earth value after ⊕.
  */
 export function useHubText(): (text: string) => string {
   const { earth } = useMode();
   const spanOf = useSpanOf();
-  return (text) => (earth ? text : pureText(text, spanOf));
+  return (text) => (earth ? earthText(text, spanOf) : pureText(text, spanOf));
 }
 
 /**
@@ -108,7 +109,7 @@ export function CopyButton({ text, label = 'Copy', what }: { text: string; label
   );
 }
 
-/** A toggle chip: hairline caps word (or a bead and a name), lumen when pressed. */
+/** A toggle chip: an engraved caps word (or a bead and a name), bone over a lumen hairline when pressed; no box. */
 export function Chip({ pressed, onToggle, children, bead, beadLabel, title, count }: { pressed: boolean; onToggle: () => void; children: string; bead?: BeadState; beadLabel?: string; title?: string; count?: number }) {
   return (
     <button type="button" className="ui-chip" aria-pressed={pressed} onClick={onToggle} title={title}>
@@ -121,8 +122,10 @@ export function Chip({ pressed, onToggle, children, bead, beadLabel, title, coun
 
 /** A line of chips that wraps. */
 export function ChipRow({ label, children }: { label: string; children: ReactNode }) {
+  const ref = useRef<HTMLDivElement>(null);
+  useMoreRight(ref);
   return (
-    <div className="ui-chips" role="group" aria-label={label}>
+    <div className="ui-chips" role="group" aria-label={label} ref={ref}>
       {children}
     </div>
   );

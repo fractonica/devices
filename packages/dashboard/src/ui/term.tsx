@@ -1,6 +1,6 @@
 // Logs (design README "Hub" 9): xterm.js on the plate, themed from the tokens. Text bone, errors fault, warnings ash,
-// debug etch-3, the hub's own stage lines lumen; the terminal's 16 ANSI colours are mapped onto the same tokens, so
-// a device's colour sequences stay in the palette. xterm and its fit addon load on first use (a chunk of their own).
+// debug etch-3, the hub's own stage lines ash (ruling 9: no lumen in a log: lumen is the clock's); the terminal's 16
+// ANSI colours are mapped onto those tokens, so a device's colour sequences stay in the palette. xterm and its fit addon load on first use (a chunk of their own).
 //
 //   <Term onOpen={(t) => { t.line('hello'); t.line('boom', 'error'); return () => {} }} />
 //
@@ -44,19 +44,19 @@ export function termTheme(): ITheme {
     selectionForeground: c.bone,
     black: c.void,
     red: c.fault,
-    green: c.lumenMid,
+    green: c.bone,
     yellow: c.ash,
-    blue: c.lumenMid,
+    blue: c.ash,
     magenta: c.ash,
-    cyan: c.lumen,
+    cyan: c.ash,
     white: c.bone,
     brightBlack: c.etch3,
     brightRed: c.fault,
-    brightGreen: c.lumen,
+    brightGreen: c.bone,
     brightYellow: c.bone,
-    brightBlue: c.lumen,
+    brightBlue: c.bone,
     brightMagenta: c.bone,
-    brightCyan: c.lumen,
+    brightCyan: c.bone,
     brightWhite: c.nowCore,
   };
 }

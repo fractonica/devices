@@ -292,7 +292,7 @@
   border-bottom: var(--hair) solid var(--c-etch2);
   background: var(--c-plate);
   color: var(--c-bone);
-  font-size: 12px;
+  font-size: var(--fs-data);
   line-height: 1.45;
   resize: vertical;
 }

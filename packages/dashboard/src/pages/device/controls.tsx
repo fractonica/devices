@@ -78,9 +78,9 @@ export function InlineSlider({
 export function PropSwitch({ checked, onChange, label, disabled }: { checked: boolean; onChange: (v: boolean) => void; label: string; disabled?: boolean }) {
   return (
     <button type="button" role="switch" aria-checked={checked} aria-label={label} className="ui-toggle" disabled={disabled} onClick={() => onChange(!checked)}>
-      <svg width="24" height="14" viewBox="-12 -7 24 14" aria-hidden="true">
-        <rect className="ring" x="-11.5" y="-6.5" width="23" height="13" rx="6.5" strokeWidth="1" />
-        <circle className="knob" cx="-5" cy="0" r="3.5" />
+      <svg width="18" height="18" viewBox="-9 -9 18 18" aria-hidden="true">
+        <circle className="ring" r="7.5" strokeWidth="1" />
+        <circle className="dot" r="3.6" />
       </svg>
       <span className="caps">{engrave(checked ? 'on' : 'off')}</span>
     </button>

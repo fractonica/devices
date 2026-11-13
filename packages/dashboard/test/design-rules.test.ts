@@ -90,6 +90,24 @@ describe('the dashboard sources follow the design rules', () => {
     expect(bad).toEqual([]);
   });
 
+  it('show no milestone code (LCD-1, CLOCK-1, M2-C5) in the texts the hub serves to the Bench', () => {
+    const WIRING = join(import.meta.dirname, '..', '..', '..', 'hardware', 'wiring');
+    const bad: string[] = [];
+    for (const dir of readdirSync(WIRING)) {
+      const file = join(WIRING, dir, 'guide.yaml');
+      if (!statSync(join(WIRING, dir)).isDirectory()) {
+        continue;
+      }
+      const text = readFileSync(file, 'utf8');
+      text.split('\n').forEach((line, i) => {
+        if (/\((?:[^)]*\b)?(?:LCD|CLOCK|POWER|SCALE|CAM|CSI|WIRING|AUDIO)-\d\b(?!\.)|\bM\d-C\d\b/.test(line.replace(/^\s*#.*$/, ''))) {
+          bad.push(`${dir}/guide.yaml:${i + 1}: ${line.trim()}`);
+        }
+      });
+    }
+    expect(bad).toEqual([]);
+  });
+
   it('vendor the site’s token table byte for byte, as tokens.lock says', () => {
     const lock = JSON.parse(readFileSync(join(SRC, 'design', 'tokens.lock'), 'utf8')) as { files: Record<string, { sha256: string }> };
     const sha = createHash('sha256').update(readFileSync(join(SRC, 'design', 'tokens.js'))).digest('hex');

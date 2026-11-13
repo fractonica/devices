@@ -5,7 +5,8 @@
 .ui-chips {
   display: flex;
   flex-wrap: wrap;
-  gap: var(--sp-2);
+  column-gap: var(--sp-4);
+  row-gap: var(--sp-1);
 }
 
 .ui-chip {
@@ -15,10 +16,9 @@
   gap: 7px;
   min-height: 28px;
   max-width: 100%;
-  padding: 0 11px;
-  border: var(--hair) solid var(--c-etch2);
-  border-radius: 2px;
-  color: var(--c-ash);
+  padding: 0;
+  border-bottom: var(--hair) solid transparent;
+  color: var(--c-etch3);
   font-family: var(--font-caps);
   font-weight: var(--w-caps);
   font-size: var(--fs-label);
@@ -54,16 +54,16 @@
   font-weight: var(--w-value);
   font-size: var(--fs-earth);
   letter-spacing: 0;
-  color: var(--c-etch3);
+  color: var(--c-ash);
 }
 
+/* an engraved word, as the sub-nav's (no box: a filter is not a button, ruling 4); pressed: bone over a lumen hairline */
 .ui-chip:hover {
-  border-color: var(--c-etch3);
-  color: var(--c-bone);
+  color: var(--c-ash);
 }
 
 .ui-chip[aria-pressed='true'] {
-  border-color: var(--c-lumen);
+  border-bottom-color: var(--c-lumen);
   color: var(--c-bone);
 }
 
@@ -170,6 +170,13 @@
   flex-wrap: wrap;
   align-items: center;
   gap: var(--sp-2);
+}
+
+.ui-lend-why {
+  flex-basis: 100%;
+  margin-bottom: var(--sp-1);
+  color: var(--c-ash);
+  font-size: var(--fs-earth);
 }
 
 .ui-lend-q {

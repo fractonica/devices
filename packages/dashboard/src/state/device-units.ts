@@ -11,7 +11,7 @@
 // - pixels and bytes are counts, the same in both modes.
 // The words of a field drop an Earth unit from its name too ("on_ms" is "on", "seconds" is "duration").
 
-import type { Core } from '@fractonica/time/browser';
+import { type Core, Unit } from '@fractonica/time/browser';
 
 export type UnitClass = 'none' | 'time' | 'rate' | 'share' | 'earth' | 'count';
 
@@ -78,7 +78,7 @@ export function impliedUnit(name: string, type?: string): string | undefined {
 /** Name suffixes that are an Earth unit (stripped from the words), longest first. */
 const UNIT_SUFFIXES = ['_mv', '_mg', '_mb', '_ms', '_us', '_hz', '_c10', '_s'];
 /** Whole names that are an Earth word. */
-const NAME_WORDS: Record<string, string> = { ms: 'duration', seconds: 'duration', percent: 'charge', freq_hz: 'pitch', unix: 'time', mv: 'voltage', meter_mv: 'meter voltage', supply_mv: 'supply voltage' };
+const NAME_WORDS: Record<string, string> = { on: 'state', ms: 'duration', seconds: 'duration', percent: 'charge', freq_hz: 'pitch', unix: 'time', mv: 'voltage', meter_mv: 'meter voltage', supply_mv: 'supply voltage' };
 
 /** A field or property name as words, with an Earth unit dropped: on_ms → "on", double_click → "double click". */
 export function fieldWords(name: string): string {
@@ -95,11 +95,10 @@ export function fieldWords(name: string): string {
   return n.replace(/_/g, ' ');
 }
 
-/** The microseconds of one Blink at `t` (they follow the Saros interval): 10⁹ µs over the Blinks in them. */
+/** The microseconds of one Blink at `t` (they follow the Saros interval): the core's period of the Blink's level. */
 export function blinkMicros(core: Core, t: bigint = core.frc.now()): number {
-  const s = core.cat.spanBetween(t - 1_000_000_000n, t);
-  const blinks = Number(s.blinks) + s.frac / 2 ** 32;
-  return blinks > 0 ? 1e9 / blinks : NaN;
+  const level = core.frc.unitLevel(Unit.BLINK);
+  return level === null ? NaN : core.frc.periodSeconds(level, core.cat.intervalAt(t)) * 1e6;
 }
 
 /** A span of `us` microseconds ending now, as the core writes it ("3.2ν", "7λ 17ν", "0.0036ν"); "0ν" for none. */

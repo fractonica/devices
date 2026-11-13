@@ -118,6 +118,7 @@ Hairline caps words. `primary` is lumen (one per page); `destructive` is fault a
 | `children` | `ReactNode` | a string is engraved |
 | `confirm` | `string` | the question asked in place before `onClick` |
 | `confirmLabel` | `string` | default "Confirm" |
+| `cancelLabel` | `string` | the word that keeps things as they are, default "Cancel" ("Keep going" for a Stop); focus returns to the button |
 | `busy` | `boolean` | disabled, `aria-busy` (nothing spins) |
 | …button attributes | | `onClick`, `disabled`, `type`, `data-*` |
 
@@ -136,7 +137,7 @@ A caps label over a hairline (no box), a note (ash) or an error (fault) under it
 |---|---|
 | `TextField` | `label`, `value`, `onChange(value)`, `note?`, `error?`, `mono?`, input attributes (`placeholder`, `maxLength`, `type`, …) |
 | `Select` | `label`, `value`, `onChange(value)`, `options: {value, label, disabled?}[]`, `note?`, `error?`, `disabled?` |
-| `Toggle` | `label`, `checked`, `onChange(checked)`, `states?: [off, on]`, `disabled?` (role switch) |
+| `Toggle` | `label`, `checked`, `onChange(checked)`, `states?: [off, on]`, `disabled?` (role switch; the mode toggle's ring, lit with a dot when on; nothing slides) |
 | `Slider` | `label`, `value`, `min`, `max`, `step?`, `onChange(n)`, `format?(n)` (never a percentage), `note?`, `disabled?` |
 
 ```tsx
@@ -291,9 +292,13 @@ current? }[]`, `label?`.
 - `<Span us={…} sign? parts?>`: a duration as the core's span ("0.048ν"), ⊕ its Earth duration in Earth mode.
   `spanText(core, us)` and `useSpanOf()` give the same as strings.
 - `useHubText()` → `(text) => string`: a text the hub wrote in the mode's units (durations as spans, other Earth
-  measures left out in pure mode; whole in Earth mode).
+  measures left out in pure mode; in Earth mode the spans kept and each Earth value added after ⊕).
 - `<CopyButton text label? what?>`: a quiet button that copies; its word says "Copied" (nothing moves).
-- `<ChipRow label>` of `<Chip pressed onToggle bead? count?>`: toggles on a line that wraps (Live's filters).
+- `<ChipRow label>` of `<Chip pressed onToggle bead? count?>`: toggles on a line that wraps (Live's filters): engraved
+  words, no box; bone over a lumen hairline when pressed. A row that scrolls sideways fades at its cut edge (`useMoreRight`
+  in `overflow.ts`, SubNav too).
+- `useInPlace(key, close)` (`in-place.ts`): an in-place form or picker takes focus when it opens, closes on Escape, and
+  gives focus back to the control marked `data-opens="<key>"` (Lend, Add network, Rename).
 - `<Code>`: a command or id in the monospace face, selectable.
 - `<Line bead? label|name value detail actions>`: a row with a detail line across it and its buttons under it (a
   check with its fix, a port with its policy actions).

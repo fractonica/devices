@@ -445,8 +445,7 @@ button.ui-row:hover .ui-row-name {
 }
 
 .ui-input.mono {
-  font-family: var(--mono);
-  font-size: var(--fs-data);
+  font-variant-numeric: tabular-nums;
 }
 
 .ui-input:hover,
@@ -511,25 +510,26 @@ button.ui-row:hover .ui-row-name {
   inset: min(0px, calc((100% - 44px) / 2)) 0;
 }
 
+/* the mode toggle's ring (shell/sigils.tsx ModeRing): engraved at rest; on, the ring and a dot in it lit in lumen.
+   Nothing slides: only the colour changes, over 200 ms. */
 .ui-toggle .ring {
-  fill: var(--c-void);
+  fill: none;
   stroke: currentColor;
-  transition:
-    fill 200ms linear,
-    stroke 200ms linear;
+  transition: stroke 200ms linear;
 }
 
-.ui-toggle .knob {
+.ui-toggle .dot {
   fill: currentColor;
-  transition: transform 200ms linear;
+  opacity: 0;
+  transition: opacity 200ms linear;
 }
 
 .ui-toggle[aria-checked='true'] {
   color: var(--c-lumen);
 }
 
-.ui-toggle[aria-checked='true'] .knob {
-  transform: translateX(10px);
+.ui-toggle[aria-checked='true'] .dot {
+  opacity: 1;
 }
 
 .ui-toggle .caps {
@@ -736,6 +736,10 @@ button.ui-row:hover .ui-row-name {
 
 .ui-ring[data-state='done'] .ui-ring-centre-word {
   fill: var(--c-lumen);
+}
+
+.ui-ring[data-state='stopped'] .ui-ring-centre-word {
+  fill: var(--c-ash);
 }
 
 .ui-ring[data-state='failed'] .ui-ring-centre-word {
@@ -1049,6 +1053,12 @@ button.ui-row:hover .ui-row-name {
   overflow-x: auto;
   scrollbar-width: none;
   border-bottom: var(--hair) solid var(--c-etch1);
+}
+
+/* a sideways scroller cut at its end fades there, so it says there is more (as the site's .more-below) */
+.ui-subnav[data-more],
+.ui-chips[data-more] {
+  mask-image: linear-gradient(to right, black calc(100% - 28px), transparent);
 }
 
 .ui-subnav-item {
