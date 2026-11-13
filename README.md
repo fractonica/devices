@@ -44,7 +44,7 @@ This repository was `fractonica/esp32` (the clock). On 2026-11-13 the framework'
 spike notes and personal data were left out; they stay in the archived `fractonica/hardware`. The clock moved to
 `clock/`. The merge plan and review is `HARDWARE-REVIEW.md` in the owner's workspace (not published).
 
-Checked at the merge, on the owner's Mac:
+Checked at the merge, on the owner's Mac (a record of that day: `web/bench` has since been folded into the dashboard, and the typecheck and test scripts no longer look in `web/`):
 
 - typecheck (root, dashboard, web/bench): clean. vitest, one package at a time: 2,432 of 2,432 passed in the seven
   packages, and web/bench's 8. Timing-sensitive cases can fail under heavy machine load and pass when re-run alone.

@@ -79,7 +79,7 @@ fractonica/                       # this folder; unrelated experiments move to e
 │  ├─ test/host/                   # host C++ suite: codecs, vectors, fuzz, services (`pnpm test:host`, 10 §10.4)
 │  │                               #   sim/: the T2 kit (`fr_sim`: medium, SimAir, SimCore, executor) and tools/fleet.cpp (`fr_fleet`), M2-C2
 │  └─ config/                      # sdkconfig.framework[.<target>], sdkconfig.build.{debug,release}, sdkconfig.local (git-ignored)
-├─ packages/                       # TypeScript (pnpm workspace: packages/*, web/*)
+├─ packages/                       # TypeScript (pnpm workspace: packages/*)
 │  ├─ protocol/                    # Zod control-plane schemas, `fr-ws/1` frames, generated device codecs
 │  ├─ host/                        # host toolchain shared by hub and CLI: paths, IDF env, pytools, `fr doctor`, web dist builds
 │  ├─ codegen/                     # `fr gen`

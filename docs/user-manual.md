@@ -885,32 +885,42 @@ thresholds of the last minute are announced in time order; older ones are skippe
 The hub serves the dashboard at <http://127.0.0.1:7420/>. It is drawn in the same instrument language as
 [fractonica.com](https://fractonica.com): dark, hairline rows, engraved capitals, light for progress (never a bar or a
 percentage), and nothing that blinks. The rail (left on a computer, along the bottom on a phone) has six pages; the
-switch at its top is **PURE / EARTH**, as on the site: pure mode shows only Fractonica units, Earth mode adds the
-clock time, dates and physical units after a ⊕.
+switch at its top (on a phone, in the page's top right corner) is **PURE / EARTH**, as on the site: pure mode shows
+only Fractonica units, Earth mode keeps them and adds the clock time, dates and physical units after a ⊕. On the
+Bench, pure mode leaves out the ratings and sizes parts are sold by (a guide's step says *values in earth* where it
+did).
 
 | Page | What it is for |
 |---|---|
-| **Hub** | The present moment as a small instrument computed by the temporal core, the fleet as beads (one per device, lit when online) with each device's last word, one line of hub health with the checks that need something done, and a banner for anything waiting on you (an agent's prompt, a lent port, a job running). |
+| **Hub** | The present moment as a small instrument computed by the temporal core, the fleet as beads (one per device, lit when online) with each device's last word, one line of hub health (the hub's last checks at once, with when they ran, and **Run fixes** for what the hub can fix itself), a banner for what **needs you** (an agent's prompt, a port lent to a program) and, quietly, what is **running**. At most ten devices are listed, those that need a look first; all of them are on Devices. |
 | **Devices** | Every registered board on one line: presence, profile and chip, signal, firmware, its last event, Identify. **PROVISION A BOARD** starts a new one. |
 | **Device** (open one) | Its capabilities as controls generated from the catalog (switches, sliders, colour wells, command forms), a sparkline per number, its recent events, its log on demand, and on the right its link, clock sync, running state, build and registry facts. **Engineering** (folded) holds diagnostics, bindings, OTA history and the raw record. |
 | **Provision** | **New board**: six steps (plug in · network · board · name · flash · done), with a ring of nine arcs that light as the hub's stages complete; the flash arc fills with the bytes written. **Firmware**: profiles with Build, the builds kept, recent jobs. **Over the air**: preview, then deploy. A job page, `#/provision/<job>`, survives a reload. |
 | **Live** | The event stream as rows, newest first, with Fractonica times (⊕ the clock time in Earth mode). Filter by device and by type; Pause holds the list while events keep coming. |
 | **Bench** | The wiring guides step by step (tick each step off; the hub remembers), the parts catalogue with what is on hand, and a shopping list. Old links to `/apps/bench/` land here. |
-| **Settings** | **Health** (`fr doctor`'s checks with their fixes to copy), **Networks** (Wi-Fi for the nodes, add or change one; a password is never shown again), **Ports** (every USB port and who holds it), **Agents** (prompts, leases, agent jobs), **Storage** (`hub.db`), **About** (versions and what this build is pinned to). |
+| **Settings** | **Health** (`fr doctor`'s checks: **Run fix** for those the hub fixes itself, `fr doctor --fix`'s; other fixes as a command to copy or steps), **Networks** (Wi-Fi for the nodes, add or change one; a password is never shown again), **Ports** (every USB port and who holds it), **Agents** (prompts, leases, agent jobs), **Storage** (`hub.db`), **About** (versions and what this build is pinned to). |
 
 **Provisioning a board, step by step.**
 
 1. Open **Provision** and plug the board in with a USB cable that carries data. It appears within a moment, lit; a
    board you plug in while the page is open is chosen for you. If something else holds the port (a serial monitor, a
    Web Serial tab), or the port is lent or ignored, the page says so and offers the fix (Release, Stop ignoring,
-   Check again) before anything starts.
-2. **Network:** pick one of the stored Wi-Fi networks, or **Add a network** in place.
+   Check again) before anything starts. A port's policy (Lend, Ignore, Claim) is behind its quiet **Port…**:
+   provisioning needs none of it.
+2. **Network:** pick one of the stored Wi-Fi networks, or **Add a network** in place. A 5g-only network is muted for
+   a board known to be another chip than the ESP32-C5.
 3. **Board:** the profiles for the board's chip come first, built ones before the rest; **Automatic** lets the hub
    choose. An unbuilt profile offers **Build and provision**.
 4. **Name:** checked as you type (31 characters at most, letters, digits and hyphens; not one another board has).
-5. **Provision:** the ring lights stage by stage. **Cancel** asks once more in place. The job's output is folded under
-   the steps.
-6. **Done:** the board's name, profile, Wi-Fi and whether it reached the hub, with **Open device** and **Identify**.
+5. **Provision:** the ring lights stage by stage. **Stop** asks once more in place (**Keep going** leaves it running);
+   a stopped job is drawn where it stopped, not as an error. The job's output is folded under the steps. The page's
+   address carries the choices, so a reload shows them.
+6. **Done:** the board's name, profile, Wi-Fi and whether it reached the hub, with **Open device** and **Identify**. A
+   board that was flashed but did not join the Wi-Fi leaves the ring's JOIN arc in the error colour and offers
+   **Change the network and provision again** and **Open its log**.
+
+**When the hub stops answering**, a line at the top of every page says so; until it is back, presence is drawn as not
+known and actions are refused at once (nothing is sent to run minutes later).
 
 **Ports on the dashboard.** Each port says what it is to the hub: *watched by the hub*, *lent* (with when the lease
 ends), *in use by a job*, *held by* another program, *ignored* or *not watched*. **Lend** hands it to another program

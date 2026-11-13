@@ -81,9 +81,18 @@ The dashboard (`packages/dashboard`, stage 4) is drawn in the site's Astrolabe l
 - **The token rule.** Colours only from the site's token table, `src/design/tokens.js` (vendored byte for byte and
   locked by `tokens.lock`, like the core; `fr gen` refreshes it) plus the hub's one extension, the `fault` colour, in
   `src/design/hub-tokens.ts`: `var(--c-*)` in CSS, never a hex, `rgb()` or colour name. Dark only, no bold, nothing
-  that pulses or blinks, no bars or percentages. `test/design-rules.test.ts` fails on any of it.
+  that pulses or blinks, no bars or percentages. Two faces: `--font-reading` (ids, paths and firmware too, with
+  tabular figures: the `.mono` class) and `--font-caps`; the monospace stack only for what a person copies (`<Code>`,
+  `<code>`) and the log terminal. `test/design-rules.test.ts` fails on any of it.
 - **Pure mode** shows only Fractonica units (no clock time, date, zone, Hz, metre or per cent, also in `aria-label`);
-  Earth mode adds them after ⊕. A hub text goes through `useHubText()` (`src/state/pure-text.ts`).
+  Earth mode keeps the Fractonica value and adds the Earth one after ⊕. Any text the dashboard did not write (the hub's,
+  a device's, the catalogue's, a guide's, a toast's) goes through `useHubText()` (`src/state/pure-text.ts`: `pureText`
+  in pure mode, whose output always passes `pureSafe`; `earthText` in Earth mode); the Bench's through
+  `pages/bench/said.tsx`. A relative time under one Blink is a word ("just now"), never a counting fraction
+  (`src/time/wake.ts`).
+- **The live link.** `src/shell/link.ts` says when `/ws` has been down a moment or the hub does not answer its status:
+  the notices say so, presence reads as not known and `useAct` refuses at once. REST calls time out after 10 s
+  (`runtime.ts`), except the long ops (`hooks.ts` LONG_OPS).
 - **Layout.** `src/ui`: the primitives (Page, Section, Row, Bead, Button, StageRing, ErrorLine, Pending, FTime, Span,
   …; their README). `src/pages/<page>.tsx` and `<page>.css` (classes prefixed with the page's name), the page's parts
   in `src/pages/<page>/`, components two pages share in `src/pages/shared/` (a port's actions, the network form).
