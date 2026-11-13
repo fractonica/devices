@@ -12,6 +12,7 @@ import { type Core, dateLine, DateForm, EARTH_SIGN, isoLocal, outOfCatalogueText
 
 import { useMode } from '../shell/mode.ts';
 import { useFractonica, useNowFor } from '../time/hooks.ts';
+import { withinBlink } from '../time/wake.ts';
 import { type InstantLike, instantOf } from '../time/instant.ts';
 import { Reading } from './text.tsx';
 
@@ -55,6 +56,10 @@ function fractonica(core: Core, t: bigint, now: bigint | null, form: FTimeForm, 
     if (now === null) {
       return '';
     }
+    // within a Blink a relative time is a word, not a fraction of the Blink counting at frame rate (time/wake.ts)
+    if (withinBlink(core, t, now)) {
+      return t > now ? 'now' : 'just now';
+    }
     if (t > now) {
       return `in ${frc.formatSpan(cat.spanBetween(now, t), parts)}`;
     }
@@ -81,7 +86,7 @@ function earthText(core: Core, t: bigint, now: bigint | null, kind: FTimeEarth):
   if (kind === 'date-time') {
     return dateLine(core, t);
   }
-  if (now === null) {
+  if (now === null || withinBlink(core, t, now)) {
     return null;
   }
   return t > now ? `in ${core.frc.formatDuration(t - now, 2)}` : `${core.frc.formatDuration(now - t, 2)} ago`;

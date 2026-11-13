@@ -7,6 +7,7 @@ import { type Core, nextCivilSecond, type NowReading, readNow, Unit } from '@fra
 
 import type { Mode } from '../shell/mode.ts';
 import { coreState, loadCore, subscribeCore } from './core.ts';
+import { browserTimers, relativeWake, wakeAt } from './wake.ts';
 
 /** The loaded core, or null while it loads (or when it failed: useCoreError says why). Starts the load. */
 export function useFractonica(): Core | null {
@@ -24,7 +25,10 @@ export function useCoreError(): Error | null {
   return useSyncExternalStore(subscribeCore, coreState, coreState).error;
 }
 
-/** Calls `fire` at the Unix µs `at` (a setTimeout to that instant on the core's clock); again whenever `at` changes. */
+/**
+ * Calls `fire` at the Unix µs `at` on the core's clock (time/wake.ts: armed again when the timer fires early by the
+ * wall clock), again whenever `at` changes, and when the tab comes back into view (a hidden tab's timers are held back).
+ */
 function useWakeAt(core: Core | null, at: bigint | null, fire: () => void): void {
   const ref = useRef(fire);
   ref.current = fire;
@@ -32,11 +36,20 @@ function useWakeAt(core: Core | null, at: bigint | null, fire: () => void): void
     if (!core || at === null) {
       return;
     }
-    const ms = Number(at - core.frc.now()) / 1000;
-    // a timer fires a little early on some engines: one more ms so the core's text has changed when it does
-    const t = setTimeout(() => ref.current(), Math.max(0, Math.min(ms + 1, 2 ** 31 - 1)));
-    return () => clearTimeout(t);
+    return wakeAt(() => core.frc.now(), at, () => ref.current(), browserTimers);
   }, [core, at]);
+  useEffect(() => {
+    if (!core) {
+      return;
+    }
+    const seen = () => {
+      if (document.visibilityState === 'visible') {
+        ref.current();
+      }
+    };
+    document.addEventListener('visibilitychange', seen);
+    return () => document.removeEventListener('visibilitychange', seen);
+  }, [core]);
 }
 
 export interface ReadingOptions {
@@ -89,13 +102,8 @@ export function useNowFor(core: Core | null, origin: bigint | null, maxParts = 2
       return;
     }
     const t = core.frc.now();
-    let wake: bigint | null = null;
-    try {
-      // a past origin counts up from it; a future one counts down to it
-      wake = origin > t ? core.cat.spanNextChange(t, origin, maxParts) : core.cat.spanNextChangeSince(origin, t, maxParts);
-    } catch {
-      wake = null; // outside the catalogue: a fixed text
-    }
+    // a past origin counts up from it, a future one down to it; within a Blink of it the text is a word (wake.ts)
+    const wake = relativeWake(core, origin, t, maxParts);
     setNow({ t, wake });
   }, [core, origin, maxParts, tick]);
   useWakeAt(core, now?.wake ?? null, () => setTick((n) => n + 1));
