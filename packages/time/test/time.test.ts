@@ -257,6 +257,33 @@ describe('catalogue edges: a reading exists only inside the catalogue', () => {
     }
   });
 
+  it('keeps a pure refusal pure: no Gregorian date unless Earth was asked for, then marked ⊕', () => {
+    const at = '1500-01-01T00:00:00Z';
+    const caught = (fn: () => unknown) => {
+      try {
+        fn();
+      } catch (e) {
+        return e as TimeError;
+      }
+      throw new Error('no refusal');
+    };
+    const pure = caught(() => readNow(core, { at }));
+    expect(pure.message).toBe('the instant is outside the catalogue: OUT OF CATALOGUE · α#1 – α#18');
+    expect(pure.details).toEqual({ at_us: String(toInstant(core, at).t), first_us: String(core.cat.first), last_us: String(core.cat.last) });
+    const earth = caught(() => readNow(core, { at, earth: true }));
+    expect(earth.message).toBe('the instant is outside the catalogue: OUT OF CATALOGUE · α#1 – α#18 (⊕ 1613-05-19T17:41:53.032Z to 2857-06-13T09:33:55.816Z)');
+    // a conversion is between the two times: its refusal gives both
+    expect(caught(() => convert(core, { at })).message).toMatch(/⊕ 1613-05-19/);
+  });
+
+  it('has no solar sync in the catalogue\'s partial first and last syncs, and says so as partial_sync', () => {
+    const { cat } = core;
+    for (const at of [`${cat.first}us`, `${cat.last}us`]) {
+      expect(readNow(core, { at }).sun).toBeNull();
+      refuses(() => readSync(core, { at }), 'partial_sync', /partial/);
+    }
+  });
+
   it('stops listing thresholds where the catalogue ends', () => {
     const { cat } = core;
     const r = readNext(core, { at: `${cat.last - 1n}us`, level: 'α', count: 3 });
@@ -281,7 +308,8 @@ describe('levels, quarters, next thresholds and spans', () => {
     refuses(() => parseLevel(core, '0'), 'range');
     refuses(() => parseLevel(core, 'ω'), 'parse');
     expect([0, 1, 2, 3].map((q) => parseQuarter(core, core.frc.formatQuarter(q)))).toEqual([0, 1, 2, 3]);
-    refuses(() => parseQuarter(core, 'noon'), 'parse');
+    expect(parseQuarter(core, 'END')).toBe(3);
+    refuses(() => parseQuarter(core, 'noon'), 'parse', /peak, node, valley, end/);
   });
 
   it('lists the next thresholds of a level, each the end of a quarter of the cycle before it', () => {

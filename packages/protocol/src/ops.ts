@@ -216,7 +216,7 @@ export type { OtaOpName } from './ops/ota.ts';
 export { LeaseSchema, PortPolicyResultSchema, type Lease, type PortPolicyOpName, type PortsOpName } from './ops/ports.ts';
 export { CapInstanceSchema, DeviceLinkInfoSchema, GatewayInfoSchema, type InventoryOpName, type RegistryOpName } from './ops/registry.ts';
 export { TEST_TIERS, TestReportSchema, type TestsOpName, type TestTier } from './ops/tests.ts';
-export { LOCAL_TIME_OPS, TIME_OPS, TIME_QUARTERS, type TimeOpName } from './ops/time.ts';
+export { LOCAL_TIME_OPS, TIME_OPS, type TimeOpName } from './ops/time.ts';
 
 export const OPS = [
   op({

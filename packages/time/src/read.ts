@@ -11,7 +11,7 @@
 // - `earth` blocks exist only when Earth mode was asked for (design ruling 11): a pure reading has no civil time,
 //   zone or Earth unit anywhere in it.
 
-import { DateForm, LevelKind, PentadForm, Unit } from '../vendor/lib/fractonica.js';
+import { DateForm, LevelKind, PentadForm, Quarter, Unit } from '../vendor/lib/fractonica.js';
 import type { Core } from './core.ts';
 import { CoreError } from './core.ts';
 import { dateLine, dayMonthSeconds, duration, isoLocal, isoUtc, nextCivilSecond, signedDuration, when, zoneName } from './earth.ts';
@@ -20,11 +20,18 @@ import { type Clock, clockLevels, inCatalogue, nowOf, type ParsedInstant, parseL
 
 const us = (t: bigint | null) => (t === null ? null : String(t));
 
-/** The instant an op is asked about: `at` (any form toInstant reads), else now; refused outside the catalogue. */
-export function resolveAt(core: Core, at: string | undefined, clock: Clock = {}, what = 'the instant'): bigint {
+/**
+ * The instant an op is asked about: `at` (any form toInstant reads), else now; refused outside the catalogue (the
+ * refusal names the Gregorian bounds only when `earth`).
+ */
+export function resolveAt(core: Core, at: string | undefined, clock: Clock = {}, what = 'the instant', earth = false): bigint {
   const parsed: ParsedInstant = at === undefined ? { t: nowOf(core, clock), form: 'now' } : toInstant(core, at, clock);
-  return inCatalogue(core, parsed, at === undefined ? 'now' : what);
+  return inCatalogue(core, parsed, at === undefined ? 'now' : what, earth);
 }
+
+/** The number of quarters of a cycle and of units, as the core's enumerations count them. */
+const QUARTERS = Object.keys(Quarter).length;
+const UNITS = Object.keys(Unit).length;
 
 /** "Helion" for a unit, the core's "between" for a level between units (design ruling 4), else the level's word. */
 function kindWord(core: Core, level: number): string {
@@ -153,7 +160,7 @@ export interface NowReading {
 export function readNow(core: Core, input: { at?: string; earth?: boolean } = {}, clock: Clock = {}): NowReading {
   const { frc, cat } = core;
   const earth = Boolean(input.earth);
-  const t = resolveAt(core, input.at, clock);
+  const t = resolveAt(core, input.at, clock, undefined, earth);
   const date = cat.dateAt(t);
   const { stamp, terms } = stampOf(core, t);
   const changes: (bigint | null)[] = [cat.cycleAt(t, frc.unitLevel(Unit.BLINK)!).end];
@@ -161,7 +168,9 @@ export function readNow(core: Core, input: { at?: string; earth?: boolean } = {}
     changes.push(nextCivilSecond(core, t));
   }
 
-  const majors = [0, 1, 2, 3].map((level) => {
+  // The major levels (α to δ), as the core classes them.
+  const majorLevels = Array.from({ length: clockLevels(core) + 1 }, (_, level) => level).filter((level) => frc.levelKind(level) === LevelKind.MAJOR);
+  const majors = majorLevels.map((level) => {
     const cycle = cat.cycleAt(t, level);
     return { level, depth: level + 1, symbol: frc.formatLevelName(level), name: frc.formatCycleName(level, cycle.cycle), quarter: frc.formatQuarter(cycle.quarter) };
   });
@@ -309,7 +318,7 @@ export interface LadderReading {
 export function readLadder(core: Core, input: { at?: string; to?: string | number; earth?: boolean } = {}, clock: Clock = {}): LadderReading {
   const { frc, cat } = core;
   const earth = Boolean(input.earth);
-  const t = resolveAt(core, input.at, clock);
+  const t = resolveAt(core, input.at, clock, undefined, earth);
   const to = input.to === undefined ? frc.unitLevel(Unit.BLINK)! : parseLevel(core, input.to);
   const changes: (bigint | null)[] = [];
   const rungs: Rung[] = [];
@@ -368,7 +377,7 @@ export interface NextReading {
 export function readNext(core: Core, input: { level: string | number; quarter?: string; count?: number; at?: string; earth?: boolean }, clock: Clock = {}): NextReading {
   const { frc, cat } = core;
   const earth = Boolean(input.earth);
-  const t0 = resolveAt(core, input.at, clock);
+  const t0 = resolveAt(core, input.at, clock, undefined, earth);
   const level = parseLevel(core, input.level);
   const quarter = input.quarter === undefined ? null : parseQuarter(core, input.quarter);
   const count = input.count ?? 5;
@@ -380,7 +389,7 @@ export function readNext(core: Core, input: { level: string | number; quarter?: 
   let ends = false;
   // Each threshold is the end of a quarter of the cycle running just before it; a quarter filter skips three in four.
   for (let step = 0; thresholds.length < count; step++) {
-    if (step > 4 * count + 4) {
+    if (step > QUARTERS * (count + 1)) {
       throw new TimeError('range', 'no such threshold'); // cannot happen: every cycle has the four quarters
     }
     const th = cat.nextThreshold(t, level);
@@ -436,11 +445,12 @@ export interface SpanReading {
 /** The span from `from` to `to`, both in the catalogue. */
 export function readSpan(core: Core, input: { from: string; to: string; parts?: number; earth?: boolean }, clock: Clock = {}): SpanReading {
   const { frc, cat } = core;
-  const a = inCatalogue(core, toInstant(core, input.from, clock), input.from);
-  const b = inCatalogue(core, toInstant(core, input.to, clock), input.to);
+  const earth = Boolean(input.earth);
+  const a = inCatalogue(core, toInstant(core, input.from, clock), input.from, earth);
+  const b = inCatalogue(core, toInstant(core, input.to, clock), input.to, earth);
   const parts = input.parts ?? 0;
-  if (!Number.isInteger(parts) || parts < 0 || parts > 9) {
-    throw new TimeError('range', `parts ${parts}: give 0 (the core's default) to 9`);
+  if (!Number.isInteger(parts) || parts < 0 || parts > UNITS) {
+    throw new TimeError('range', `parts ${parts}: give 0 (the core's default) to ${UNITS}`);
   }
   const span = cat.spanBetween(a, b);
   return {
@@ -451,8 +461,8 @@ export function readSpan(core: Core, input: { from: string; to: string; parts?: 
     span: frc.formatSpan(span, parts),
     signed: frc.formatSpanSigned(span, parts),
     negative: span.negative,
-    parts: frc.spanParts(span, 9).map((p) => ({ symbol: frc.formatUnitSymbol(p.unit), count: String(p.count) })),
-    ...(input.earth ? { earth: { duration: signedDuration(core, b - a), from: isoLocal(core, a), to: isoLocal(core, b) } } : {}),
+    parts: frc.spanParts(span, UNITS).map((p) => ({ symbol: frc.formatUnitSymbol(p.unit), count: String(p.count) })),
+    ...(earth ? { earth: { duration: signedDuration(core, b - a), from: isoLocal(core, a), to: isoLocal(core, b) } } : {}),
   };
 }
 
@@ -480,10 +490,10 @@ export interface SyncReading {
 export function readSync(core: Core, input: { at?: string; earth?: boolean } = {}, clock: Clock = {}): SyncReading {
   const { frc, cat } = core;
   const earth = Boolean(input.earth);
-  const t = resolveAt(core, input.at, clock);
+  const t = resolveAt(core, input.at, clock, undefined, earth);
   const sync = syncOrNull(core, t);
   if (!sync) {
-    throw new TimeError('out_of_catalogue', 'no solar sync here: the catalogue\'s first and last syncs are partial');
+    throw new TimeError('partial_sync', 'no solar sync here: the catalogue\'s first and last syncs are partial (the instant is in the catalogue: every other reading exists there)');
   }
   const p = cat.pentadAt(t);
   return {
@@ -539,9 +549,10 @@ export interface Conversion {
 /** An instant in every form: from a stamp to Unix µs and ISO, or from ISO, Unix or now to the stamp. */
 export function convert(core: Core, input: { at: string; context?: string }, clock: Clock = {}): Conversion {
   const { frc, cat } = core;
-  const context = input.context === undefined ? undefined : inCatalogue(core, toInstant(core, input.context, clock), input.context);
+  // A conversion gives both times (iso, local), so a refusal names the Gregorian bounds too, marked ⊕.
+  const context = input.context === undefined ? undefined : inCatalogue(core, toInstant(core, input.context, clock), input.context, true);
   const parsed = toInstant(core, input.at, { ...clock, ...(context === undefined ? {} : { context }) });
-  const t = inCatalogue(core, parsed, input.at);
+  const t = inCatalogue(core, parsed, input.at, true);
   const { stamp, terms } = stampOf(core, t);
   return {
     form: parsed.form,

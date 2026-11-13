@@ -21,9 +21,6 @@ const at = instant.optional().describe('the instant to read (default now); now, 
 const earth = z.boolean().default(false).describe('add the Earth (Gregorian, local zone) translation of each instant and span, in an `earth` block; pure Fractonica only by default');
 const level = z.string().min(1).describe('a level: its symbol (η), ASCII letter (h), word (Eta), unit name (Helion) or depth (7 = η; 1 = α … 22 = χ)');
 
-/** The time.threshold quarter words, as the core writes them in lower case. */
-export const TIME_QUARTERS = ['peak', 'node', 'valley', 'end'] as const;
-
 export const TIME_OPS = [
   op({
     name: 'time_now',
@@ -66,7 +63,8 @@ export const TIME_OPS = [
       'The next thresholds of one level after an instant (default now): each quarter boundary (peak, node, valley, end) with the cycle it ends a quarter of, its instant, its stamp and the span to it; `quarter` keeps only one kind (end: each cycle\'s end). Stops where the catalogue ends (ends: true). Use it to plan for a coming threshold; time.threshold events report them as they pass.',
     input: z.object({
       level,
-      quarter: z.enum(TIME_QUARTERS).optional().describe('only boundaries of this kind'),
+      // The core's quarter words, checked by the core (packages/time parseQuarter), so every surface accepts any case.
+      quarter: z.string().min(1).optional().describe('only boundaries of this kind: the core\'s quarter word (peak, node, valley or end), any case'),
       count: z.number().int().min(1).max(100).default(5),
       at,
       earth,

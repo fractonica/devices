@@ -26,5 +26,21 @@ describe('time_* handlers', () => {
     expect(e).toBeInstanceOf(FrError);
     expect(e).toMatchObject({ code: 'INVALID_ARGS', details: { reason: 'out_of_catalogue' } });
     expect((e as FrError).message).toMatch(/OUT OF CATALOGUE · α#1 – α#18/);
+    // pure: no Gregorian date in the message, the bounds in details as Unix µs
+    expect((e as FrError).message).not.toMatch(/\d{4}-\d\d-\d\d|⊕/);
+    expect((e as FrError).details).toMatchObject({ at_us: expect.any(String), first_us: expect.any(String), last_us: expect.any(String) });
+    // with earth: the Gregorian bounds, marked ⊕
+    const earth = await (async () => HANDLERS.time_now({ at: '1500-01-01T00:00:00Z', earth: true }, {} as HubContext))().catch((x: unknown) => x);
+    expect((earth as FrError).message).toMatch(/⊕ 1613-05-19T17:41:53\.032Z to 2857-06-13T09:33:55\.816Z/);
+  });
+
+  it('read the quarter by the core\'s word in any case, and refuse a word it does not have', async () => {
+    const at = '2026-10-08T12:00:00Z';
+    const lower = (await HANDLERS.time_next({ level: 'η', quarter: 'end', count: 2, at, earth: false }, {} as HubContext)) as { thresholds: unknown[] };
+    const upper = (await HANDLERS.time_next({ level: 'η', quarter: 'End', count: 2, at, earth: false }, {} as HubContext)) as { thresholds: unknown[] };
+    expect(upper).toEqual(lower);
+    const e = await (async () => HANDLERS.time_next({ level: 'η', quarter: 'noon', count: 2, at, earth: false }, {} as HubContext))().catch((x: unknown) => x);
+    expect(e).toMatchObject({ code: 'INVALID_ARGS', details: { reason: 'parse' } });
+    expect((e as FrError).message).toMatch(/peak, node, valley, end/);
   });
 });

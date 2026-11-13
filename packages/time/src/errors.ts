@@ -8,7 +8,12 @@ export type TimeErrorReason =
   /** Before the catalogue's first eclipse or after its last: the core has no reading there (design ruling 7). */
   | 'out_of_catalogue'
   /** A value the core refused (a level past the deepest one, a stamp that names no Blink). */
-  | 'range';
+  | 'range'
+  /**
+   * Inside the catalogue, but in its first or last solar sync, which the catalogue holds only in part: the core has
+   * no sync reading there (`fr time sync`); every other reading exists.
+   */
+  | 'partial_sync';
 
 export class TimeError extends Error {
   readonly code = 'INVALID_ARGS' as const;

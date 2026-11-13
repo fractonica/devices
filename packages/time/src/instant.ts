@@ -15,8 +15,10 @@
 //   2026-10-08T12:00:00Z        a civil date and time (everything the core's frc_parse_civil reads); without an
 //   2026-10-08 12:00            offset it is read in the local time zone of the machine
 
+import { Quarter } from '../vendor/lib/fractonica.js';
 import type { Core } from './core.ts';
 import { CoreError } from './core.ts';
+import { EARTH_SIGN } from './earth.ts';
 import { TimeError } from './errors.ts';
 
 /** How an instant was written. */
@@ -173,22 +175,20 @@ export function outOfCatalogueText(core: Core): string {
 
 /**
  * `t`, when the catalogue holds it; else TimeError('out_of_catalogue'), never a reading extrapolated past the
- * eclipses. `what` names the argument in the message.
+ * eclipses. `what` names the argument in the message. The message is pure Fractonica (the catalogue's first and last
+ * cycle by the core's names); the Gregorian bounds are added, marked ⊕, only when `earth` is asked for. details always
+ * carries the instant and the bounds in Unix µs (at_us, first_us, last_us).
  */
-export function inCatalogue(core: Core, parsed: ParsedInstant, what = 'the instant'): bigint {
+export function inCatalogue(core: Core, parsed: ParsedInstant, what = 'the instant', earth = false): bigint {
   const { frc, cat } = core;
   if (cat.contains(parsed.t)) {
     return parsed.t;
   }
   const iso = (t: bigint) => frc.formatCivil(frc.civilFromTime(t, 0), 0);
-  let shown: string;
-  try {
-    shown = iso(parsed.t);
-  } catch {
-    shown = `${parsed.t} µs`;
-  }
+  const bounds = earth ? ` (${EARTH_SIGN} ${iso(cat.first)} to ${iso(cat.last)})` : '';
   const hint = parsed.bareSeconds ? '; a bare number is Unix seconds: write 1791460800000ms for milliseconds or 1791460800000000us for microseconds' : '';
-  throw new TimeError('out_of_catalogue', `${what} (${shown}) is outside the catalogue: ${outOfCatalogueText(core)}, ${iso(cat.first)} to ${iso(cat.last)}${hint}`, {
+  throw new TimeError('out_of_catalogue', `${what} is outside the catalogue: ${outOfCatalogueText(core)}${bounds}${hint}`, {
+    at_us: String(parsed.t),
     first_us: String(cat.first),
     last_us: String(cat.last),
   });
@@ -232,10 +232,10 @@ export function parseLevel(core: Core, text: string | number): number {
 /** A quarter by the core's word (peak, node, valley, end), any case: the core's frc_quarter_t. */
 export function parseQuarter(core: Core, text: string): number {
   const want = text.trim().toLowerCase();
-  for (let q = 0; q < 4; q++) {
-    if (core.frc.formatQuarter(q, true) === want) {
-      return q;
-    }
+  const quarters: number[] = Object.values(Quarter);
+  const found = quarters.find((q) => core.frc.formatQuarter(q, true) === want);
+  if (found !== undefined) {
+    return found;
   }
-  throw new TimeError('parse', `no quarter ${JSON.stringify(text)}: give ${[0, 1, 2, 3].map((q) => core.frc.formatQuarter(q, true)).join(', ')}`);
+  throw new TimeError('parse', `no quarter ${JSON.stringify(text)}: give ${quarters.map((q) => core.frc.formatQuarter(q, true)).join(', ')}`);
 }

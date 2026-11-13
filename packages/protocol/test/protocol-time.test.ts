@@ -18,8 +18,9 @@ describe('time ops', () => {
     expect(findOp('time_convert')!.cli).toEqual({ path: ['time', 'stamp'], positional: ['at'] });
     expect(findOp('time_ladder')!.cli.path).toEqual(['time', 'ladder']);
     expect(findOp('time_next')!.cli).toEqual({ path: ['time', 'next'], positional: ['level'] });
-    expect(REGISTRY_HASH).toBe('d7907c2ee54a');
+    expect(REGISTRY_HASH).toBe('b72ee2ac252c');
     expect(REGISTRY_HASH).not.toBe('050452ab10c2'); // before the time ops
+    expect(REGISTRY_HASH).not.toBe('d7907c2ee54a'); // time_next's quarter as an enum
   });
 
   it('takes an instant as text, pure by default, and bounds next', () => {
@@ -27,7 +28,9 @@ describe('time ops', () => {
     expect(findOp('time_now')!.input.parse({ at: '2026-10-08T12:00:00Z', earth: true })).toEqual({ at: '2026-10-08T12:00:00Z', earth: true });
     expect(findOp('time_convert')!.input.safeParse({}).success).toBe(false);
     expect(findOp('time_next')!.input.parse({ level: 'η' })).toEqual({ level: 'η', count: 5, earth: false });
-    expect(findOp('time_next')!.input.safeParse({ level: 'η', quarter: 'noon' }).success).toBe(false);
+    // the quarter is the core's word, read by the core (any case): the schema only asks for text
+    expect(findOp('time_next')!.input.parse({ level: 'η', quarter: 'End' })).toMatchObject({ quarter: 'End' });
+    expect(findOp('time_next')!.input.safeParse({ level: 'η', quarter: '' }).success).toBe(false);
     expect(findOp('time_next')!.input.safeParse({ level: 'η', count: 101 }).success).toBe(false);
   });
 
