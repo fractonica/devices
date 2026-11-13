@@ -186,6 +186,15 @@ describe('hosted apps at /apps/<name>/', () => {
     expect((await app.inject({ method: 'POST', url: '/apps/demo/', headers: { ...HOST, 'content-type': 'application/json' }, payload: '{}' })).statusCode).toBe(405);
   });
 
+  it('sends the old bench app to the dashboard’s Bench page', async () => {
+    const { app } = site(checkout());
+    for (const url of ['/apps/bench', '/apps/bench/', '/apps/bench/index.html']) {
+      const r = await app.inject({ url, headers: HOST });
+      expect(r.statusCode, url).toBe(302);
+      expect(r.headers.location, url).toBe('/#/bench');
+    }
+  });
+
   it('keeps raw dot segments inside the dist over a real socket', async () => {
     const src = checkout();
     put(join(src, 'secret.txt'), 'top secret\n');

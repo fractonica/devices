@@ -4,7 +4,8 @@
 //   history, so there is no SPA fallback: an unknown path is a 404.
 // - `/apps/<name>/` is web/<name>/dist: index.html gets `window.__FRACTONICA__={token:"…"}` (the /app
 //   token, design c6 D11) in an inline script the page's CSP allows by its hash, and no-store, so the token
-//   is never cached. `/apps/<name>` redirects there.
+//   is never cached. `/apps/<name>` redirects there. `/apps/bench/` (web/bench, folded into the dashboard in stage 4)
+//   redirects to the dashboard's Bench page, `/#/bench`.
 // - A package without a dist answers 503 with the "not built" page; `fr doctor --fix` builds it.
 // - dist/.source-hash against the sources (@fractonica/host web.ts) says whether the dashboard is stale:
 //   hub_status.dashboard and a warning. The source hash is recomputed every 30 s, off the request path.
@@ -195,6 +196,11 @@ export function createStaticSite(hub: () => HubContext, run: HubRunOptions, opts
       app.get('/index.html', (_req, reply) => index(reply));
       app.get<{ Params: { '*': string } }>('/assets/*', (req, reply) => reply.sendFile(req.params['*'], join(dashDir(), 'dist', 'assets'), IMMUTABLE));
       app.get<{ Params: { file: string } }>('/:file', (req, reply) => reply.sendFile(req.params.file, join(dashDir(), 'dist')));
+
+      // ---- the bench app, folded into the dashboard (stage 4): old links to /apps/bench/ land on its Bench page ----
+      const bench = (_req: unknown, reply: FastifyReply) => reply.redirect('/#/bench');
+      app.get('/apps/bench', bench);
+      app.get('/apps/bench/*', bench);
 
       // ---- hosted apps ----
       const appRoot = (name: string) => (APP_NAME.test(name) ? appDir(hub().hubSourceDir, name) : null);
