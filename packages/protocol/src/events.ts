@@ -75,6 +75,8 @@ export const HUB_EVENT_TYPES = [
   // Not `csi.*`: that is the capability event space of an instance named csi (c5d-csi's).
   'stream.started',
   'stream.ended',
+  // Fractonica time (packages/hub/src/time/thresholds.ts): a quarter boundary of a level passed.
+  'time.threshold',
 ] as const;
 export type HubEventType = (typeof HUB_EVENT_TYPES)[number];
 
@@ -313,7 +315,23 @@ export const StreamEndedFields = z.looseObject({
   job_id: z.string().optional(),
 });
 
-/** The fields schema of each hub event type C6, M2-C1, A1 and CSI-1 define, plus hub.warning. */
+/**
+ * time.threshold: a quarter boundary of a Fractonica level passed, as the temporal core places it. Stored for α down
+ * to config.json time.durable_to (default η), live only below it down to time.live_to (default ι). quarter is the
+ * core's word in lower case; cycle and at are decimal strings (cycle indices and Unix µs can pass 2^53).
+ */
+export const TimeThresholdFields = z.looseObject({
+  level: z.number().int(),
+  depth: z.number().int(),
+  symbol: z.string(),
+  unit: z.string().nullable(),
+  quarter: z.string(),
+  cycle: z.string(),
+  at: z.string(),
+  stamp: z.string(),
+});
+
+/** The fields schema of each hub event type C6, M2-C1, A1 and CSI-1 define, plus hub.warning and time.threshold. */
 export const HUB_EVENT_FIELDS = {
   'port.attached': PortAttachedFields,
   'port.detached': PortDetachedFields,
@@ -331,4 +349,5 @@ export const HUB_EVENT_FIELDS = {
   'audio.stream_ended': AudioStreamEndedFields,
   'stream.started': StreamStartedFields,
   'stream.ended': StreamEndedFields,
+  'time.threshold': TimeThresholdFields,
 } as const satisfies Partial<Record<HubEventType, z.ZodType>>;

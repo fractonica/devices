@@ -64,7 +64,7 @@ describe('A1 ops (design audio-a1 D8)', () => {
   });
 
   it('adds the hub events audio.stream_started and audio.stream_ended, with fields schemas', () => {
-    expect(HUB_EVENT_TYPES.slice(-4, -2)).toEqual(['audio.stream_started', 'audio.stream_ended']); // CSI-1 adds two after them
+    expect(HUB_EVENT_TYPES.slice(-5, -3)).toEqual(['audio.stream_started', 'audio.stream_ended']); // CSI-1 adds two after them, then time.threshold
     const fields = (type: keyof typeof HUB_EVENT_FIELDS, f: unknown) => HUB_EVENT_FIELDS[type].safeParse(f).success;
     expect(fields('audio.stream_started', { instance: 'mic', direction: 'in', stream_id: 7, sample_hz: 16000, seconds: 10, path: '/fr/a.wav' })).toBe(true);
     expect(fields('audio.stream_ended', { instance: 'mic', direction: 'in', stream_id: 7, reason: 'net_lost', sample_hz: 16000, samples: 1600, dropped_samples: 3200 })).toBe(true);

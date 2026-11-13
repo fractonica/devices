@@ -98,7 +98,7 @@ describe('CSI-1 ops (design csi-c1 D4, D5, D13)', () => {
   });
 
   it('adds the hub events stream.started and stream.ended (not csi.*: an instance named csi owns that space)', () => {
-    expect(HUB_EVENT_TYPES.slice(-2)).toEqual(['stream.started', 'stream.ended']);
+    expect(HUB_EVENT_TYPES.slice(-3, -1)).toEqual(['stream.started', 'stream.ended']); // then time.threshold
     expect(STREAM_KINDS).toContain('csi'); // CAM-1 adds jpeg (protocol-camera.test.ts)
     const fields = (type: keyof typeof HUB_EVENT_FIELDS, f: unknown) => HUB_EVENT_FIELDS[type].safeParse(f).success;
     expect(fields('stream.started', { kind: 'csi', instance: 'csi', stream_id: 7, format: 'csi1', source: 'router', seconds: 0, live: true })).toBe(true);

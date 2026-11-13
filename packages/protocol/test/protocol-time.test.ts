@@ -1,8 +1,8 @@
 // Fractonica time ops (ops/time.ts): time_now, time_convert, time_ladder, time_next on `fr time …`, read-only, their
-// input schemas and the REGISTRY_HASH they move.
+// input schemas and the REGISTRY_HASH they move; and the time.threshold event's fields.
 import { describe, expect, it } from 'vitest';
 
-import { findOp, LOCAL_TIME_OPS, OPS, REGISTRY_HASH, TIME_OPS } from '../src/index.ts';
+import { findOp, HUB_EVENT_FIELDS, HUB_EVENT_TYPES, LOCAL_TIME_OPS, OPS, REGISTRY_HASH, TIME_OPS } from '../src/index.ts';
 
 describe('time ops', () => {
   it('adds four read-only queries at the end, on `fr time …`, and moves REGISTRY_HASH', () => {
@@ -29,5 +29,13 @@ describe('time ops', () => {
     expect(findOp('time_next')!.input.parse({ level: 'η' })).toEqual({ level: 'η', count: 5, earth: false });
     expect(findOp('time_next')!.input.safeParse({ level: 'η', quarter: 'noon' }).success).toBe(false);
     expect(findOp('time_next')!.input.safeParse({ level: 'η', count: 101 }).success).toBe(false);
+  });
+
+  it('names time.threshold among the hub events, with its fields', () => {
+    expect(HUB_EVENT_TYPES.at(-1)).toBe('time.threshold');
+    const ok = { level: 6, depth: 7, symbol: 'η', unit: 'Helion', quarter: 'end', cycle: '717211', at: '1791464172427759', stamp: 'α#6 β#4 γ#9 δ#3 ε#5 35η 0ι 0λ 0ν' };
+    expect(HUB_EVENT_FIELDS['time.threshold'].safeParse(ok).success).toBe(true);
+    expect(HUB_EVENT_FIELDS['time.threshold'].safeParse({ ...ok, unit: null }).success).toBe(true);
+    expect(HUB_EVENT_FIELDS['time.threshold'].safeParse({ ...ok, at: 1791464172427759 }).success).toBe(false);
   });
 });

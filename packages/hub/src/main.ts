@@ -46,6 +46,7 @@ import { CursorSeq } from './seq.ts';
 import { SerialPortManager } from './serial.ts';
 import { listenLoopbackV6 } from './web/guard.ts';
 import { restoreApps } from './app-host/ops.ts';
+import { createTimeThresholds } from './time/thresholds.ts';
 import { createStaticSite } from './web/static.ts';
 import { createWsServer } from './web/ws.ts';
 
@@ -341,6 +342,9 @@ async function main(): Promise<void> {
   }
   // Apps (design uno-q-services): on a Linux hub with systemd, recorded apps get their units back after a reflash.
   await restoreApps(hub);
+  // Fractonica time: time.threshold events as quarter boundaries pass (config.json time; stored down to the Helion).
+  const thresholds = createTimeThresholds({ events, config: () => hubConfig.read().config.time });
+  await thresholds.start().catch((e: unknown) => console.error(JSON.stringify({ event: 'time_thresholds_failed', message: (e as Error).message })));
   console.log(
     JSON.stringify({
       event: 'listening',
@@ -377,6 +381,7 @@ async function main(): Promise<void> {
     clearInterval(envTimer);
     clearInterval(logTimer);
     jobsRetention.stop();
+    thresholds.stop();
     // Jobs still running here (`fr hub stop --force`, or a signal from elsewhere) are aborted: that
     // kills their build groups and sidecars, and lets them record "cancelled" while the db is open.
     jobs.cancelAll();

@@ -13,7 +13,10 @@
 //     },
 //     "retention": { "jobs_days": 30, "jobs_rows": 5000 },   // finished jobs (and their logs) kept
 //     "log": { "max_bytes": 10485760, "keep": 3 },            // hub.log rotation
-//     "mcp": { "autostart": false }                           // fr mcp may start a hub when none runs
+//     "mcp": { "autostart": false },                          // fr mcp may start a hub when none runs
+//     "time": { "thresholds": true, "durable_to": "η", "live_to": "ι" }
+//                     // time.threshold events: stored for α..durable_to, live only (subscribers, no row) down to live_to;
+//                     // a level is a symbol, word, unit name or depth, which the hub reads with the temporal core
 //   }
 
 import { existsSync, mkdirSync, readFileSync, renameSync, statSync, writeFileSync } from 'node:fs';
@@ -31,6 +34,8 @@ export interface HubConfig {
   retention: { jobs_days: number; jobs_rows: number };
   log: { max_bytes: number; keep: number };
   mcp: { autostart: boolean };
+  /** time.threshold events (packages/hub/src/time/thresholds.ts): levels by name or depth, read by the hub. */
+  time: { thresholds: boolean; durable_to: string; live_to: string };
 }
 
 export const DEFAULT_CONFIG: HubConfig = {
@@ -38,6 +43,7 @@ export const DEFAULT_CONFIG: HubConfig = {
   retention: { jobs_days: 30, jobs_rows: 5000 },
   log: { max_bytes: 10 * 1024 * 1024, keep: 3 },
   mcp: { autostart: false },
+  time: { thresholds: true, durable_to: 'η', live_to: 'ι' },
 };
 
 /** A part of the file that could not be used: the whole file, or one section. */
@@ -139,6 +145,27 @@ export function parseConfig(raw: unknown): { config: HubConfig; problems: string
       config.mcp.autostart = mcp.autostart;
     } else {
       problem('mcp', 'mcp.autostart is not true or false; using false');
+    }
+  }
+  const time = section('time');
+  if (time) {
+    if (time.thresholds !== undefined) {
+      if (typeof time.thresholds === 'boolean') {
+        config.time.thresholds = time.thresholds;
+      } else {
+        problem('time', 'time.thresholds is not true or false; using true');
+      }
+    }
+    for (const key of ['durable_to', 'live_to'] as const) {
+      const v = time[key];
+      if (v === undefined) {
+        continue;
+      }
+      if ((typeof v === 'string' && v.trim() !== '') || (typeof v === 'number' && Number.isInteger(v) && v > 0)) {
+        config.time[key] = String(v).trim();
+      } else {
+        problem('time', `time.${key} is not a level (a symbol such as η, a word or a depth); using ${DEFAULT_CONFIG.time[key]}`);
+      }
     }
   }
   return { config, problems, bad: [...bad] };

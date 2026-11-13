@@ -169,7 +169,7 @@ describe('hub events (D9)', () => {
   const fields = (type: keyof typeof HUB_EVENT_FIELDS, f: unknown) => HUB_EVENT_FIELDS[type].safeParse(f).success;
 
   it('adds op.called, hil.edge and hil.frame, with fields schemas', () => {
-    expect(HUB_EVENT_TYPES.slice(-7, -4)).toEqual(['op.called', 'hil.edge', 'hil.frame']); // A1 and CSI-1 add two each after them
+    expect(HUB_EVENT_TYPES.slice(-8, -5)).toEqual(['op.called', 'hil.edge', 'hil.frame']); // A1 and CSI-1 add two each after them, then time.threshold
     expect(fields('op.called', { op: 'input_simulate', client: 'mcp', instance: 'boot', gesture: 'click', layer: 'gpio' })).toBe(true);
     expect(fields('op.called', { op: 'binding_set', client: null })).toBe(true);
     expect(fields('op.called', { op: 'device_reset', client: 'cli' })).toBe(false);

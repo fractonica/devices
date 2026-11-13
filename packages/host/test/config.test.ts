@@ -22,6 +22,18 @@ describe('readConfig', () => {
     writeFileSync(file, '{}');
     expect(readConfig(file).bad).toEqual([]);
   });
+
+  it('reads the time section: threshold levels by name or depth, a wrong value reported', () => {
+    const file = join(dir, 'time.json');
+    writeFileSync(file, JSON.stringify({ time: { thresholds: false, durable_to: 'δ', live_to: 9 } }));
+    expect(readConfig(file).config.time).toEqual({ thresholds: false, durable_to: 'δ', live_to: '9' });
+    writeFileSync(file, '{}');
+    expect(readConfig(file).config.time).toEqual({ thresholds: true, durable_to: 'η', live_to: 'ι' });
+    writeFileSync(file, JSON.stringify({ time: { live_to: 0, thresholds: 'yes' } }));
+    const bad = readConfig(file);
+    expect(bad.bad).toEqual(['time']);
+    expect(bad.config.time).toEqual({ thresholds: true, durable_to: 'η', live_to: 'ι' });
+  });
 });
 
 describe('liveConfig', () => {
@@ -35,7 +47,7 @@ describe('liveConfig', () => {
     const broken = cfg.refresh();
     expect(broken.config.ports.ignore).toEqual(['aabbcc000001']);
     expect(broken.config.retention.jobs_days).toBe(90);
-    expect(broken.held).toEqual(['ports', 'retention', 'log', 'mcp']);
+    expect(broken.held).toEqual(['ports', 'retention', 'log', 'mcp', 'time']);
     expect(broken.problems.join('\n')).toMatch(/not valid JSON/);
     // Only the retention section wrong: the rest is read, retention held.
     writeFileSync(file, JSON.stringify({ ports: { ignore: [] }, retention: { jobs_days: -1 } }));
@@ -55,7 +67,7 @@ describe('liveConfig', () => {
     const file = join(dir, 'never.json');
     writeFileSync(file, '{ "ports": ');
     const r = liveConfig(file).read();
-    expect(r.unset).toEqual(['ports', 'retention', 'log', 'mcp']);
+    expect(r.unset).toEqual(['ports', 'retention', 'log', 'mcp', 'time']);
     expect(r.problems.join('\n')).toMatch(/opens no port until the file is fixed/);
     // An absent file is the defaults, read cleanly.
     expect(liveConfig(join(dir, 'absent.json')).read()).toMatchObject({ unset: [], held: [], problems: [] });

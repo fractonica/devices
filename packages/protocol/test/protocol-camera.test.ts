@@ -138,7 +138,7 @@ describe('CAM-1 ops (design camera-c1 D11)', () => {
   });
 
   it('the hub events stream.started and stream.ended carry kind jpeg (D11, D12); no new event type', () => {
-    expect(HUB_EVENT_TYPES).toHaveLength(24);
+    expect(HUB_EVENT_TYPES).toHaveLength(25);
     expect(STREAM_KINDS).toEqual(['csi', 'jpeg']);
     const fields = (type: keyof typeof HUB_EVENT_FIELDS, f: unknown) => HUB_EVENT_FIELDS[type].safeParse(f).success;
     expect(fields('stream.started', { kind: 'jpeg', instance: 'cam', stream_id: 8, format: 'mjpg1', to: 'hub', interval_ms: 0, frame_size: 'svga', quality: 12, seconds: 0, live: true })).toBe(true);
