@@ -1,0 +1,14 @@
+Fractonica devices
+Copyright 2026 The Fractonica authors
+
+Licensed under the Apache License, Version 2.0 (see LICENSE).
+
+This repository includes third-party software under its own licence:
+
+- cJSON 1.7.19 (MIT licence), vendored for the host C++ test suite in
+  firmware/test/host/third_party/cjson/; see the LICENSE and PROVENANCE
+  files there.
+
+Firmware builds also fetch components from the ESP Component Registry
+(managed_components/, not part of this repository), each under its own
+licence.
