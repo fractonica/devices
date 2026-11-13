@@ -270,7 +270,7 @@ function EventsRow({ deviceId, inst, names }: { deviceId: string; inst: string; 
   );
 }
 
-function InstanceBlock({ detail, inst, cap, instances }: { detail: DeviceDetail; inst: InstanceView; cap: CatalogCapability | undefined; instances: readonly InstanceView[] }) {
+export function InstanceBlock({ detail, inst, cap, instances }: { detail: DeviceDetail; inst: InstanceView; cap: CatalogCapability | undefined; instances: readonly InstanceView[] }) {
   const deviceId = detail.device_id;
   const live = useLive((s) => s.properties[deviceId]);
   const routerProps = (detail.router?.properties ?? {}) as Record<string, unknown>;

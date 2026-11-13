@@ -3,7 +3,11 @@
 //
 //   /                      pages/hub.tsx        HubPage
 //   /devices               pages/devices.tsx    DevicesPage
-//   /devices/$id           pages/device.tsx     DevicePage        (an alias or a device id)
+//   /devices/$id           pages/device.tsx     DevicePage        (an alias or a device id: its instruments)
+//   /devices/$id/activity  pages/device/page-activity.tsx DeviceActivityPage (events; ?log=1 opens the log)
+//   /devices/$id/facts     pages/device/page-facts.tsx    DeviceFactsPage    (link, time, build, registry)
+//   /devices/$id/engineering  page-engineering.tsx        DeviceEngineeringPage (diagnostics, commands, raw)
+//   /devices/$id/$instance pages/device/page-lens.tsx     DeviceLensPage     (one instrument's page)
 //   /provision             pages/provision.tsx  ProvisionPage
 //   /provision/$job        pages/provision.tsx  ProvisionPage     (resumes a provisioning job)
 //   /live                  pages/live.tsx       LivePage
@@ -23,6 +27,10 @@ import { Shell } from './shell/shell.tsx';
 // The Hub page is in the main chunk (it is the first page); every other page is its own chunk, loaded on first visit.
 const BenchPage = lazyRouteComponent(() => import('./pages/bench.tsx'), 'BenchPage');
 const DevicePage = lazyRouteComponent(() => import('./pages/device.tsx'), 'DevicePage');
+const DeviceActivityPage = lazyRouteComponent(() => import('./pages/device/page-activity.tsx'), 'DeviceActivityPage');
+const DeviceEngineeringPage = lazyRouteComponent(() => import('./pages/device/page-engineering.tsx'), 'DeviceEngineeringPage');
+const DeviceFactsPage = lazyRouteComponent(() => import('./pages/device/page-facts.tsx'), 'DeviceFactsPage');
+const DeviceLensPage = lazyRouteComponent(() => import('./pages/device/page-lens.tsx'), 'DeviceLensPage');
 const DevicesPage = lazyRouteComponent(() => import('./pages/devices.tsx'), 'DevicesPage');
 const LivePage = lazyRouteComponent(() => import('./pages/live.tsx'), 'LivePage');
 const ProvisionPage = lazyRouteComponent(() => import('./pages/provision.tsx'), 'ProvisionPage');
@@ -45,6 +53,12 @@ const routeTree = root.addChildren([
   createRoute({ getParentRoute: parent, path: '/', component: HubPage }),
   createRoute({ getParentRoute: parent, path: '/devices', component: DevicesPage }),
   createRoute({ getParentRoute: parent, path: '/devices/$id', component: DevicePage }),
+  // the device's sub-pages (DEVICE-SPEC §1.1); the static words rank above $instance, and no instance may take one
+  // (pages/device/frame.tsx RESERVED_SEGMENTS)
+  createRoute({ getParentRoute: parent, path: '/devices/$id/activity', component: DeviceActivityPage }),
+  createRoute({ getParentRoute: parent, path: '/devices/$id/facts', component: DeviceFactsPage }),
+  createRoute({ getParentRoute: parent, path: '/devices/$id/engineering', component: DeviceEngineeringPage }),
+  createRoute({ getParentRoute: parent, path: '/devices/$id/$instance', component: DeviceLensPage }),
   createRoute({ getParentRoute: parent, path: '/provision', component: ProvisionPage }),
   createRoute({ getParentRoute: parent, path: '/provision/$job', component: ProvisionPage }),
   createRoute({ getParentRoute: parent, path: '/live', component: LivePage }),
