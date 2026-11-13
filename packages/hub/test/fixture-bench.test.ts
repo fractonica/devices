@@ -42,9 +42,9 @@ async function rig(opts: Parameters<typeof benchRig>[0] = {}): Promise<BenchRig>
 
 /**
  * The lab bench as designed (§2.3: pad-c3 on ch0/ch4/ch8, pad-c3b on ch1/ch5/ch9, fw_id null), frozen. The
- * checkout's own hardware/bench/lab.bench.yaml is the rig as wired and follows the bench, so the cases that need
- * exact lines or exact problems read this copy, and the cases of the checkout's file check only what holds for
- * any rig.
+ * rig as wired (hardware/bench/lab.bench.yaml) is personal and git-ignored, so the cases that need exact lines or
+ * exact problems read this copy, and the case of the committed example (hardware/bench/bench.example.yaml) checks
+ * only what holds for any rig.
  */
 const DESIGN_YAML = readFileSync(join(REPO, 'packages', 'codegen', 'test', 'fixtures', 'lab-design.bench.yaml'), 'utf8');
 /** The fixture and the four DUTs of the lab rig (design m2-c1-hil D2, §2.3). */
@@ -66,6 +66,23 @@ duts:
       status:   { role: led,      dut_gpio: 8,  channel: ch4,  fixture_gpio: 4,  active_level: low, series_ohm: 10000 }
       analog:   { role: analog,   dut_gpio: 3,  channel: ch12, fixture_gpio: 11, dut_profile: c3o-analog, rc: { r_ohm: 10000, c_nf: 1000 }, wired: false }
 `;
+
+/**
+ * A checkout whose lab bench is the committed example (hardware/bench/bench.example.yaml, placeholder ids), with
+ * the real schema, boards, drivers, profiles, partitions and apps linked in: the rig as wired is personal and
+ * git-ignored, so the example stands in for it.
+ */
+function exampleCheckout(): string {
+  const dir = mkdtempSync(join(tmpdir(), 'fr-bench-ex-'));
+  cleanups.push(() => rmSync(dir, { recursive: true, force: true }));
+  for (const d of ['schema', 'hardware/boards', 'hardware/drivers', 'firmware/profiles', 'firmware/partitions', 'firmware/apps']) {
+    mkdirSync(join(dir, d, '..'), { recursive: true });
+    symlinkSync(join(REPO, d), join(dir, d));
+  }
+  mkdirSync(join(dir, 'hardware/bench'), { recursive: true });
+  writeFileSync(join(dir, 'hardware/bench/lab.bench.yaml'), readFileSync(join(REPO, 'hardware/bench/bench.example.yaml'), 'utf8'));
+  return dir;
+}
 
 function checkout(files: Record<string, string>): string {
   const dir = mkdtempSync(join(tmpdir(), 'fr-bench-'));
@@ -99,8 +116,8 @@ describe('the bench file', () => {
     expect(lines.filter((l) => !l.wired).map((l) => l.channel).sort()).toEqual(['ch14']);
   });
 
-  it("loads this checkout's lab bench (the rig as wired): the fixture fix-s3, known DUTs, a pinned fw_id in hex", () => {
-    const r = loadBench(REPO);
+  it('loads the example bench (bench.example.yaml as lab): the fixture fix-s3, known DUTs, a pinned fw_id in hex', () => {
+    const r = loadBench(exampleCheckout());
     expect(r.errors).toEqual([]);
     expect(r.bench?.fixture).toMatchObject({ device: FIX.mac, profile: 's3k-fixture' });
     expect(Object.keys(r.bench!.duts).filter((id) => !KNOWN_DUTS.includes(id))).toEqual([]);
@@ -144,8 +161,8 @@ describe('the bench file', () => {
     expect(() => new BenchMap(testBench((b) => (b.duts[C6.mac].lines.boot.channel = 'ch0')))).toThrow(/ch0 is already the channel of/);
   });
 
-  it("validates this checkout's lab bench with codegen's checkBench (fr gen --check), and refuses one it rejects", () => {
-    expect(validateBench(REPO, 'lab')).toEqual([]);
+  it("validates the example bench with codegen's checkBench (fr gen --check), and refuses one it rejects", () => {
+    expect(validateBench(exampleCheckout(), 'lab')).toEqual([]);
     // A checkout whose bench (as designed) swaps pad-c3's and pad-c3b's BOOT pins: shape and pins unique, but
     // against what s3k-fixture binds (ch0 gpio.42, ch1 gpio.41) the hub would press the other DUT.
     const dir = mkdtempSync(join(tmpdir(), 'fr-bench-ck-'));
@@ -170,8 +187,8 @@ describe('the bench file', () => {
     expect(m.bench()).toBeNull();
     expect(m.warnings()).toEqual([expect.stringMatching(/ch0 binds gpio\.42 in s3k-fixture, not fixture GPIO41/)]);
     expect(() => m.status()).toThrow(expect.objectContaining({ code: 'NOT_FOUND', message: expect.stringMatching(/ch1 binds gpio\.41/) }));
-    // The lab bench as designed takes effect, and so does this checkout's (the rig as wired).
-    for (const text of [lab, readFileSync(join(REPO, 'hardware/bench/lab.bench.yaml'), 'utf8')]) {
+    // The lab bench as designed takes effect, and so does the committed example (hardware/bench/bench.example.yaml).
+    for (const text of [lab, readFileSync(join(REPO, 'hardware/bench/bench.example.yaml'), 'utf8')]) {
       writeFileSync(join(dir, 'hardware/bench/lab.bench.yaml'), text);
       const ok = createFixture(() => ({ hubSourceDir: dir, events: { subscribe: () => () => undefined } }) as unknown as HubContext, RUN);
       ok.start();

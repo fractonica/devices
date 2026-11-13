@@ -37,7 +37,7 @@ detection:
   esptool: { chip_type: '^ESP32-C3 \(QFN32\)', flash_size: 4MB }
   probe: { i2c: { sda: 5, scl: 6, address: 0x3C } }
 sources:
-  - docs/spikes/2026-10-20-hwprobe-c3-oled.md
+  - https://github.com/fractonica/hardware/blob/master/docs/spikes/2026-10-20-hwprobe-c3-oled.md   # the archived fractonica/hardware repository
   - https://docs.zephyrproject.org/latest/boards/01space/esp32c3_042_oled/doc/index.html
   - https://www.otronic.nl/en/esp32-c3-ontwikkelbord-met-mini-042-inch-midi-oled.html
   - https://www.espboards.dev/esp32/esp32-c3-oled-042/   # headers (JP1, JP2)

@@ -11,6 +11,12 @@ sdkconfig.old
 sdkconfig.local
 firmware/config/sdkconfig.local
 
+# Personal, machine-specific: the HIL bench as wired (device ids; hardware/bench/bench.example.yaml is the
+# committed example), a local MCP server config, scratch debug projects
+hardware/bench/lab.bench.yaml
+.mcp.json
+esp32s3-debug/
+
 # Secrets (Wi-Fi credentials, tokens) never go into git
 secrets.json
 *.secret

@@ -1,6 +1,6 @@
 # fr_posix
 
-Fractonica's node runtime on a POSIX host: a Linux board can join the fleet as a device and run the same code as an ESP32 node. That code is the `fr_net` core, the `fr_core` services and display backends, and the generated capability dispatch. The first user is `qonu-node` on the Arduino UNO Q ([`hosts/uno-q/node`](../../../hosts/uno-q/node), design [uno-q-host](../../../docs/design/uno-q-host.md)).
+Fractonica's node runtime on a POSIX host: a Linux board can join the fleet as a device and run the same code as an ESP32 node. That code is the `fr_net` core, the `fr_core` services and display backends, and the generated capability dispatch. The first user is `qonu-node` on the Arduino UNO Q ([`hosts/uno-q/node`](https://github.com/fractonica/hardware/tree/master/hosts/uno-q/node) in the archived fractonica/hardware repository; the Linux boards move to a repository of their own; design [uno-q-host](../../../docs/design/uno-q-host.md)).
 
 | Piece | What it is |
 |---|---|

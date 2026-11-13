@@ -31,7 +31,7 @@
 //     seen. The calibration made stays on the board (kept across reboots: that is the point).
 //   5 display (no person; with --look a person): capability_list's fr.display instance of the DUT whose traits say
 //     `round` (else its only one; failed when there is none that takes layouts): ui_load of web/scale's layout for its
-//     size (web/scale/src/round.ts scaleLayout: the same the app sends), then --ui-sets (10) ui_set of the scale's
+//     size (tests/e2e/lib/scale-round.ts scaleLayout: the same the app sends), then --ui-sets (10) ui_set of the scale's
 //     updates (displayScript), every RESULT ok. With --look: "does the round display show <the last value>?" answered
 //     on BOOT (once: yes; held 2 s: no). No snapshot: the board has no PSRAM for a shadow frame (design D4).
 //   Each phase publishes its figures. A cancelled or failed run sends `<scale>.watch_stop` (a watch falls back by itself
@@ -47,7 +47,7 @@ import { join } from 'node:path';
 
 import type { Job } from '@fractonica/protocol';
 
-import { displaySize, scaleLayout, shownFor, type Shown, uiSets, type UiSet } from '../../web/scale/src/round.ts';
+import { displaySize, scaleLayout, shownFor, type Shown, uiSets, type UiSet } from './lib/scale-round.ts';
 import { ask, readFlags, runJob, scenarioArgs, tell } from './lib/nn-flood-common.ts';
 import { runStandalone } from './lib/runner.ts';
 import { defineScenario, type Needs, type Outcome, type ScenarioCtx } from './lib/scenario.ts';

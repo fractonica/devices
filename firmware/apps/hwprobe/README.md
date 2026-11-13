@@ -35,4 +35,4 @@ On the Mac, start the echo server:
 python3 tools/hwprobe/echo_server.py 7421
 ```
 
-Results from the first run are in [docs/spikes/2026-10-20-hwprobe-c3-oled.md](../../../docs/spikes/2026-10-20-hwprobe-c3-oled.md).
+Results from the first run are in [docs/spikes/2026-10-20-hwprobe-c3-oled.md](https://github.com/fractonica/hardware/blob/master/docs/spikes/2026-10-20-hwprobe-c3-oled.md), in the archived fractonica/hardware repository (the spike notes were not brought into this one).

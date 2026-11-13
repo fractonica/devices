@@ -1,6 +1,6 @@
 # Apps
 
-Background services and websites in Node.js that a Fractonica hub on Linux runs next to itself: the UNO Q's hub, `hosts/uno-q`. An app reaches the hub's devices through `@fractonica/sdk`. Design: [docs/design/uno-q-services.md](../docs/design/uno-q-services.md).
+Background services and websites in Node.js that a Fractonica hub on Linux runs next to itself: the UNO Q's hub (its Linux image, `hosts/uno-q`, is not in this repository: it stays in the [archived fractonica/hardware repository](https://github.com/fractonica/hardware/tree/master/hosts/uno-q) until the Linux boards get a repository of their own). An app reaches the hub's devices through `@fractonica/sdk`. Design: [docs/design/uno-q-services.md](../docs/design/uno-q-services.md).
 
 ## An app
 
@@ -47,7 +47,7 @@ await board.raw.call('matrix', 'text', { x: 1, y: 0, text: 'Hi' });
 
 ## Commands
 
-From the Mac, through `make hub-tunnel` (in `hosts/uno-q`) and `FR_HUB=http://127.0.0.1:7520`; on the board, plain `fr`:
+From the Mac, through `make hub-tunnel` (in `hosts/uno-q` of the Linux-board checkout) and `FR_HUB=http://127.0.0.1:7520`; on the board, plain `fr`:
 
 ```bash
 fr app deploy apps/hello-web                   # pack, upload, npm install, unit, start, check

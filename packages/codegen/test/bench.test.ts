@@ -1,9 +1,9 @@
 // The HIL bench check (design m2-c1-hil D7, D12, §2.3): hardware/bench/*.bench.yaml against the board manifests
 // and the profiles, as `fr gen` and `fr gen --check` run it. Each case edits one thing in a scratch checkout (the
 // checkout's boards and profiles, and the lab bench as designed: test/fixtures/lab-design.bench.yaml, a frozen
-// copy of §2.3) and reads the problems back. The checkout's own hardware/bench/lab.bench.yaml is the rig as wired
-// and follows the bench, so the tests of that file check only what holds for any rig: it validates, its notes
-// are documented exceptions, and it names the known devices.
+// copy of §2.3) and reads the problems back. The rig as wired (hardware/bench/lab.bench.yaml) is personal and
+// git-ignored; the committed hardware/bench/bench.example.yaml stands in for it, and its tests check only what holds
+// for any rig: it validates, its notes are documented exceptions, and it names the known devices.
 
 import { cpSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -25,6 +25,8 @@ type Yaml = Record<string, any>;
 const BENCH = 'hardware/bench/lab.bench.yaml';
 /** The lab bench as designed (§2.3: pad-c3 on ch0/ch4/ch8, pad-c3b on ch1/ch5/ch9, fw_id null), frozen. */
 const DESIGN_BENCH = join(dirname(fileURLToPath(import.meta.url)), 'fixtures', 'lab-design.bench.yaml');
+/** The committed example bench (placeholder ids), loaded as `lab` in a scratch checkout. */
+const EXAMPLE_BENCH = join(ROOT, 'hardware', 'bench', 'bench.example.yaml');
 const FIXTURE = 'firmware/profiles/s3k-fixture.profile.yaml';
 const PAD_C3 = '1cdbd40002c4';
 const PAD_C3B = '1cdbd4000134';
@@ -42,12 +44,12 @@ afterEach(() => {
  * A scratch checkout with what the bench check reads (and, with schema, what `fr gen` reads): the checkout's
  * boards, drivers and profiles, and the as-designed lab bench as its only bench, whatever the rig's file says.
  */
-function checkout(opts: { schema?: boolean } = {}): string {
+function checkout(opts: { schema?: boolean; bench?: string } = {}): string {
   const dir = mkdtempSync(join(tmpdir(), 'fr-bench-'));
   temps.push(dir);
   cpSync(join(ROOT, 'hardware'), join(dir, 'hardware'), { recursive: true, filter: (src) => relative(join(ROOT, 'hardware'), src).split(sep)[0] !== 'bench' });
   mkdirSync(join(dir, 'hardware', 'bench'));
-  cpSync(DESIGN_BENCH, join(dir, BENCH));
+  cpSync(opts.bench ?? DESIGN_BENCH, join(dir, BENCH));
   cpSync(join(ROOT, 'firmware', 'partitions'), join(dir, 'firmware', 'partitions'), { recursive: true });
   cpSync(join(ROOT, 'firmware', 'profiles'), join(dir, 'firmware', 'profiles'), { recursive: true });
   cpSync(join(ROOT, 'firmware', 'apps', 'node', 'CMakeLists.txt'), join(dir, 'firmware', 'apps', 'node', 'CMakeLists.txt'));
@@ -109,11 +111,12 @@ const NOTE = new RegExp(
   `^${esc(BENCH)}: duts\\.([0-9a-f]{12})\\.lines\\.(\\w+): note: (ch\\d+) is an input tap on fixture GPIO(\\d+), which glitches at power-up, and reaches strapping pin GPIO(\\d+) of \\1: ${esc(NOTE_TAIL)}$`,
 );
 
-describe("this checkout's lab bench (the rig as wired)", () => {
+describe('the example bench (hardware/bench/bench.example.yaml, as lab)', () => {
   it('passes against the committed boards and profiles, and its only notes are the documented D12 input taps', () => {
-    const { bench, notes } = checkBench(ROOT, 'lab', { model: MODEL });
-    expect(listBenches(ROOT)).toContain('lab');
-    const all = checkBenches(ROOT, MODEL);
+    const dir = checkout({ bench: EXAMPLE_BENCH });
+    const { bench, notes } = checkBench(dir, 'lab', { model: MODEL });
+    expect(listBenches(dir)).toContain('lab');
+    const all = checkBenches(dir, MODEL);
     expect(all.benches).toContain(BENCH);
     expect(all.notes.filter((n) => n.startsWith(`${BENCH}: `))).toEqual(notes);
     for (const note of notes) {
@@ -127,7 +130,7 @@ describe("this checkout's lab bench (the rig as wired)", () => {
   });
 
   it('names the known fixture and DUTs, and a pinned fixture.fw_id is a hex fw_id of 16 to 64 digits', () => {
-    const { bench } = checkBench(ROOT, 'lab', { model: MODEL });
+    const { bench } = checkBench(checkout({ bench: EXAMPLE_BENCH }), 'lab', { model: MODEL });
     expect(bench.fixture).toMatchObject({ device: FIX_S3, profile: 's3k-fixture' });
     expect(Object.keys(bench.duts).length).toBeGreaterThan(0);
     expect(Object.keys(bench.duts).filter((id) => !(id in KNOWN_DUTS))).toEqual([]);

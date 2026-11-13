@@ -26,7 +26,7 @@ Contents:
 18. [Troubleshooting](#18-troubleshooting)
 19. [The bench](#19-the-bench)
 
-Every `fr` command below runs from the checkout (`~/projects/fractonica-hardware`). Add `--json` to any of them for machine-readable output, and `--help` to see all options.
+Every `fr` command below runs from the checkout of this repository (for example `~/projects/fractonica-org/devices`). Add `--json` to any of them for machine-readable output, and `--help` to see all options.
 
 ---
 
@@ -703,7 +703,7 @@ The SDK gives you the devices by alias, their commands and events, and live stre
 
 Every `fr` command is also an MCP tool, served by `fr mcp`.
 
-- **Claude Code:** run `claude --plugin-dir ~/projects/fractonica-hardware/plugin`, or install it once with `/plugin marketplace add ~/projects/fractonica-hardware` then `/plugin install fractonica@fractonica`. Its skills teach the agent each area: fleet-ops, build-deploy, e2e-verify, hil-rig, audio, camera and scale.
+- **Claude Code:** run `claude --plugin-dir <checkout>/plugin`, or install it once with `/plugin marketplace add <checkout>` then `/plugin install fractonica@fractonica`. Its skills teach the agent each area: fleet-ops, build-deploy, e2e-verify, hil-rig, audio, camera and scale.
 - **Other agents:** [`plugin/AGENTS.md`](../plugin/AGENTS.md) has the same guidance with CLI equivalents.
 - Ask in plain words, for example "take a photo with cam-esp32 and show it to me" or "record ten seconds from mic-s3".
 

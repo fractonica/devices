@@ -1,7 +1,8 @@
 // The HIL bench reader (design m2-c1-hil D7): readBench loads hardware/bench/<name>.bench.yaml (lab by default)
 // with BenchSchema, for the hub's fixture module, and reports a missing or malformed file instead of throwing.
 // The exact cases read the lab bench as designed (§2.3), frozen in packages/codegen/test/fixtures; the
-// checkout's own hardware/bench/lab.bench.yaml is the rig as wired, so its test checks only what holds for any rig.
+// rig as wired (hardware/bench/lab.bench.yaml) is personal and git-ignored, so the committed example
+// (hardware/bench/bench.example.yaml) stands in for it, and its test checks only what holds for any rig.
 
 import { mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
@@ -53,8 +54,8 @@ describe('readBench', () => {
     expect(bench!.duts['94a9900007cc'].lines.en).toMatchObject({ role: 'en', dut_pin: 'EN', via: 'nfet', wired: false });
   });
 
-  it("reads this checkout's lab bench (the rig as wired): the known fixture and DUTs, a pinned fw_id in hex", () => {
-    const { bench, errors } = readBench(REPO);
+  it('reads the example bench (hardware/bench/bench.example.yaml) as lab: the known fixture and DUTs, a pinned fw_id in hex', () => {
+    const { bench, errors } = readBench(checkout({ 'hardware/bench/lab.bench.yaml': readFileSync(join(REPO, 'hardware', 'bench', 'bench.example.yaml'), 'utf8') }));
     expect(errors).toEqual([]);
     expect(bench).toMatchObject({ schema: 'fractonica/bench@1', id: 'lab', fixture: { device: FIX_S3, profile: 's3k-fixture' } });
     expect(Object.keys(bench!.duts).filter((id) => !KNOWN_DUTS.includes(id))).toEqual([]);

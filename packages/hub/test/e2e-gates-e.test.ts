@@ -1888,7 +1888,12 @@ describe('T-LAT, T-INPUT, T-LED and T-AGENT with the HIL bench', () => {
       "the checkout's hardware/bench/lab.bench.yaml wires the T-LAT rig's pins to the fixture (pad-c6 test_pin GPIO20 on fixture ch10, pad-c3b boot GPIO9 on fixture ch1, pad-c3b test_pin GPIO10 on fixture ch9, pad-c6 boot GPIO9 on fixture ch2), though the hub has no bench loaded (bench_get: NOT_FOUND no HIL bench: duts.58e6c5000564.lines.boot.channel: Required): the cross-jumpers are off; T-LAT returns at M2-C8 on the fixture",
     );
     // This checkout's file (the rig as wired) wires the same rig's pins, wherever they went: T-LAT stays skipped.
-    expect(await benchSkip(ctxOn(noBench.url).ctx, T_LAT)).toMatch(/^the checkout's hardware\/bench\/lab\.bench\.yaml wires the T-LAT rig's pins to the fixture \(/);
+    // (The rig as wired is git-ignored: the committed example, bench.example.yaml, stands in for it.)
+    const example = mkdtempSync(join(tmpdir(), 'fr-tlat-example-'));
+    cleanups.push(() => rmSync(example, { recursive: true, force: true }));
+    mkdirSync(join(example, 'hardware', 'bench'), { recursive: true });
+    writeFileSync(join(example, 'hardware', 'bench', 'lab.bench.yaml'), readFileSync(join(REPO, 'hardware', 'bench', 'bench.example.yaml'), 'utf8'));
+    expect(await benchSkip({ ...ctxOn(noBench.url).ctx, sourceDir: example }, T_LAT)).toMatch(/^the checkout's hardware\/bench\/lab\.bench\.yaml wires the T-LAT rig's pins to the fixture \(/);
     // A checkout with no bench file, or pairs it does not wire: T-LAT runs.
     const bare = mkdtempSync(join(tmpdir(), 'fr-tlat-'));
     cleanups.push(() => rmSync(bare, { recursive: true, force: true }));

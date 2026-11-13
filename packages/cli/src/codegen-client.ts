@@ -125,7 +125,7 @@ export function addCodegenClientCommand(codegen: Command, kit: CliKit): void {
   codegen
     .command('client')
     .description("Write an app's typed device registry for @fractonica/sdk (devices.ts; token.ts 0600, git-ignored) into --out")
-    .option('--out <dir>', 'output directory, e.g. web/demo/src/fractonica', 'fractonica')
+    .option('--out <dir>', 'output directory, e.g. web/myapp/src/fractonica', 'fractonica')
     .option('--selector <sel>', 'devices to include (default: every provisioned device)')
     .option('--no-token', 'do not write token.ts')
     .action(async (opts: { out: string; selector?: string; token: boolean }) => {

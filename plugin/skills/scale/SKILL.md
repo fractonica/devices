@@ -53,6 +53,8 @@ A board's scale is an `fr.scale` instance (usually `scale`): an HX711 24-bit bri
 
 ## The app
 
+Not in this repository: the bench web apps (web/scale, web/force, web/cam, web/csi, web/power, web/demo) stay in the [archived fractonica/hardware repository](https://github.com/fractonica/hardware/tree/master/web); a hub serves them only from a checkout that has them. The ops below work without them.
+
 `http://127.0.0.1:7420/apps/scale/` (web/scale): pick a board with fr.scale, a large readout in grams with a stability dot (green stable, amber settling, red no HX711), a 30 s plot, the HX711's rate and the rate reports arrive at, the noise (sd over the plot's window), Tare, Calibrate (a known-mass field; both retried while the board says not stable), Reset calibration, **live at 80 Hz** (while on, a 30 s `watch_start {report_hz: 80}` renewed every 20 s, so the plot and the noise show every conversion; off, or the page closed, it only stops renewing and the board falls back within 30 s to reporting changes of 100 mg or more; it never sends `watch_stop`, which belongs to a `scale_watch` job, but while on its renewals do replace a running job's rate and window, so turn it off before a `scale_watch` at another rate), and **Show on the round display**: it loads a layout centred in the circle (a ring gauge of the full scale, the value, the unit, the state) on the chosen fr.display (the round one by default) and updates it with `ui_set` at most 5 times a second while the page is open, in a hidden tab too (about once a second there); a failed `ui_load` or `ui_set` loads the layout again after 2 s, backing off to 30 s. Point the person at it to watch the scale live.
 
 ### Force instrument

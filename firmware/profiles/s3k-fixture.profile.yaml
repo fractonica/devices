@@ -4,7 +4,7 @@ app: node
 role: fixture                      # HELLO role 2 (CONFIG_FR_ROLE): out of `all`, fenced, invisible to apps (D6, D15)
 net: { link_profile: default, radio: off }   # serial only: no Wi-Fi, no ESP-NOW
 test_pin: none                     # no CONFIG_FR_TEST_PIN; diag info reports -1
-# SPIRAM stays off, as in every M1 profile. Channel -> DUT line: hardware/bench/lab.bench.yaml.
+# SPIRAM stays off, as in every M1 profile. Channel -> DUT line: hardware/bench/lab.bench.yaml (example: bench.example.yaml).
 caps:
   status: { cap: fr.led,     driver: led_ws2812,        bind: leds.rgb, config: { max_brightness: 32 } }  # identify blink; lit while a press runs
   ch0:    { cap: fr.fixture, driver: fixture_gpio,      bind: gpio.42, config: { drive: open_drain } }

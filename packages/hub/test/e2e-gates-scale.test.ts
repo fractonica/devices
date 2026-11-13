@@ -5,7 +5,7 @@
 
 import { describe, expect, it } from 'vitest';
 
-import { scaleLayout } from '../../../web/scale/src/round.ts';
+import { scaleLayout } from '../../../tests/e2e/lib/scale-round.ts';
 import {
   DEFAULT_PHASES,
   DEFAULTS,
