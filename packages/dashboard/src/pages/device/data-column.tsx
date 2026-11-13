@@ -7,8 +7,10 @@ import { useState } from 'react';
 
 import type { DeviceDetail } from '../../api/types.ts';
 import { useAct } from '../../hooks.ts';
+import { usePresence } from '../../shell/link.ts';
 import { CLOCK_WORDS, type ClockInfo, clockState, hardwareLine, heartbeatOf, linksText, shortId } from '../../state/device-link.ts';
 import { countText } from '../../state/device-units.ts';
+import { presenceWord } from '../../state/words.ts';
 import { Button, Earth, FTime, presenceBead, Row, Section, Span, TextField } from '../../ui/index.ts';
 import { Signal } from './bits.tsx';
 
@@ -17,6 +19,7 @@ const PRESENCE_TEXT: Record<string, string> = {
   suspect: 'suspect: heartbeats are late',
   offline: 'offline',
   unknown: 'not seen since the hub started',
+  not_known: 'not known: the hub does not answer',
 };
 
 function ClockRows({ clock }: { clock: ClockInfo | null }) {
@@ -90,6 +93,8 @@ function Tags({ detail }: { detail: DeviceDetail }) {
 }
 
 export function DataColumn({ detail, fetchedAt }: { detail: DeviceDetail; fetchedAt: number }) {
+  const said = usePresence();
+  const presence = said(detail.presence) ?? 'unknown';
   const r = detail.router;
   const hb = heartbeatOf(r?.heartbeat as Record<string, unknown> | null | undefined);
   const fw = detail.fw_id ?? r?.fw_id_prefix ?? null;
@@ -97,7 +102,7 @@ export function DataColumn({ detail, fetchedAt }: { detail: DeviceDetail; fetche
   return (
     <div className="dev-data">
       <Section title="Link">
-        <Row label="Presence" bead={presenceBead(detail.presence)} beadLabel={detail.presence} value={PRESENCE_TEXT[detail.presence] ?? detail.presence} />
+        <Row label="Presence" bead={presenceBead(presence)} beadLabel={presenceWord(presence)} value={PRESENCE_TEXT[presence] ?? presence} />
         {r ? (
           <>
             <Row label="Links" value={r.links.length ? linksText(r.links, r.gw) : <span className="ash">none open</span>} extra={r.udp_blocked ? 'UDP is blocked on this network: it talks over TCP only' : undefined} />

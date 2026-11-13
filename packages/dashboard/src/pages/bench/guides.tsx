@@ -4,7 +4,7 @@
 import { useOp } from '../../hooks.ts';
 import { stepsText } from '../../state/bench-view.ts';
 import type { WiringLoadError } from '@fractonica/protocol/client';
-import { Bead, Caps, Code, EmptyState, ErrorLine, Pending, Row, Section } from '../../ui/index.ts';
+import { Bead, Caps, EmptyState, ErrorLine, Pending, Row, Section } from '../../ui/index.ts';
 import { BenchLink } from './link.tsx';
 import { Said } from './said.tsx';
 import { StepRing } from './step-ring.tsx';
@@ -16,7 +16,7 @@ export function Refused({ refused }: { refused: readonly WiringLoadError[] }) {
   return (
     <Section title="Files the hub refused" aside={<Bead state="fault" label="refused" />}>
       {refused.map((r) => (
-        <Row key={r.file} bead="fault" name={<Code>{r.file}</Code>} extra={r.errors.join(' · ')} />
+        <Row key={r.file} bead="fault" name={<span className="mono">{r.file}</span>} extra={r.errors.join(' · ')} />
       ))}
     </Section>
   );
@@ -32,7 +32,7 @@ export function GuidesView() {
         {!q.data && !q.error ? <Pending what="the guides" /> : null}
         {q.data && !guides.length ? (
           <EmptyState title="No wiring guides yet">
-            A guide lives in <Code>hardware/wiring/&lt;id&gt;/guide.yaml</Code> with its drawings beside it; the wiring skill writes one with every hardware change.
+            A guide lives in <span className="mono">hardware/wiring/&lt;id&gt;/guide.yaml</span> with its drawings beside it; the wiring skill writes one with every hardware change.
           </EmptyState>
         ) : null}
         {guides.map((g) => {

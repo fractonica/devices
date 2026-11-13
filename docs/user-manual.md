@@ -887,8 +887,10 @@ The hub serves the dashboard at <http://127.0.0.1:7420/>. It is drawn in the sam
 percentage), and nothing that blinks. The rail (left on a computer, along the bottom on a phone) has six pages; the
 switch at its top (on a phone, in the page's top right corner) is **PURE / EARTH**, as on the site: pure mode shows
 only Fractonica units, Earth mode keeps them and adds the clock time, dates and physical units after a ⊕. On the
-Bench, pure mode leaves out the ratings and sizes parts are sold by (a guide's step says *values in earth* where it
-did).
+Bench, pure mode puts a small ⊕ where a guide, a part or a drawing states a rating or a size (“below ⊕ it is damaged”),
+so every sentence keeps its shape and a safety limit is never silently gone; a guide's step or safety line also says
+*values in earth*, and Earth mode shows each value after its ⊕. Identifiers (a USB serial, a MAC) are always shown as
+written.
 
 | Page | What it is for |
 |---|---|
@@ -898,7 +900,7 @@ did).
 | **Provision** | **New board**: six steps (plug in · network · board · name · flash · done), with a ring of nine arcs that light as the hub's stages complete; the flash arc fills with the bytes written. **Firmware**: profiles with Build, the builds kept, recent jobs. **Over the air**: preview, then deploy. A job page, `#/provision/<job>`, survives a reload. |
 | **Live** | The event stream as rows, newest first, with Fractonica times (⊕ the clock time in Earth mode). Filter by device and by type; Pause holds the list while events keep coming. |
 | **Bench** | The wiring guides step by step (tick each step off; the hub remembers), the parts catalogue with what is on hand, and a shopping list. Old links to `/apps/bench/` land here. |
-| **Settings** | **Health** (`fr doctor`'s checks: **Run fix** for those the hub fixes itself, `fr doctor --fix`'s; other fixes as a command to copy or steps), **Networks** (Wi-Fi for the nodes, add or change one; a password is never shown again), **Ports** (every USB port and who holds it), **Agents** (prompts, leases, agent jobs), **Storage** (`hub.db`), **About** (versions and what this build is pinned to). |
+| **Settings** | **Health** (`fr doctor`'s checks: **Run fix** on a check runs that check's fix only, and its row says what the fix changes; a fix that rewrites the `fr` command in `~/.local/bin` asks first, and a hub started with its own `FR_HOME` leaves that one to you as a command to copy; other fixes as a command to copy or steps), **Networks** (Wi-Fi for the nodes, add or change one; a password is never shown again), **Ports** (every USB port and who holds it), **Agents** (prompts, leases, agent jobs), **Storage** (`hub.db`), **About** (versions and what this build is pinned to). |
 
 **Provisioning a board, step by step.**
 

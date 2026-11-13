@@ -878,8 +878,9 @@ button.ui-row:hover .ui-row-name {
   border-bottom: var(--hair) solid var(--c-etch1);
 }
 
+/* on the label's line, as a row's bead: a long message wraps under it, the sign stays with the word */
 .ui-error-sign {
-  align-self: center;
+  align-self: baseline;
   display: flex;
 }
 

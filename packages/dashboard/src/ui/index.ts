@@ -8,7 +8,7 @@ export { Disclosure, type DisclosureProps } from './disclosure.tsx';
 export { EmptyState, type EmptyStateProps } from './empty-state.tsx';
 export { type ErrorFix, ErrorLine, type ErrorLineProps } from './error-line.tsx';
 export { Select, type SelectOption, type SelectProps, Slider, type SliderProps, TextField, type TextFieldProps, Toggle, type ToggleProps } from './fields.tsx';
-export { Chip, ChipRow, Code, CopyButton, Line, Span, spanText, useHubText, useSpanOf } from './kit.tsx';
+export { Chip, ChipRow, Code, CopyButton, Line, Span, spanText, useHeldText, useHubText, useSpanOf } from './kit.tsx';
 export { FTime, type FTimeEarth, type FTimeForm, type FTimeProps, fTimeText } from './ftime.tsx';
 export { Page, type PageProps, Section, type SectionProps } from './page.tsx';
 export { Pending, Row, type RowProps } from './row.tsx';

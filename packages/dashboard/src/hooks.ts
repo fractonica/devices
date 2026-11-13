@@ -56,7 +56,7 @@ export function useAct<N extends OpName>(name: N, opts: ActOptions<N> = {}) {
     mutationFn: (input) => {
       // with the live link down a press is refused now, not sent to a hub that may run it minutes later
       if (linkDown()) {
-        return Promise.reject(new OpError({ code: 'HUB_UNREACHABLE', message: 'the hub is not answering, so nothing was sent', retryable: true }));
+        return Promise.reject(new OpError({ code: 'HUB_UNREACHABLE', message: 'the hub is not answering; nothing was sent', retryable: true }));
       }
       return rest.op(name, input, { long: LONG_OPS.has(name) });
     },

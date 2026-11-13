@@ -293,6 +293,10 @@ current? }[]`, `label?`.
   `spanText(core, us)` and `useSpanOf()` give the same as strings.
 - `useHubText()` → `(text) => string`: a text the hub wrote in the mode's units (durations as spans, other Earth
   measures left out in pure mode; in Earth mode the spans kept and each Earth value added after ⊕).
+- `useHeldText()` → `(text) => string`: a text someone wires or buys from (a Bench guide, a part, a drawing's labels):
+  pure mode replaces each Earth value in place by ⊕ (`heldText`), so the sentence keeps its shape; Earth mode as
+  `useHubText()`. `pages/bench/said.tsx` draws the ⊕ as the held mark. Identifiers (a MAC, a USB serial) are kept as
+  written by both.
 - `<CopyButton text label? what?>`: a quiet button that copies; its word says "Copied" (nothing moves).
 - `<ChipRow label>` of `<Chip pressed onToggle bead? count?>`: toggles on a line that wraps (Live's filters): engraved
   words, no box; bone over a lumen hairline when pressed. A row that scrolls sideways fades at its cut edge (`useMoreRight`

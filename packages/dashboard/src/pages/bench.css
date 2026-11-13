@@ -500,6 +500,13 @@
   white-space: nowrap;
 }
 
+/* pure mode: the ⊕ an Earth value leaves in a sentence someone wires from (pages/bench/said.tsx HeldMarks) */
+.bench-held {
+  color: var(--c-etch3);
+  font-size: var(--fs-earth);
+  cursor: help;
+}
+
 /* pure mode: once per page, where the parts' values went (pages/bench/said.tsx) */
 .bench-pure-note {
   margin: var(--sp-3) 0 0;

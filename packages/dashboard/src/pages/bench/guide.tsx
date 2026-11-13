@@ -10,7 +10,7 @@ import type { WiringShow } from '@fractonica/protocol/client';
 
 import { useAct, useLive, useOp } from '../../hooks.ts';
 import { instanceLive, liveText, missingText, nextStep, pinInstances, stepsText } from '../../state/bench-view.ts';
-import { Bead, type BeadState, Button, ButtonRow, Caps, Code, EmptyState, engrave, ErrorLine, Line, Pending, presenceBead, Row, Section, useFractonica, useHubText, useMode } from '../../ui/index.ts';
+import { Bead, type BeadState, Button, ButtonRow, Caps, EmptyState, engrave, ErrorLine, Line, Pending, presenceBead, Row, Section, useFractonica, useMode } from '../../ui/index.ts';
 import { Diagram } from './diagram.tsx';
 import { BenchLink } from './link.tsx';
 import { Said } from './said.tsx';
@@ -19,13 +19,7 @@ import { StepRing } from './step-ring.tsx';
 const REFRESH = ['wiring_show', 'wiring_list', 'wiring_shopping'] as const;
 const CONN_BEAD: Record<string, BeadState> = { ok: 'online', warning: 'waiting', failed: 'fault', unchecked: 'idle' };
 
-/** The page's text in the mode's units (said.tsx: a guide's prose may say "for 2 s" or "3.3 V"). */
-function useSay(): (t: string) => string {
-  return useHubText();
-}
-
 function Step({ g, step, pinInst, live, online }: { g: WiringShow; step: WiringShow['sections'][number]['steps'][number]; pinInst: Map<string, string>; live: (inst: string) => string[]; online: boolean }) {
-  const say = useSay();
   const tick = useAct('wiring_step', { refresh: REFRESH });
   const untick = useAct('wiring_undo', { refresh: REFRESH });
   const busy = tick.isPending || untick.isPending;
@@ -77,7 +71,6 @@ export function GuideView({ id }: { id: string }) {
   const q = useOp('wiring_show', { guide: id });
   const devices = useOp('device_list', { selector: 'all' });
   const reset = useAct('wiring_reset', { done: () => 'every step cleared', refresh: REFRESH });
-  const say = useSay();
   const g = q.data;
   const device = g?.device ? devices.data?.devices.find((d) => d.alias === g.device || d.device_id === g.device) : undefined;
   const props = useLive((s) => (device ? s.properties[device.device_id] : undefined));
@@ -137,7 +130,7 @@ export function GuideView({ id }: { id: string }) {
 
       <Section title="The board">
         {g.board ? <Row label="Board" value={g.board} /> : null}
-        {g.profile ? <Row label="Firmware profile" value={<Code>{g.profile}</Code>} /> : null}
+        {g.profile ? <Row label="Firmware profile" value={<span className="mono">{g.profile}</span>} /> : null}
         {g.device ? (
           <Row
             bead={device ? presenceBead(device.presence) : 'idle'}
@@ -147,7 +140,7 @@ export function GuideView({ id }: { id: string }) {
             extra={online ? 'its live values show beside the pins' : device ? 'offline: the pins show no live values' : undefined}
           />
         ) : null}
-        {g.design ? <Row label="Design" value={<Code>{g.design}</Code>} /> : null}
+        {g.design ? <Row label="Design" value={<span className="mono">{g.design}</span>} /> : null}
       </Section>
 
       {g.check === 'failed' || g.warnings.length ? (
@@ -165,7 +158,7 @@ export function GuideView({ id }: { id: string }) {
       {g.safety.length ? (
         <Section title="Safety first">
           {g.safety.map((s) => (
-            <Line key={s} bead="waiting" beadLabel="safety" name={<span className="bench-line-text"><Said text={s} /></span>} />
+            <Line key={s} bead="waiting" beadLabel="safety" name={<span className="bench-line-text"><Said text={s} hint /></span>} />
           ))}
         </Section>
       ) : null}
@@ -177,9 +170,9 @@ export function GuideView({ id }: { id: string }) {
               <Line
                 bead={b.missing > 0 ? 'waiting' : 'online'}
                 beadLabel={b.missing > 0 ? `${b.missing} short` : 'on hand'}
-                name={`${b.name}${b.value ? ` ${b.value}` : ''}`}
+                name={<Said text={`${b.name}${b.value ? ` ${b.value}` : ''}`} />}
                 value={b.missing > 0 ? `${b.missing} short` : `${b.qty} needed`}
-                detail={[`needs ${b.qty}`, `${b.have} on hand`, b.note ? say(b.note) : null].filter(Boolean).join(' · ')}
+                detail={<Said text={[`needs ${b.qty}`, `${b.have} on hand`, b.note].filter(Boolean).join(' · ')} />}
               />
             </BenchLink>
           ))}
@@ -213,14 +206,27 @@ export function GuideView({ id }: { id: string }) {
               key={`${c.pin}:${c.to}`}
               bead={CONN_BEAD[c.check] ?? 'idle'}
               beadLabel={c.check}
-              name={<Code>{c.pin}</Code>}
+              name={<span className="mono">{c.pin}</span>}
               value={
                 <>
-                  {c.to}
-                  {c.via ? <span className="ash"> via {c.via}</span> : null}
+                  <Said text={c.to} />
+                  {c.via ? (
+                    <span className="ash">
+                      {' via '}
+                      <Said text={c.via} />
+                    </span>
+                  ) : null}
                 </>
               }
-              detail={[c.instance ? `${c.instance}${c.bind ? `.${c.bind}` : ''}` : null, c.message ? say(c.message) : null].filter(Boolean).join(' · ') || undefined}
+              detail={
+                c.instance || c.message ? (
+                  <>
+                    {c.instance ? `${c.instance}${c.bind ? `.${c.bind}` : ''}` : null}
+                    {c.instance && c.message ? ' · ' : null}
+                    <Said text={c.message} />
+                  </>
+                ) : undefined
+              }
             />
           ))}
         </Section>

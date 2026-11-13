@@ -29,7 +29,7 @@ function PortRow({ port, alias }: { port: PortInfo; alias?: string }) {
       beadLabel={v.word}
       name={
         <span className="set-port-name">
-          <Code>{port.path}</Code>
+          <span className="mono">{port.path}</span>
           {who ? <span className="set-port-alias">{who}</span> : <span className="set-port-alias ash">no board known</span>}
         </span>
       }

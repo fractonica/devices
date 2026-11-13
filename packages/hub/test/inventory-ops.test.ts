@@ -232,4 +232,33 @@ describe('hub_doctor', () => {
     expect(calls).toEqual([false, false, false, true]);
     expect(output('hub_doctor_fix').safeParse(a).success).toBe(true);
   });
+
+  it("runs only the fixes a person chose, and a hub with its own FR_HOME never rewrites the user's fr shim", async () => {
+    const r = openRig();
+    const hub = { ...r.hub, lnp: undefined, advert: undefined } as unknown as HubContext;
+    const calls: unknown[] = [];
+    const deps = (ownHome: boolean) =>
+      ({
+        ownHome,
+        runDoctor: async (opts: unknown) => {
+          calls.push(opts);
+          return [
+            { id: 'pytools', level: 'error', detail: 'sidecar venv missing', fix: 'fr doctor --fix' },
+            { id: 'shim', level: 'warn', detail: 'the shim points elsewhere', fix: 'fr doctor --fix' },
+          ] as Check[];
+        },
+      }) as never;
+    const own = await hubDoctor(hub, deps(true), { fix: true, ids: ['pytools'] });
+    expect(calls.at(-1)).toEqual({ sourceDir: r.dir, fix: true, only: ['pytools'], never: ['shim'] });
+    // the shim's fix is the user's to run: a command to copy, no longer one the hub runs
+    expect(own.checks.find((c) => c.id === 'shim')!.fix).toMatch(/^run `fr doctor --fix` in Terminal/);
+    expect(own.checks.find((c) => c.id === 'pytools')!.fix).toBe('fr doctor --fix');
+    await hubDoctor(hub, deps(true), {});
+    expect(calls.at(-1)).toEqual({ sourceDir: r.dir, fix: false });
+    const main = await hubDoctor(hub, deps(false), { fix: true });
+    expect(calls.at(-1)).toEqual({ sourceDir: r.dir, fix: true });
+    expect(main.checks.find((c) => c.id === 'shim')!.fix).toBe('fr doctor --fix');
+    expect(findOp('hub_doctor_fix')!.input.parse({ ids: ['shim'] })).toEqual({ ids: ['shim'] });
+    expect(findOp('hub_doctor_fix')!.input.safeParse({ ids: [] }).success).toBe(false);
+  });
 });

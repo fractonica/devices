@@ -8,7 +8,7 @@ import { CATALOG_HASH } from '@fractonica/protocol/gen';
 import tokensLockText from '../../design/tokens.lock?raw';
 import timeLockText from '../../../../time/time.lock?raw';
 import { useLive, useOp } from '../../hooks.ts';
-import { Bead, Code, FTime, Row, Section, useCoreError, useFractonica } from '../../ui/index.ts';
+import { Bead, FTime, Row, Section, useCoreError, useFractonica } from '../../ui/index.ts';
 
 /** The dashboard's build-time op registry hash (vite.config.ts). */
 declare const __FR_REGISTRY_HASH__: string | undefined;
@@ -53,16 +53,16 @@ export function AboutSection() {
         <Row label="Node.js" value={s ? s.node.version : '—'} />
       </Section>
       <Section title="Protocol" id="protocol">
-        <Row bead={same ? 'online' : 'fault'} label="Op registry" value={<Code>{hubHash ?? '—'}</Code>} extra={BUILT_FOR ? (same ? 'this dashboard was built for the same registry' : <>this dashboard was built for <Code>{BUILT_FOR}</Code>: rebuild it with fr doctor --fix</>) : undefined} />
-        <Row label="Capability catalog" value={<Code>{CATALOG_HASH.toString(16).padStart(8, '0')}</Code>} extra="catalog_hash, as firmware built from this checkout reports it" />
+        <Row bead={same ? 'online' : 'fault'} label="Op registry" value={<span className="mono">{hubHash ?? '—'}</span>} extra={BUILT_FOR ? (same ? 'this dashboard was built for the same registry' : <>this dashboard was built for <span className="mono">{BUILT_FOR}</span>: rebuild it with fr doctor --fix</>) : undefined} />
+        <Row label="Capability catalog" value={<span className="mono">{CATALOG_HASH.toString(16).padStart(8, '0')}</span>} extra="catalog_hash, as firmware built from this checkout reports it" />
       </Section>
       <Section title="Fractonica time" id="time">
         <Row bead={core ? 'online' : coreError ? 'fault' : 'idle'} label="Temporal core" value={core ? core.frc.version : coreError ? 'did not load' : 'loading'} extra={coreError ? coreError.message : undefined} />
         <Row label="SPEC" value={core ? core.frc.specVersion : (TIME_LOCK?.spec ?? '—')} />
-        <Row label="Core files" value={<Code>{short(wasm?.sha256)}</Code>} extra={TIME_LOCK ? <>fractonica.wasm from the web repository at <Code>{short(TIME_LOCK.web?.commit, 7)}</Code> (time.lock, core {TIME_LOCK.core})</> : 'time.lock unreadable'} />
+        <Row label="Core files" value={<span className="mono">{short(wasm?.sha256)}</span>} extra={TIME_LOCK ? <>fractonica.wasm from the web repository at <span className="mono">{short(TIME_LOCK.web?.commit, 7)}</span> (time.lock, core {TIME_LOCK.core})</> : 'time.lock unreadable'} />
       </Section>
       <Section title="Design" id="design">
-        <Row label="Token table" value={<Code>{short(tokens?.sha256)}</Code>} extra={TOKENS_LOCK ? <>the site’s tokens.js at <Code>{short(TOKENS_LOCK.web?.commit, 7)}</Code> (tokens.lock); fr gen --check reports drift</> : 'tokens.lock unreadable'} />
+        <Row label="Token table" value={<span className="mono">{short(tokens?.sha256)}</span>} extra={TOKENS_LOCK ? <>the site’s tokens.js at <span className="mono">{short(TOKENS_LOCK.web?.commit, 7)}</span> (tokens.lock); fr gen --check reports drift</> : 'tokens.lock unreadable'} />
         <Row label="Theme" value="Astrolabe" extra={<>dark only · one hub colour of its own, fault <Bead state="fault" label="the fault colour" size={6} /></>} />
       </Section>
     </>

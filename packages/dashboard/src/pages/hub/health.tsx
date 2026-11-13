@@ -69,7 +69,7 @@ export function Health() {
             value={shown(c.detail) ? <span className="hub-check-detail">{shown(c.detail)}</span> : <span className="caps ash">{engrave(c.level === 'error' ? 'error' : 'warning')}</span>}
             extra={
               fix?.kind === 'hub' ? (
-                <span className="hub-fix">the hub can fix this</span>
+                <span className="hub-fix">{fix.text}</span>
               ) : fix?.kind === 'command' ? (
                 <span className="hub-fix">
                   <Code>{fix.command}</Code>
@@ -84,7 +84,7 @@ export function Health() {
       {h.issues.length > MAX_ISSUES ? <Row label={`${h.issues.length - MAX_ISSUES} more in Settings › Health`} {...HEALTH} /> : null}
       {d.fixable.length ? (
         <ButtonRow>
-          <Button busy={d.fixing} onClick={d.runFixes} data-action="run-fixes">
+          <Button busy={d.fixing} confirm={d.confirmAll ?? undefined} confirmLabel="Run" onClick={() => d.runFixes()} data-action="run-fixes">
             {d.fixable.length === 1 ? 'Run the fix' : `Run ${d.fixable.length} fixes`}
           </Button>
         </ButtonRow>

@@ -11,6 +11,8 @@ const PRESENCE_WORDS: Record<string, string> = {
   suspect: 'suspect',
   offline: 'offline',
   unknown: 'not heard yet',
+  // the hub does not answer now (shell/link.ts usePresence): the page cannot say
+  not_known: 'not known',
 };
 
 /** A device's presence as a word: online, suspect (seen lately, not answering now), offline, not heard yet. */
@@ -115,7 +117,10 @@ export function actFailure(op: string, err: { code: string; message: string }, s
     err.code === 'DEVICE_OFFLINE' || err.code === 'DEVICE_UNREACHABLE'
       ? ['try again when it is back online']
       : err.code === 'HUB_UNREACHABLE'
-        ? ['the hub does not answer; the page tries again by itself']
+        ? // the page's own refusal already says so (hooks.ts useAct): the advice would repeat it
+          /\b(?:not answering|does not answer)\b/.test(err.message)
+          ? []
+          : ['the hub does not answer; the page tries again by itself']
         : steps;
   return { title, body: [err.message, ...advice].join(' — ') };
 }

@@ -110,8 +110,10 @@ export const HUB_OPS = [
     kind: 'command',
     tier: 'mutate',
     summary:
-      "Runs the fixes `fr doctor --fix` runs, in the hub process, then the checks again: installs or repairs the esptool sidecar, refreshes the IDF environment cache, rewrites the fr shim, rebuilds the dashboard when it is older than its source. A check whose fix is a step for a person (System Settings, a brew install) stays as it was. Answers the checks after the fixes (a check fixed has fixed: true).",
-    input: z.object({}),
+      "Runs the fixes `fr doctor --fix` runs, in the hub process, then the checks again: installs or repairs the esptool sidecar (check pytools), refreshes the IDF environment cache (idf_env), rewrites the fr shim (shim), rebuilds the dashboard or a web app when it is older than its source (dashboard, web_<name>). `ids` names the checks whose fixes run; without it every fix runs. A hub with its own FR_HOME never rewrites the fr shim (it is the user's, outside FR_HOME). A check whose fix is a step for a person (System Settings, a brew install) stays as it was. Answers the checks after the fixes (a check fixed has fixed: true).",
+    input: z.object({
+      ids: z.array(z.string().min(1).max(64)).min(1).max(64).optional().describe('the checks whose fixes run (pytools, idf_env, shim, dashboard, web_<name>); absent runs every fix'),
+    }),
     output: z.looseObject({ checks: z.array(CheckSchema), checked_at: z.string().optional() }),
     cli: { path: ['hub', 'doctor-fix'] },
   }),

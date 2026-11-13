@@ -85,6 +85,14 @@ describe('the dashboard sources follow the design rules', () => {
     expect(bad).toEqual([]);
   });
 
+  it('keep the monospace <Code> for what a person copies or types, never an id, a port, a path or a hash (ruling 12)', () => {
+    const bad: string[] = [];
+    for (const f of code) {
+      bad.push(...hits(f, /<Code>\{[^}]*\b(path|port|profile|design|job_id|selector|file|hash|Hash|sha256|commit|BUILT_FOR|CATALOG_HASH|types)\b[^}]*\}<\/Code>|<Code>[^<{]*(hardware\/|\/dev\/)/));
+    }
+    expect(bad).toEqual([]);
+  });
+
   it('carry no Tailwind', () => {
     const bad = css.flatMap((f) => hits(f, /@import\s+['"]tailwindcss|@tailwind\b|@apply\b|@theme\b/));
     expect(bad).toEqual([]);

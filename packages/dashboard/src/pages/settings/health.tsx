@@ -9,7 +9,7 @@ import { Link } from '@tanstack/react-router';
 
 import { useOp } from '../../hooks.ts';
 import { useDoctor } from '../shared/doctor.ts';
-import { checkBead, checkFix, checkName, healthLine, sortChecks } from '../../state/checks.ts';
+import { checkBead, checkFix, checkName, fixConfirm, healthLine, sortChecks } from '../../state/checks.ts';
 import { Bead, Button, Caps, Code, CopyButton, ErrorLine, FTime, Line, Pending, Row, Section, useHubText, useMode, useSpanOf } from '../../ui/index.ts';
 
 function Checks() {
@@ -38,7 +38,7 @@ function Checks() {
           value={<FTime at={q.data.checked_at} form="relative" />}
           actions={
             d.fixable.length ? (
-              <Button variant="primary" busy={d.fixing} onClick={d.runFixes} data-action="run-fixes">
+              <Button variant="primary" busy={d.fixing} confirm={d.confirmAll ?? undefined} confirmLabel="Run" onClick={() => d.runFixes()} data-action="run-fixes">
                 {d.fixable.length === 1 ? 'Run the fix' : `Run ${d.fixable.length} fixes`}
               </Button>
             ) : undefined
@@ -63,11 +63,12 @@ function Checks() {
                     <Caps>fix</Caps> {fix.kind === 'command' ? <Code>{fix.command}</Code> : say(fix.text)}
                   </span>
                   {fix.kind === 'hub' ? (
-                    <Button busy={d.fixing} onClick={d.runFixes} data-action="run-fix" aria-label={`Run the fix: ${checkName(c.id)}`}>
+                    <Button busy={d.fixing} confirm={fixConfirm([c.id]) ?? undefined} confirmLabel="Run" onClick={() => d.runFixes([c.id])} data-action="run-fix" aria-label={`Run the fix: ${checkName(c.id)}`}>
                       Run fix
                     </Button>
                   ) : null}
                   {fix.kind === 'command' ? <CopyButton text={fix.command} label="Copy command" what={checkName(c.id)} /> : null}
+                  {fix.kind === 'command' && fix.text.includes('`') ? <span className="set-fix-why">{say(fix.text.replace(/`[^`]+`/, 'it'))}</span> : null}
                   {fix.kind === 'page' ? (
                     <Link to={fix.to as never} params={fix.params as never} className="ui-button" data-variant="default">
                       <span className="ui-button-text">{fix.label.toUpperCase()}</span>

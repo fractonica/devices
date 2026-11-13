@@ -16,11 +16,13 @@ import { Link, useSearch } from '@tanstack/react-router';
 
 import { useAct } from '../hooks.ts';
 import { type BenchRoute, benchRoute, benchSearch, benchTab } from '../state/bench-view.ts';
+import { HELD } from '../state/pure-text.ts';
 import { Button, engrave, Page, useMode } from '../ui/index.ts';
 import { clearDiagrams } from './bench/diagram.tsx';
 import { GuideView } from './bench/guide.tsx';
 import { GuidesView } from './bench/guides.tsx';
 import { PartsView, PartView, ShoppingView } from './bench/parts.tsx';
+import { HeldMarks } from './bench/said.tsx';
 
 const TABS: { to: BenchRoute; label: string; tab: ReturnType<typeof benchTab> }[] = [
   { to: { view: 'guides' }, label: 'Guides', tab: 'guides' },
@@ -76,7 +78,7 @@ export function BenchPage() {
       <Tabs current={tab} />
       {earth ? null : (
         <p className="bench-pure-note">
-          <span className="caps">{engrave('pure')}</span> leaves out the ratings, sizes and values parts are sold by; <span className="caps">{engrave('earth')}</span> shows them.
+          <span className="caps">{engrave('pure')}</span> marks the ratings, sizes and values parts are sold by with <HeldMarks text={HELD} />; <span className="caps">{engrave('earth')}</span> shows them.
         </p>
       )}
       <div className="bench-body" data-view={route.view}>

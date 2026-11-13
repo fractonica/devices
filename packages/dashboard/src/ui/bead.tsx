@@ -7,7 +7,7 @@ export type BeadState = 'online' | 'waiting' | 'offline' | 'fault' | 'idle';
 
 /** A device presence (online, suspect, offline, unknown) as a bead. */
 export function presenceBead(presence: string | undefined | null): BeadState {
-  return presence === 'online' ? 'online' : presence === 'suspect' ? 'waiting' : presence === 'offline' ? 'offline' : 'idle';
+  return presence === 'online' ? 'online' : presence === 'suspect' || presence === 'not_known' ? 'waiting' : presence === 'offline' ? 'offline' : 'idle';
 }
 
 export interface BeadProps {

@@ -66,7 +66,7 @@ export function checkFix(check: Pick<Check, 'id' | 'fix'>): CheckFix | null {
     return { kind: 'page', to: '/settings/$section', params: { section: 'ports' }, label: 'Open ports', text: fix };
   }
   if (/^fr doctor --fix$/.test(fix)) {
-    return { kind: 'hub', command: fix, text: 'the hub can run this fix' };
+    return { kind: 'hub', command: fix, text: hubFixWords(check.id) };
   }
   const quoted = /`([^`]+)`/.exec(fix);
   if (quoted && COMMANDS.test(quoted[1]!.trim())) {
@@ -125,7 +125,27 @@ export function healthLine(checks: readonly DoctorCheck[]): HealthLine {
   };
 }
 
-/** The checks the hub can fix itself (their fix is `fr doctor --fix`: hub_doctor_fix runs it), not ok. */
+/** The checks the hub can fix itself (their fix is exactly `fr doctor --fix`: hub_doctor_fix runs it), not ok. */
 export function hubFixes<T extends Pick<Check, 'level' | 'fix'>>(checks: readonly T[]): T[] {
-  return checks.filter((c) => c.level !== 'ok' && /\bfr doctor --fix\b/.test(c.fix ?? ''));
+  return checks.filter((c) => c.level !== 'ok' && /^\s*fr doctor --fix\s*$/.test(c.fix ?? ''));
+}
+
+/** What the hub's fix of a check changes, said on its row before a person presses Run fix. */
+const HUB_FIX_WORDS: Record<string, string> = {
+  pytools: 'the hub installs esptool in its sidecar',
+  idf_env: 'the hub reads the IDF environment again',
+  shim: 'the hub points the fr command at its own checkout',
+  dashboard: 'the hub builds the dashboard',
+};
+
+export function hubFixWords(id: string): string {
+  return HUB_FIX_WORDS[id] ?? (id.startsWith('web_') ? `the hub builds the ${checkName(id)}` : 'the hub can run this fix');
+}
+
+/**
+ * Whether running these checks' fixes needs a person to say yes first: a fix that writes outside the hub's home (the
+ * fr shim in ~/.local/bin, which every Terminal's `fr` runs) asks in place; null when none does.
+ */
+export function fixConfirm(ids: readonly string[]): string | null {
+  return ids.includes('shim') ? 'Point the fr command in Terminal at this hub’s checkout?' : null;
 }

@@ -6,7 +6,7 @@
 import { useLive, useNow, useOp } from '../../hooks.ts';
 import { pendingPrompts } from '../../state/live.ts';
 import type { BeadState } from '../../ui/index.ts';
-import { Button, Caps, Code, EmptyState, ErrorLine, FTime, Line, Section } from '../../ui/index.ts';
+import { Button, Caps, EmptyState, ErrorLine, FTime, Line, Section } from '../../ui/index.ts';
 import { useAct } from '../../hooks.ts';
 
 const JOB_BEAD: Record<string, BeadState> = { queued: 'waiting', working: 'waiting', completed: 'online', failed: 'fault', cancelled: 'offline' };
@@ -44,11 +44,11 @@ export function AgentsSection() {
               }
               detail={
                 <>
-                  waits for <Code>{p.types.join(', ')}</Code>
+                  waits for <span className="mono">{p.types.join(', ')}</span>
                   {p.selector ? (
                     <>
                       {' '}
-                      on <Code>{p.selector}</Code>
+                      on <span className="mono">{p.selector}</span>
                     </>
                   ) : null}
                 </>
@@ -69,7 +69,7 @@ export function AgentsSection() {
               id={`lease-${p.lease!.lease_id}`}
               bead="waiting"
               beadLabel="lent"
-              name={<Code>{p.path}</Code>}
+              name={<span className="mono">{p.path}</span>}
               value={
                 <>
                   ends <FTime at={p.lease!.expires_at} form="relative" />
@@ -98,7 +98,7 @@ export function AgentsSection() {
             detail={
               <>
                 {j.status}
-                {j.stage ? ` · ${j.stage}` : ''} · <Code>{j.job_id}</Code>
+                {j.stage ? ` · ${j.stage}` : ''} · <span className="mono">{j.job_id}</span>
               </>
             }
           />

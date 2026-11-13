@@ -6,7 +6,7 @@ import { useState } from 'react';
 
 import { useAct, useOp } from '../../hooks.ts';
 import { parseQty, partMatches } from '../../state/bench-view.ts';
-import { Button, ButtonRow, Caps, Code, EmptyState, engrave, ErrorLine, Line, Pending, Row, Section, Select, TextField, useHubText, useMode } from '../../ui/index.ts';
+import { Button, ButtonRow, Caps, EmptyState, engrave, ErrorLine, Line, Pending, Row, Section, Select, TextField, useHeldText, useMode } from '../../ui/index.ts';
 import { Refused } from './guides.tsx';
 import { BenchLink } from './link.tsx';
 import { Said } from './said.tsx';
@@ -28,8 +28,9 @@ function store(q: string): void {
   }
 }
 
+/** A part's text in the mode's units, with ⊕ where pure mode holds a value back (said.tsx). */
 function useSay(): (t: string) => string {
-  return useHubText();
+  return useHeldText();
 }
 
 export function PartsView() {
@@ -65,7 +66,7 @@ export function PartsView() {
           </EmptyState>
         ) : (
           <EmptyState title="No parts yet">
-            A part lives in <Code>hardware/parts/&lt;id&gt;.part.yaml</Code>.
+            A part lives in <span className="mono">hardware/parts/&lt;id&gt;.part.yaml</span>.
           </EmptyState>
         )
       ) : null}
@@ -110,7 +111,7 @@ function Stock({ part }: { part: { id: string; values: string[]; stock: { value:
       {part.stock.length ? (
         <div>
           {part.stock.map((s) => (
-            <Row key={s.value ?? ''} name={s.value ? <Said text={s.value} /> : undefined} label={s.value ? undefined : 'count'} value={`${s.qty}`} extra={[s.location ? `in ${s.location}` : null, s.note].filter(Boolean).join(' · ') || undefined} />
+            <Row key={s.value ?? ''} name={s.value ? <Said text={s.value} /> : undefined} label={s.value ? undefined : 'count'} value={`${s.qty}`} extra={s.location || s.note ? <Said text={[s.location ? `in ${s.location}` : null, s.note].filter(Boolean).join(' · ')} /> : undefined} />
           ))}
         </div>
       ) : (
@@ -176,7 +177,7 @@ export function PartView({ id }: { id: string }) {
         </h2>
         <p className="bench-part-cat caps">{engrave(`${p.category} · ${p.id}`)}</p>
         <p className="bench-guide-about"><Said text={p.summary} /></p>
-        {p.image ? <img className="bench-part-image" src={p.image} alt={say(p.name)} /> : null}
+        {p.image ? <img className="bench-part-image" src={p.image} alt={say(p.name).replace(/\s*⊕/g, '')} /> : null}
       </header>
       {specs.length ? (
         <Section title="Specs">
@@ -189,7 +190,7 @@ export function PartView({ id }: { id: string }) {
         <Section title="Pins">
           {p.pinout ? <p className="bench-say"><Said text={p.pinout} /></p> : null}
           {p.pins.map((x) => (
-            <Row key={x.name} name={<Code>{x.name}</Code>} value={x.desc ? <Said text={x.desc} /> : ''} />
+            <Row key={x.name} name={<span className="mono">{x.name}</span>} value={x.desc ? <Said text={x.desc} /> : ''} />
           ))}
         </Section>
       ) : null}

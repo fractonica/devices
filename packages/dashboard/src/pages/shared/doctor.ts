@@ -1,10 +1,11 @@
 // The hub's checks as the Hub page and Settings › Health read them: hub_doctor with max_age_s, so a page shows the
 // hub's last result at once (checked_at says when it ran; the checks take a while), "Check again" runs them now, and
-// "Run fixes" runs `fr doctor --fix`'s fixes in the hub (hub_doctor_fix) when a check says the hub can fix it.
+// "Run fix" on a check runs that check's fix in the hub (hub_doctor_fix with its id), "Run N fixes" the fixes of every
+// check the hub can fix, each named; a fix that writes outside the hub's home (the fr shim) asks first (fixConfirm).
 
 import { useAct, useOp } from '../../hooks.ts';
 import { queryClient } from '../../runtime.ts';
-import { hubFixes } from '../../state/checks.ts';
+import { fixConfirm, hubFixes } from '../../state/checks.ts';
 
 /** How old a result a page takes without running the checks again. */
 export const DOCTOR_MAX_AGE_S = 600;
@@ -32,6 +33,9 @@ export function useDoctor() {
     checkAgain: () => again.mutate({}),
     fixable,
     fixing: fix.isPending,
-    runFixes: () => fix.mutate({}),
+    /** The question to ask before running every fix, or null. */
+    confirmAll: fixConfirm(fixable.map((c) => c.id)),
+    /** Runs the fixes of these checks (every fixable one by default). */
+    runFixes: (ids: readonly string[] = fixable.map((c) => c.id)) => fix.mutate({ ids: [...ids] }),
   };
 }

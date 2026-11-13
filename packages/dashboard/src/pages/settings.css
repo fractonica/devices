@@ -30,6 +30,13 @@
   color: var(--c-bone);
 }
 
+/* why a command is the person's to run (a scratch hub leaves the fr command alone) */
+.set-fix-why {
+  flex-basis: 100%;
+  color: var(--c-ash);
+  font-size: var(--fs-earth);
+}
+
 .set-fix {
   display: inline-flex;
   flex-wrap: wrap;

@@ -1,10 +1,15 @@
 // One rule for the texts the dashboard does not write itself (src/state/pure-text.ts) and one vocabulary for the
 // states every page names (src/state/words.ts), as the stage 4 integration settled them.
 
-import { describe, expect, it } from 'vitest';
+import { readdirSync, readFileSync } from 'node:fs';
+import { join } from 'node:path';
 
-import { earthText, pureSafe, pureText } from '../src/state/pure-text.ts';
-import { eventWords, fleetCount, presenceWord } from '../src/state/words.ts';
+import { describe, expect, it } from 'vitest';
+import { parse } from 'yaml';
+
+import { sayInSvg } from '../src/state/bench-view.ts';
+import { earthText, heldText, pureSafe, pureText } from '../src/state/pure-text.ts';
+import { actFailure, eventWords, fleetCount, presenceWord } from '../src/state/words.ts';
 
 describe('a hub text in pure mode', () => {
   const spanOf = (us: bigint) => `[${us}]`;
@@ -75,9 +80,112 @@ describe('a hub text in pure mode', () => {
   });
 });
 
+describe('identifiers and lists', () => {
+  const spanOf = (us: bigint) => `[${us}]`;
+
+  it('keeps a MAC or a USB serial as written in both modes', () => {
+    for (const x of ['mac 02:6F:28:AB:CD:EF', 'usb serial 02:F2:00:00:00:02', 'port /dev/cu.usbmodem-fr-02f200000002']) {
+      expect(pureText(x, spanOf)).toBe(x);
+      expect(earthText(x, spanOf)).toBe(x);
+      expect(heldText(x, spanOf)).toBe(x);
+      expect(pureSafe(x)).toBe(true);
+    }
+    // a MAC beside a measure: the measure goes, the MAC stays
+    expect(pureText('mac 02:6F:28:AB:CD:EF, rssi -70 dBm', spanOf)).toBe('mac 02:6F:28:AB:CD:EF');
+    expect(earthText('mac 02:6F:28:AB:CD:EF, rssi -70 dBm', spanOf)).toBe('mac 02:6F:28:AB:CD:EF, rssi ⊕ -70 dBm');
+    // three decimal pairs read as a clock time still (pure mode never shows one)
+    expect(pureSafe('at 12:00:05')).toBe(false);
+  });
+
+  it('reads a comma list only when it ends with a joining word', () => {
+    expect(earthText('channel 6, 2.4 GHz', spanOf)).toBe('channel 6, ⊕ 2.4 GHz');
+    expect(earthText('retried after 5, 15 and 45 s', spanOf)).toBe('retried after [5000000], [15000000] and [45000000] ⊕ 5, 15 and 45 s');
+    expect(heldText('LiPo OUT+ (TP4056 #1, 3.0–4.2 V)', spanOf)).toBe('LiPo OUT+ (TP4056 #1, ⊕)');
+  });
+
+  it('says a rate per Earth time and a duration in words as Earth measures', () => {
+    expect(pureSafe('10 or 80 conversions/s')).toBe(false);
+    expect(pureSafe('samples/s')).toBe(false);
+    expect(pureText('switches it on for a minute', spanOf)).toBe('switches it on for [60000000]');
+    expect(earthText('switches it on for a minute', spanOf)).toBe('switches it on for [60000000] ⊕ a minute');
+    expect(pureText('rises within a few seconds', spanOf)).toBe('rises within a few moments');
+    expect(pureText('rises within a few minutes', spanOf)).toBe('rises within a short while');
+    expect(pureSafe(pureText('switches it on for a minute'))).toBe(true);
+  });
+
+  it('cleans up after a removal: no doubled commas, no dangling "about", no ":."', () => {
+    expect(pureText('pouch, about 250–300 mAh, usually lithium')).toBe('pouch, usually lithium');
+    expect(pureText('Multimeter on the cell holder: 3.7 V.')).not.toMatch(/:\.|:$/);
+    expect(pureText('Leave it at 3.8 V: then stop.')).not.toMatch(/:\./);
+  });
+});
+
+describe('a text someone wires or buys from, in pure mode (heldText)', () => {
+  const spanOf = (us: bigint) => `[${us}]`;
+
+  it('puts ⊕ where it holds a value back, so the sentence keeps its shape and a safety limit is never silently gone', () => {
+    expect(heldText('Never short the capacitor or run it flat: below 2.5 V it is damaged. Leave it at about 3.8 V when you stop.', spanOf)).toBe(
+      'Never short the capacitor or run it flat: below ⊕ it is damaged. Leave it at about ⊕ when you stop.',
+    );
+    expect(heldText('GC9A01 1.28" round display, 240 × 240', spanOf)).toBe('GC9A01 ⊕ round display, 240 × 240');
+    expect(heldText('Resistor (¼ W through-hole) 1 MΩ', spanOf)).toBe('Resistor (⊕ through-hole) ⊕');
+    expect(heldText('holes at 15/40/15 mm from the ends; ±2 ppm', spanOf)).toBe('holes at ⊕ from the ends; ±⊕');
+    // a part's number is not a measure
+    expect(heldText('TP4056 charger module with protection (DW01 + 8205A)', spanOf)).toBe('TP4056 charger module with protection (DW01 + 8205A)');
+    expect(heldText('a 5V pin and a 3.3V rail', spanOf)).toBe('a ⊕ pin and a ⊕ rail');
+    expect(heldText('TP4056 #1 OUT+ through the divider via 1 MΩ / 1 MΩ, 100 nF', spanOf)).toBe('TP4056 #1 OUT+ through the divider via ⊕ / ⊕, ⊕');
+    expect(heldText('Momentary push button with debounced edges.', spanOf)).toBe('Momentary push button with debounced edges.');
+  });
+
+  it('draws a diagram\'s labels the same way, changing no markup', () => {
+    const svg = '<svg><text x="1">10 kΩ in series</text><g><text>GPIO0 &amp; GND</text></g></svg>';
+    expect(sayInSvg(svg, (t) => heldText(t, spanOf), null)).toBe('<svg><text x="1">⊕ in series</text><g><text>GPIO0 &amp; GND</text></g></svg>');
+  });
+
+  it('leaves no Earth measure and no broken sentence in any guide, part or drawing the repository ships', () => {
+    const root = join(import.meta.dirname, '..', '..', '..', 'hardware');
+    const texts: string[] = [];
+    const strings = (v: unknown): void => {
+      if (typeof v === 'string') {
+        texts.push(v);
+      } else if (Array.isArray(v)) {
+        v.forEach(strings);
+      } else if (v && typeof v === 'object') {
+        Object.values(v).forEach(strings);
+      }
+    };
+    for (const g of readdirSync(join(root, 'wiring'))) {
+      for (const f of readdirSync(join(root, 'wiring', g))) {
+        if (f.endsWith('.yaml')) {
+          strings(parse(readFileSync(join(root, 'wiring', g, f), 'utf8')));
+        } else if (f.endsWith('.svg')) {
+          for (const m of readFileSync(join(root, 'wiring', g, f), 'utf8').matchAll(/>([^<>]+)</g)) {
+            texts.push(m[1]!);
+          }
+        }
+      }
+    }
+    for (const f of readdirSync(join(root, 'parts'))) {
+      if (f.endsWith('.yaml')) {
+        strings(parse(readFileSync(join(root, 'parts', f), 'utf8')));
+      }
+    }
+    expect(texts.length).toBeGreaterThan(200);
+    for (const x of texts) {
+      const held = heldText(x, spanOf);
+      expect(pureSafe(held), `${x} → ${held}`).toBe(true);
+      expect(held, x).not.toMatch(/\bat when\b|:\.|,\s*,|\(\s*\)/);
+      if (!pureSafe(x)) {
+        // a value held back leaves its mark, or was a duration said as a span
+        expect(held.includes('⊕') || held.includes('[') || /a few moments|a (?:short|long) while/.test(held), `${x} → ${held}`).toBe(true);
+      }
+    }
+  });
+});
+
 describe('the words for states', () => {
   it('names presence the same way on every page', () => {
-    expect(['online', 'suspect', 'offline', 'unknown', undefined].map(presenceWord)).toEqual(['online', 'suspect', 'offline', 'not heard yet', 'not heard yet']);
+    expect(['online', 'suspect', 'offline', 'unknown', undefined, 'not_known'].map(presenceWord)).toEqual(['online', 'suspect', 'offline', 'not heard yet', 'not heard yet', 'not known']);
   });
 
   it('says a device’s last event in words where the hub has them', () => {
@@ -87,6 +195,13 @@ describe('the words for states', () => {
     expect(eventWords({ type: 'button.pressed' })).toBe('button pressed');
     expect(eventWords({ type: 'boot.pressed' })).toBe('boot pressed');
     expect(eventWords({ type: 'scale.weight_mg' })).toBe('scale weight');
+  });
+
+  it('says a refused action once, without repeating that the hub does not answer', () => {
+    expect(actFailure('device_set', { code: 'HUB_UNREACHABLE', message: 'the hub is not answering; nothing was sent' }, []).body).toBe('the hub is not answering; nothing was sent');
+    expect(actFailure('device_set', { code: 'HUB_UNREACHABLE', message: 'the hub did not answer in time' }, []).body).toBe(
+      'the hub did not answer in time — the hub does not answer; the page tries again by itself',
+    );
   });
 
   it('counts the fleet, with a filter', () => {

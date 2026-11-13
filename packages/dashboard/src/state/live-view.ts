@@ -168,6 +168,8 @@ export interface SummaryOptions {
 }
 
 const ISO = /^(?:19|20)\d{2}-\d{2}-\d{2}T[\d:.]+(?:Z|[+-]\d{2}:?\d{2})?$/;
+/** Fields that name something (a serial, a MAC, a path, an id): shown as written, never read for Earth units. */
+const ID_FIELD = /^(?:usb_serial|serial|mac|bssid|device_id|id|path|port|alias|name|ssid|host|hash|sha|fw|firmware|fw_id(?:_prefix)?|profile|board|chip)$|_(?:id|mac|serial|path|hash|sha|prefix)$/;
 
 /** One field as people read it: its name in words (no Earth unit in it) and its value in the mode's units. */
 export function fieldEntry(key: string, v: unknown, opts: Omit<SummaryOptions, 'max'>): [string, string] {
@@ -191,6 +193,9 @@ export function fieldEntry(key: string, v: unknown, opts: Omit<SummaryOptions, '
     return [name, opts.instant ? opts.instant(v) : opts.pure ? '–' : `⊕ ${v}`];
   }
   const text = valueText(v);
+  if (typeof v === 'string' && ID_FIELD.test(key)) {
+    return [fieldWords(key), text];
+  }
   return [fieldWords(key), typeof v === 'string' && opts.say ? opts.say(text) : opts.pure && !pureSafe(text) ? pureText(text, opts.spanOf) : text];
 }
 

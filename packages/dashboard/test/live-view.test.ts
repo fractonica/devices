@@ -140,6 +140,12 @@ describe('the fields line', () => {
     expect(summary({ expires_at: '2026-11-13T20:07:04.171Z' }, { pure: true, instant: () => 'in 3λ' })).toBe('expires in 3λ');
     expect(summary({ supply_mv: 3712 }, { pure: false })).toBe('supply voltage 3712 ⊕ 3712 mV');
     expect(summary({ message: 'timed out after 500 ms' }, { pure: true, say: (t) => t.replace(' after 500 ms', '') })).toBe('message timed out');
+    // an identifier is shown as written, in both modes, whatever the text pass would make of it
+    const mangle = (t: string) => `${t.replace(/\d/g, '')}!`;
+    expect(summary({ usb_serial: '02:F2:00:00:00:02', mac: '02:6F:28:AB:CD:EF', device_id: 'n-12:00:05' }, { pure: true, say: mangle })).toBe(
+      'usb serial 02:F2:00:00:00:02 · mac 02:6F:28:AB:CD:EF · device id n-12:00:05',
+    );
+    expect(summary({ usb_serial: '02:F2:00:00:00:02' }, { pure: false, say: mangle })).toBe('usb serial 02:F2:00:00:00:02');
     // no core yet: the bare name, never the Earth unit, in pure mode
     expect(summary({ rtt_ms: 9 }, { pure: true })).toBe('rtt 9');
     expect(summary(undefined, { pure: true })).toBe('');

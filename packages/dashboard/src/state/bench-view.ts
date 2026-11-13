@@ -109,6 +109,38 @@ export function sanitizeSvg(svg: string, parser: { parseFromString(s: string, ty
   return new XMLSerializer().serializeToString(root);
 }
 
+/**
+ * A sanitised drawing with the words of its labels said in the mode's units (`say`: heldText in pure mode, so "10 kΩ in
+ * series" is drawn "⊕ in series"; earthText in Earth mode). Only text content changes, never markup: with a DOM each
+ * text node's value is replaced; without one (the tests in node) the text between tags, unescaped and escaped again.
+ */
+export function sayInSvg(svg: string, say: (text: string) => string, parser: { parseFromString(s: string, type: 'image/svg+xml'): Document } | null = typeof DOMParser === 'undefined' ? null : new DOMParser()): string {
+  if (!svg) {
+    return svg;
+  }
+  if (!parser) {
+    const unescape = (t: string) => t.replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, '"').replace(/&#39;|&apos;/g, "'").replace(/&amp;/g, '&');
+    const escape = (t: string) => t.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+    return svg.replace(/>([^<>]+)</g, (m, t: string) => (t.trim() ? `>${escape(say(unescape(t)))}<` : m));
+  }
+  const doc = parser.parseFromString(svg, 'image/svg+xml');
+  const root = doc.documentElement;
+  if (!root || doc.getElementsByTagName('parsererror').length) {
+    return '';
+  }
+  const walk = (node: Node): void => {
+    for (const child of [...node.childNodes]) {
+      if (child.nodeType === 3 && child.nodeValue?.trim()) {
+        child.nodeValue = say(child.nodeValue);
+      } else if (child.nodeType === 1) {
+        walk(child);
+      }
+    }
+  };
+  walk(root);
+  return new XMLSerializer().serializeToString(root);
+}
+
 /** The text pass: what must go, removed until nothing more changes (a nested "javajavascript:script:" included). */
 export function sanitizeSvgText(svg: string): string {
   let t = svg

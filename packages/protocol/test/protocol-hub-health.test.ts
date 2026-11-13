@@ -14,6 +14,10 @@ describe('hub health ops', () => {
     expect(findOp('hub_doctor')!.output!.safeParse({ checks: [], checked_at: '2026-11-13T20:00:00.000Z' }).success).toBe(true);
     expect(findOp('hub_doctor_fix')).toMatchObject({ kind: 'command', tier: 'mutate', cli: { path: ['hub', 'doctor-fix'] } });
     expect(findOp('hub_doctor_fix')!.summary.length).toBeLessThan(1000);
-    expect(REGISTRY_HASH).toBe('88f3b29c39ea');
+    // `ids` runs only the fixes a person chose (one check's Run fix); absent, every fix
+    expect(findOp('hub_doctor_fix')!.input.parse({})).toEqual({});
+    expect(findOp('hub_doctor_fix')!.input.parse({ ids: ['pytools'] })).toEqual({ ids: ['pytools'] });
+    expect(findOp('hub_doctor_fix')!.input.safeParse({ ids: [] }).success).toBe(false);
+    expect(REGISTRY_HASH).toBe('4c2515061881'); // '88f3b29c39ea' before hub_doctor_fix took `ids`
   });
 });

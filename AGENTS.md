@@ -88,7 +88,8 @@ The dashboard (`packages/dashboard`, stage 4) is drawn in the site's Astrolabe l
   Earth mode keeps the Fractonica value and adds the Earth one after ⊕. Any text the dashboard did not write (the hub's,
   a device's, the catalogue's, a guide's, a toast's) goes through `useHubText()` (`src/state/pure-text.ts`: `pureText`
   in pure mode, whose output always passes `pureSafe`; `earthText` in Earth mode); the Bench's through
-  `pages/bench/said.tsx`. A relative time under one Blink is a word ("just now"), never a counting fraction
+  `pages/bench/said.tsx` (`useHeldText()`: `heldText` puts ⊕ where it holds a value back, never dropping a clause
+  someone wires from). A relative time under one Blink is a word ("just now"), never a counting fraction
   (`src/time/wake.ts`).
 - **The live link.** `src/shell/link.ts` says when `/ws` has been down a moment or the hub does not answer its status:
   the notices say so, presence reads as not known and `useAct` refuses at once. REST calls time out after 10 s

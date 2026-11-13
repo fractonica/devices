@@ -203,9 +203,9 @@ export function webCheckId(pkg: WebPackage): string {
 /**
  * One check per web package: built from the current sources, stale or not built. With `fix`, the missing
  * and stale ones are built (`build` is injectable for tests). Both are warnings: the hub runs without
- * them and serves a "not built" page instead.
+ * them and serves a "not built" page instead. `only` limits the builds to those check ids.
  */
-export async function webChecks(sourceDir: string, opts: { fix: boolean; build?: typeof buildDist }): Promise<Check[]> {
+export async function webChecks(sourceDir: string, opts: { fix: boolean; only?: readonly string[]; build?: typeof buildDist }): Promise<Check[]> {
   const build = opts.build ?? buildDist;
   const checks: Check[] = [];
   for (const pkg of webPackages(sourceDir)) {
@@ -216,7 +216,7 @@ export async function webChecks(sourceDir: string, opts: { fix: boolean; build?:
       checks.push({ id, level: 'ok', detail: `${where} built from the current sources` });
       continue;
     }
-    if (opts.fix) {
+    if (opts.fix && (!opts.only || opts.only.includes(id))) {
       const b = await build(sourceDir, pkg.dir);
       checks.push(
         b.ok

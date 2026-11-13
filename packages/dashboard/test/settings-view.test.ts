@@ -13,7 +13,7 @@ import {
   networkSetInput,
   sizeText,
 } from '../src/state/settings-view.ts';
-import { checkBead, checkFix, checkName, hubFixes, sortChecks, worstLevel } from '../src/state/checks.ts';
+import { checkBead, checkFix, checkName, fixConfirm, hubFixes, sortChecks, worstLevel } from '../src/state/checks.ts';
 import { pureDurations } from '../src/state/pure-text.ts';
 
 let core: Core;
@@ -37,8 +37,16 @@ describe('doctor checks', () => {
   });
 
   it('offers a command to copy, the Ports section, or steps to read', () => {
-    expect(checkFix({ id: 'pytools', fix: 'fr doctor --fix' })).toEqual({ kind: 'hub', command: 'fr doctor --fix', text: 'the hub can run this fix' });
+    expect(checkFix({ id: 'pytools', fix: 'fr doctor --fix' })).toEqual({ kind: 'hub', command: 'fr doctor --fix', text: 'the hub installs esptool in its sidecar' });
+    expect(checkFix({ id: 'shim', fix: 'fr doctor --fix' })!.text).toBe('the hub points the fr command at its own checkout');
+    expect(checkFix({ id: 'web_demo', fix: 'fr doctor --fix' })!.text).toBe('the hub builds the app demo');
     expect(hubFixes([{ level: 'error', fix: 'fr doctor --fix' }, { level: 'warn', fix: 'brew install ccache' }, { level: 'ok', fix: 'fr doctor --fix' }])).toHaveLength(1);
+    // a scratch hub's shim fix is the user's to run: a command to copy, not one the hub runs
+    const byHand = { id: 'shim', level: 'warn' as const, fix: 'run `fr doctor --fix` in Terminal from the checkout your fr command should run: this hub has its own FR_HOME and leaves the fr command alone' };
+    expect(hubFixes([byHand])).toHaveLength(0);
+    expect(checkFix(byHand)).toMatchObject({ kind: 'command', command: 'fr doctor --fix' });
+    expect(fixConfirm(['pytools'])).toBeNull();
+    expect(fixConfirm(['pytools', 'shim'])).toMatch(/fr command/);
     expect(checkFix({ id: 'ccache', fix: 'brew install ccache' })).toMatchObject({ kind: 'command', command: 'brew install ccache' });
     expect(checkFix({ id: 'shim_path', fix: `add 'export PATH="$HOME/.local/bin:$PATH"' to ~/.zshrc` })).toMatchObject({ kind: 'command', command: 'export PATH="$HOME/.local/bin:$PATH"' });
     expect(checkFix({ id: 'x', fix: 'run `fr hub restart` after that' })).toMatchObject({ kind: 'command', command: 'fr hub restart' });

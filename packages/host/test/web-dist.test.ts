@@ -142,6 +142,22 @@ describe('vite build and fr doctor --fix', () => {
       detail: 'packages/dashboard/dist built from the current sources',
     });
   });
+
+  it('with `only`, builds just the packages a person chose', async () => {
+    const src = checkout();
+    put(join(src, 'web/demo/dist/index.html'), 'old\n');
+    const built: string[] = [];
+    const out = await webChecks(src, {
+      fix: true,
+      only: ['web_demo'],
+      build: async (_s, dir) => {
+        built.push(dir);
+        return { ok: true, output: '' };
+      },
+    });
+    expect(built).toEqual([join(src, 'web/demo')]);
+    expect(out[0]).toMatchObject({ id: 'dashboard', level: 'warn', fix: 'fr doctor --fix' });
+  });
 });
 
 describe("the hub's self-tests as fr doctor reports them", () => {

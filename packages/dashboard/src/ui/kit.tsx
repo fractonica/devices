@@ -10,7 +10,7 @@ import { type ReactNode, useEffect, useMemo, useRef, useState } from 'react';
 import { type Core } from '@fractonica/time/browser';
 
 import { earthDuration, spanText as spanAgo } from '../state/device-units.ts';
-import { earthText, pureText } from '../state/pure-text.ts';
+import { earthText, heldText, pureText } from '../state/pure-text.ts';
 import { type BeadState, Bead } from './bead.tsx';
 import { useMode } from '../shell/mode.ts';
 import { Earth, engrave, Reading } from './text.tsx';
@@ -36,6 +36,16 @@ export function useHubText(): (text: string) => string {
   const { earth } = useMode();
   const spanOf = useSpanOf();
   return (text) => (earth ? earthText(text, spanOf) : pureText(text, spanOf));
+}
+
+/**
+ * A text someone wires or buys from (a Bench guide, a part) in the mode's units: pure mode puts ⊕ where it holds back
+ * an Earth value, so the sentence keeps its shape (state/pure-text.ts heldText); Earth mode is useHubText's.
+ */
+export function useHeldText(): (text: string) => string {
+  const { earth } = useMode();
+  const spanOf = useSpanOf();
+  return (text) => (earth ? earthText(text, spanOf) : heldText(text, spanOf));
 }
 
 /**

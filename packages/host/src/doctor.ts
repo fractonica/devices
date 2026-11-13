@@ -201,11 +201,17 @@ export async function runDoctor(opts: {
   /** Where sourceDir came from: the working directory (default) or, outside any checkout, the CLI's own checkout. */
   sourceFrom?: 'cwd' | 'cli';
   fix: boolean;
+  /** With `fix`: run only the fixes of these checks (pytools, idf_env, shim, dashboard, web_<name>); absent runs every fix. */
+  only?: readonly string[];
+  /** With `fix`: checks whose fix never runs here (a hub with its own FR_HOME leaves the user's fr shim alone). */
+  never?: readonly string[];
   /** The running hub's self-tests (hub_status), null when no hub answers; fr doctor passes it, hub_doctor adds its own. */
   hub?: () => Promise<HubSelfTests | null>;
 }): Promise<Check[]> {
   const checks: Check[] = [];
   const add = (c: Check) => checks.push(c);
+  /** Whether the fix of check `id` runs. */
+  const fixes = (id: string) => opts.fix && (!opts.only || opts.only.includes(id)) && !opts.never?.includes(id);
 
   add(
     nodeOk(process.version)
@@ -239,7 +245,7 @@ export async function runDoctor(opts: {
   if (idf.ok && python) {
     try {
       // The cache is validated on read; --fix recomputes it regardless.
-      const env = await idfEnv(idf, { refresh: opts.fix, targets: lock.targets });
+      const env = await idfEnv(idf, { refresh: fixes('idf_env'), targets: lock.targets });
       buildPath = env.PATH ?? null;
       add({ id: 'idf_env', level: 'ok', detail: `export.sh OK (python ${env.IDF_PYTHON_ENV_PATH ?? '?'})` });
     } catch (e) {
@@ -251,7 +257,7 @@ export async function runDoctor(opts: {
   let py = await pytoolsStatus();
   let src = pytoolsSource(opts.sourceDir);
   let repaired = false;
-  if ((!py.ok || src.stale) && opts.fix) {
+  if ((!py.ok || src.stale) && fixes('pytools')) {
     const b = await bootstrapPytools(opts.sourceDir);
     py = await pytoolsStatus();
     src = pytoolsSource(opts.sourceDir);
@@ -293,7 +299,7 @@ export async function runDoctor(opts: {
   } catch (e) {
     unreadable = (e as NodeJS.ErrnoException).code !== 'ENOENT';
   }
-  if (current !== wanted && opts.fix && nodeOk(process.version)) {
+  if (current !== wanted && fixes('shim') && nodeOk(process.version)) {
     try {
       mkdirSync(dirname(shim), { recursive: true });
       writeFileSync(shim, wanted);
@@ -322,7 +328,7 @@ export async function runDoctor(opts: {
   }
   add(await serialPortsCheck());
   // The dashboard and web/<name> bundles the hub serves (design c6 D10): --fix builds the missing and stale.
-  checks.push(...(await webChecks(opts.sourceDir, { fix: opts.fix })));
+  checks.push(...(await webChecks(opts.sourceDir, { fix: opts.fix, ...(opts.only ? { only: opts.only } : {}) })));
   if (opts.hub) {
     const self = await opts.hub().catch(() => null);
     checks.push(...(self ? hubChecks(self) : [{ id: 'hub', level: 'ok' as const, detail: 'no hub answers; its Local Network self-test is not checked' }]));

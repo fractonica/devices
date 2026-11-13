@@ -75,8 +75,14 @@ export function useLinkDown(): boolean {
   );
 }
 
-/** A device's presence as the page may say it: unknown while the link is down. */
+/**
+ * What a device's presence is while the hub does not answer: not known (words.ts "not known", a hollow bead), never the
+ * last word the hub said and never "not heard yet", which says the device was never heard.
+ */
+export const PRESENCE_NOT_KNOWN = 'not_known';
+
+/** A device's presence as the page may say it: not known while the link is down. */
 export function usePresence(): (presence: string | null | undefined) => string | null | undefined {
   const d = useLinkDown();
-  return (p) => (d ? 'unknown' : p);
+  return (p) => (d ? PRESENCE_NOT_KNOWN : p);
 }
