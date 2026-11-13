@@ -473,18 +473,19 @@ export async function launchCheck(gate: HubGate, deps: McpDeps): Promise<void> {
   if (!health) {
     deps.log(
       deps.startHub
-        ? `no hub at ${hubUrl()}: the first tool call starts it (autostart is on); starting it from Terminal gives it Local Network access`
-        : `no hub at ${hubUrl()}: every call answers HUB_UNREACHABLE until one runs (fr hub start, from Terminal; or fr mcp --autostart)`,
+        ? `no hub at ${hubUrl()}: the first tool call that needs one starts it (autostart is on; the time_* tools answer without a hub); starting it from Terminal gives it Local Network access`
+        : `no hub at ${hubUrl()}: every call but the time_* tools answers HUB_UNREACHABLE until one runs (fr hub start, from Terminal; or fr mcp --autostart)`,
     );
   } else if (health.registry_hash !== REGISTRY_HASH) {
-    deps.log(`hub registry ${health.registry_hash} != ${REGISTRY_HASH}: calls answer HUB_VERSION_MISMATCH until \`fr hub restart\` and a reconnect`);
+    deps.log(`hub registry ${health.registry_hash} != ${REGISTRY_HASH}: calls but the time_* tools answer HUB_VERSION_MISMATCH until \`fr hub restart\` and a reconnect`);
   }
 }
 
 /**
- * `fr mcp`: serves until the client closes stdin. The hub is looked at once at launch (stderr notes). With autostart
- * (autostartWanted) the first tool call that finds none starts it (08 §8.2), never the launch itself; without it,
- * every call answers HUB_UNREACHABLE with how to start one.
+ * `fr mcp`: serves until the client closes stdin. The hub is looked at once at launch (stderr notes). The time_* tools
+ * are answered here from the temporal core and never need the hub. With autostart (autostartWanted) the first other
+ * tool call that finds none starts it (08 §8.2), never the launch itself; without it, every other call answers
+ * HUB_UNREACHABLE with how to start one.
  */
 export function runMcp(deps: McpDeps = defaultDeps()): StdioServerHandle {
   quietConsole();

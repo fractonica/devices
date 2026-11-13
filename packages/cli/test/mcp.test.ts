@@ -376,10 +376,21 @@ describe('fr mcp (in-process)', () => {
     await a.peer.until(() => (checks >= 1 ? true : undefined));
     await new Promise((r) => setTimeout(r, 50));
     expect(starts).toBe(0);
-    expect(a.logs).toEqual([expect.stringContaining('the first tool call starts it')]);
+    expect(a.logs).toEqual([expect.stringContaining('the first tool call that needs one starts it')]);
     expect(structured(await a.peer.request('tools/call', { name: 'device_list', arguments: {} })).ok).toBe(true);
     expect(starts).toBe(1);
     expect(a.calls.map((c) => c.op)).toEqual(['device_list']);
+  });
+
+  it('notes a missing hub at launch, and says the time_* tools answer without one', async () => {
+    const logs: string[] = [];
+    const deps: McpDeps = { call: async () => ({ ok: true, cursor: '', data: null }), health: async () => null, log: (m) => logs.push(m) };
+    await launchCheck(new HubGate(deps), deps);
+    expect(logs).toEqual([expect.stringMatching(/every call but the time_\* tools answers HUB_UNREACHABLE/)]);
+    logs.length = 0;
+    const auto: McpDeps = { ...deps, startHub: async () => true };
+    await launchCheck(new HubGate(auto), auto);
+    expect(logs).toEqual([expect.stringMatching(/first tool call that needs one starts it .*time_\* tools answer without a hub/)]);
   });
 
   it('notes a hub on another registry at launch, and starts nothing', async () => {

@@ -79,6 +79,43 @@ describe('fr time', { timeout: 120_000 }, () => {
     expect(fr(['time', 'next', 'η', '--count', 'x']).code).toBe(64);
     expect(fr(['time', 'bogus']).code).toBe(64);
     expect(fr(['time', '--help']).code).toBe(0);
+    // pure: no Gregorian date in the refusal unless --earth, then marked ⊕
+    const pure = fr(['time', '--at', '1500-01-01T00:00:00Z']);
+    expect(pure.err).toBe('error INVALID_ARGS: the instant is outside the catalogue: OUT OF CATALOGUE · α#1 – α#18\n');
+    expect(fr(['time', '--earth', '--at', '1500-01-01T00:00:00Z']).err).toMatch(/\(⊕ 1613-05-19T17:41:53\.032Z to 2857-06-13T09:33:55\.816Z\)$/m);
+  });
+
+  it('refuses an unreadable --at with --watch as without it: INVALID_ARGS, exit 64, nothing drawn', () => {
+    const json = fr(['--json', 'time', '--watch', '--at', 'garbage']);
+    expect(json.code).toBe(64);
+    expect(JSON.parse(json.out)).toMatchObject({ ok: false, error: { code: 'INVALID_ARGS', details: { reason: 'parse' } } });
+    const text = fr(['time', '--watch', '--at', 'garbage']);
+    expect(text.code).toBe(64);
+    expect(text.out).toBe('');
+    expect(text.err).toMatch(/^error INVALID_ARGS: cannot read "garbage" as an instant/);
+  });
+
+  it('takes an instant before 1970 (negative Unix time) as an argument, with or without a unit', () => {
+    const stamp = (args: string[]) => (JSON.parse(fr(['--json', 'time', ...args]).out) as { data: { unix_us: string } }).data.unix_us;
+    expect(stamp(['stamp', '-6000000000000000us'])).toBe('-6000000000000000');
+    expect(stamp(['stamp', '-6000000000'])).toBe('-6000000000000000');
+    expect(stamp(['stamp', '-6000000000000ms'])).toBe('-6000000000000000');
+    expect(stamp(['--at', '-6000000000000000us', 'ladder', '--to', '2'])).toBe('-6000000000000000');
+    expect(stamp(['ladder', '--at', '-6000000000000000us'])).toBe('-6000000000000000');
+    const span = JSON.parse(fr(['--json', 'time', 'span', '-6000000000000000us', '-5000000000', '--parts', '2']).out) as { data: { from_us: string; to_us: string } };
+    expect(span.data).toMatchObject({ from_us: '-6000000000000000', to_us: '-5000000000000000' });
+    // an unknown option is still one, and a negative --count is still refused
+    expect(fr(['time', 'stamp', '--bogus']).code).toBe(64);
+    const count = fr(['--json', 'time', 'next', 'η', '--count', '-3']);
+    expect(count.code).toBe(64);
+    expect(JSON.parse(count.out).error.message).toBe("option '--count <n>' argument '-3' is invalid. not a whole number");
+  });
+
+  it('says partial_sync, not out_of_catalogue, for the sync at the catalogue\'s first instant', () => {
+    const r = fr(['--json', 'time', 'sync', '--at', '-11253795486968000us']);
+    expect(r.code).toBe(64);
+    expect(JSON.parse(r.out)).toMatchObject({ ok: false, error: { code: 'INVALID_ARGS', details: { reason: 'partial_sync' } } });
+    expect(fr(['--json', 'time', '--at', '-11253795486968000us']).code).toBe(0);
   });
 
   it('is listed by fr --help, which loads the full program', () => {
@@ -125,7 +162,10 @@ describe('time_* MCP tools', () => {
     expect(conv.structuredContent).toMatchObject({ ok: true, data: { iso: '2026-10-08T11:59:59.855Z' } });
     const bad = await callTool('time_next', { level: 'η', quarter: 'noon' }, {}, gate, noHub);
     expect(bad.isError).toBe(true);
-    expect(bad.structuredContent).toMatchObject({ ok: false, error: { code: 'INVALID_ARGS' } });
+    expect(bad.structuredContent).toMatchObject({ ok: false, error: { code: 'INVALID_ARGS', details: { reason: 'parse' } } });
+    // the core's quarter word in any case, as `fr time next --quarter End`
+    const upper = await callTool('time_next', { level: 'η', quarter: 'End', at: '2026-10-08T12:00:00Z' }, {}, gate, noHub);
+    expect(upper.structuredContent).toMatchObject({ ok: true, data: { quarter: 'End' } });
     const out = await callTool('time_ladder', { at: '3000-01-01T00:00:00Z' }, {}, gate, noHub);
     expect(out.structuredContent).toMatchObject({ ok: false, error: { code: 'INVALID_ARGS', details: { reason: 'out_of_catalogue' } } });
     // other tools still need the hub

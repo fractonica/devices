@@ -13,7 +13,7 @@
 // ends cleanly on Ctrl-C (exit 0). On a terminal it redraws in place; piped, it prints each reading (one envelope per
 // line with --json).
 
-import { type Command, InvalidArgumentError } from 'commander';
+import { Command, InvalidArgumentError } from 'commander';
 
 /** What the commands need from their program: --json, and an exit that drains stdout first. */
 export interface TimeIo {
@@ -79,8 +79,19 @@ async function watchNow(io: TimeIo, opts: { at?: string; earth?: boolean }): Pro
   let shownRows = 0;
   let timer: NodeJS.Timeout | null = null;
   let done = false;
-  // --at with --watch: the reading starts there and runs at real speed (the offset to the clock is kept).
-  const offset = opts.at === undefined ? 0n : t.toInstant(core, opts.at).t - core.frc.now();
+  // --at with --watch: the reading starts there and runs at real speed (the offset to the clock is kept). An --at the
+  // core cannot read is refused as without --watch (INVALID_ARGS, exit 64), before anything is drawn.
+  let offset = 0n;
+  if (opts.at !== undefined) {
+    try {
+      offset = t.toInstant(core, opts.at).t - core.frc.now();
+    } catch (e) {
+      const r = failure(e, t);
+      return void (await (io.json()
+        ? io.exit(EXIT[r.error!.code] ?? 1, JSON.stringify(r) + '\n')
+        : io.exit(EXIT[r.error!.code] ?? 1, '', `error ${r.error!.code}: ${r.error!.message}\n`)));
+    }
+  }
   const now = () => core.frc.now() + offset;
   const rows = (text: string) => {
     const cols = out.columns || 80;
@@ -139,6 +150,30 @@ async function watchNow(io: TimeIo, opts: { at?: string; earth?: boolean }): Pro
 }
 
 /**
+ * A negative instant (`-6000000000`, `-6000000000000000us`: before 1970, and the catalogue starts in 1613) is an
+ * argument, not an option: no option of the time commands is a dash and a digit. Commander takes a plain negative
+ * number as an argument but not one with a unit suffix, so this command hides such a word from its option parser and
+ * gives it back as it was. A word that is the value of the option before it (`--at -6000000000000000us`) is left
+ * alone: commander gives an option its next word whatever it looks like.
+ */
+const NEGATIVE_INSTANT = /^-\d/;
+const HIDDEN = '\u0000';
+
+class TimeCommand extends Command {
+  override createCommand(name?: string): Command {
+    return new TimeCommand(name);
+  }
+
+  override parseOptions(args: string[]): { operands: string[]; unknown: string[] } {
+    const takesValue = (word: string | undefined) => word !== undefined && this.options.some((o) => (o.long === word || o.short === word) && (o.required || o.optional));
+    const hidden = args.map((a, i) => (NEGATIVE_INSTANT.test(a) && !takesValue(args[i - 1]) ? HIDDEN + a : a));
+    const show = (a: string) => (a.startsWith(HIDDEN) ? a.slice(1) : a);
+    const r = super.parseOptions(hidden);
+    return { operands: r.operands.map(show), unknown: r.unknown.map(show) };
+  }
+}
+
+/**
  * The `fr time` commands on `program` (the fast path's own small program, or the full one). `--at` and `--earth` are
  * options of `time` itself, which commander parses wherever they stand, so a subcommand reads them with
  * optsWithGlobals: `fr time ladder --at …` and `fr time --at … ladder` mean the same.
@@ -146,10 +181,12 @@ async function watchNow(io: TimeIo, opts: { at?: string; earth?: boolean }): Pro
 export function addTimeCommands(program: Command, io: TimeIo): void {
   type Opts = { at?: string; earth?: boolean; watch?: boolean; context?: string; to?: string; quarter?: string; count?: number; parts?: number };
   const opts = (cmd: Command) => cmd.optsWithGlobals() as Opts;
-  const time = program
-    .command('time')
+  const time = new TimeCommand('time');
+  time.copyInheritedSettings(program);
+  program.addCommand(time);
+  time
     .description('Fractonica time now, from the temporal core: the stamp, Pentad, majors, countdowns, Sun, next thresholds (no hub needed)')
-    .option('--at <instant>', 'read at this instant: now, Unix seconds (or 1791460800000ms, …us), a stamp, or an ISO date')
+    .option('--at <instant>', 'read at this instant: now, Unix seconds (or 1791460800000ms, …us; negative before 1970), a stamp, or an ISO date')
     .option('--earth', 'add the Earth translation (civil date and time, durations), marked ⊕')
     .option('--watch', 'redraw at each change the core reports, until Ctrl-C')
     .action(async (_o: unknown, cmd: Command) => {
@@ -167,7 +204,7 @@ export function addTimeCommands(program: Command, io: TimeIo): void {
   time
     .command('stamp')
     .description('The stamp of an instant (ISO date, Unix time or now), and the date in words')
-    .argument('<instant>', 'now, Unix seconds (or …ms, …us), or an ISO date')
+    .argument('<instant>', 'now, Unix seconds (or …ms, …us; negative before 1970), or an ISO date')
     .action(async (at: string) =>
       answer(
         io,
@@ -220,7 +257,7 @@ export function addTimeCommands(program: Command, io: TimeIo): void {
   time
     .command('span')
     .description('The span from one instant to another, in Fractonica units, signed')
-    .argument('<from>', 'an instant (now, Unix seconds, a stamp, an ISO date)')
+    .argument('<from>', 'an instant (now, Unix seconds, negative before 1970, a stamp, an ISO date)')
     .argument('<to>', 'an instant')
     .option('--parts <n>', "at most this many units (default: the core's precision, two)", integer)
     .action(async (from: string, to: string, _o: unknown, cmd: Command) => {
