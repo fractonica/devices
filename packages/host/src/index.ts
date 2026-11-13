@@ -2,6 +2,7 @@ export * from './doctor.ts';
 export * from './config.ts';
 export * from './idf.ts';
 export * from './inventory.ts';
+export * from './logrotate.ts';
 export * from './paths.ts';
 export * from './proc.ts';
 export * from './pytools.ts';

@@ -33,6 +33,7 @@ import type { Db } from './db.ts';
 import type { JobRunner } from './jobs.ts';
 import type { LogStore } from './logstore.ts';
 import type { PortPolicyHandle } from './ports/policy.ts';
+import type { PruneReport } from './retention.ts';
 import type { SerialPortManager } from './serial.ts';
 
 /** One cursor space for logs and events (spec 08 §8.7): `c:<run>.<seq>`, seq monotonic across runs. */
@@ -135,14 +136,17 @@ export type HubEvent = ProtocolHubEvent;
 export interface Events {
   /**
    * Synchronous: allocates the cursor from the shared Seq, notifies subscribers, enqueues persistence. `thin`: a
-   * STATE of a streaming capability, whose rows the store may thin (design m2-c3-inputs D6; EventStore).
+   * STATE of a streaming capability, whose rows the store may thin (design m2-c3-inputs D6; EventStore). `durable:
+   * false`: live only (per-frame telemetry): subscribers get it, no row is written.
    */
-  publish(e: Omit<HubEvent, 'cursor' | 'seq'>, opts?: { thin?: boolean }): HubEvent;
+  publish(e: Omit<HubEvent, 'cursor' | 'seq'>, opts?: { thin?: boolean; durable?: boolean }): HubEvent;
   subscribe(fn: (e: HubEvent) => void): () => void;
   /** Oldest first; `devices: null` is every device. */
   query(q: { afterSeq?: number; types?: string[]; devices?: string[] | null; excludeDevices?: string[]; limit: number }): HubEvent[];
   /** Streaming STATEs replaced before being written (hub_status `events`; EventStore only). */
   readonly stateThinned?: number;
+  /** Events published live only (never stored) since start. */
+  readonly liveOnly?: number;
 }
 
 /** An OTA-class frame from a node (05 §5.7, design c4 §3): ACCEPT, REJECT, STATUS or RESULT, on port 240. */
@@ -542,6 +546,8 @@ export interface HubContext {
   db: Db;
   logs: LogStore;
   serial: SerialPortManager;
+  /** Finished jobs' retention (retention.ts): its last pass, for hub_status; absent in test contexts. */
+  jobsRetention?: { last: PruneReport | null };
   /** The port policy over config.json (ports/policy.ts); absent in test contexts that watch every port. */
   portPolicy?: PortPolicyHandle;
   jobs: JobRunner;

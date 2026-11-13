@@ -1,12 +1,12 @@
 // Hub entry point: `node --conditions=@fractonica/source packages/hub/src/main.ts [--port 7420]`.
 // Normally started by `fr hub start --detach` (spec 08 §8.2 lifecycle).
 
-import { mkdirSync } from 'node:fs';
+import { existsSync, fstatSync, mkdirSync, statSync } from 'node:fs';
 import type { AddressInfo } from 'node:net';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-import { idfStatus, paths, pytoolsStatus, readIdfLock, type IdfStatus, type PytoolsStatus } from '@fractonica/host';
+import { idfStatus, paths, pytoolsStatus, readConfig, readIdfLock, rotateLog, type IdfStatus, type PytoolsStatus } from '@fractonica/host';
 import { HUB_API_PORT, HUB_VERSION, REGISTRY_HASH } from '@fractonica/protocol';
 
 import { createAppServer } from './apps/server.ts';
@@ -36,6 +36,7 @@ import { createLeases } from './ports/leases.ts';
 import { createPortPolicy } from './ports/policy.ts';
 import { createPrompts } from './prompts.ts';
 import { createRegistry, sweepIdentAtStart } from './registry/index.ts';
+import { compactDb, JobRetention } from './retention.ts';
 import { RingRetention } from './ring.ts';
 import { createRouter } from './router/index.ts';
 import { createScaleCounters } from './router/scale.ts';
@@ -58,7 +59,44 @@ function arg(name: string, fallback: string): string {
 /** What an uncaught exception still writes before the exit: set once the stores exist. */
 let crashFlush: (() => void) | null = null;
 
+/** Whether this process's stdout is hub.log (started by `fr hub start`): then the hub rotates it itself. */
+function stdoutIsHubLog(): boolean {
+  try {
+    const out = fstatSync(1);
+    const log = statSync(paths.log());
+    return out.isFile() && out.ino === log.ino && out.dev === log.dev;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * `main.ts --compact` (`fr hub compact`): VACUUM hub.db and turn on incremental auto_vacuum, with no hub running.
+ * Prints one JSON line (ok, data or error) and exits 0, or 3 when a hub runs.
+ */
+function compactMain(): void {
+  const pid = runningHubPid(paths.lock());
+  if (pid) {
+    console.log(JSON.stringify({ ok: false, error: { code: 'LOCKED', message: `hub pid ${pid} is running: stop it first (fr hub stop)` } }));
+    process.exit(3);
+  }
+  if (!existsSync(paths.db())) {
+    console.log(JSON.stringify({ ok: true, data: { db: paths.db(), skipped: 'no database yet' } }));
+    return;
+  }
+  const db = openDb(paths.db());
+  try {
+    console.log(JSON.stringify({ ok: true, data: { db: paths.db(), ...compactDb(db) } }));
+  } finally {
+    db.close();
+  }
+}
+
 async function main(): Promise<void> {
+  if (process.argv.includes('--compact')) {
+    compactMain();
+    return;
+  }
   // First: an uncaught exception from here on is logged, the queued rows are written, and the exit is non-zero (70);
   // an unhandled rejection is logged and the hub keeps running.
   installCrashHandlers({ flush: () => crashFlush?.() });
@@ -150,6 +188,22 @@ async function main(): Promise<void> {
     }
   };
   const eventsRing = new RingRetention(db, 'events', () => seq.head());
+  // Finished jobs and their logs (config.json retention), read at each pass so an edit applies without a restart.
+  const jobsRetention = new JobRetention(db, () => {
+    const r = readConfig().config.retention;
+    return { days: r.jobs_days, rows: r.jobs_rows };
+  });
+  // hub.log by size (config.json log), when it is this process's stdout.
+  const rotateOwnLog = () => {
+    if (stdoutIsHubLog()) {
+      const { max_bytes, keep } = readConfig().config.log;
+      if (rotateLog(paths.log(), { maxBytes: max_bytes, keep, how: 'copytruncate' })) {
+        console.log(JSON.stringify({ event: 'log_rotated', file: paths.log(), keep }));
+      }
+    }
+  };
+  const logTimer = setInterval(guarded('log.rotate', rotateOwnLog), 60_000);
+  logTimer.unref();
   const sleepGuard = new SleepGuard();
   // The Mac stays awake while a node session is up or an OTA job runs (design c4 §4): an OTA's node may
   // be between sessions (REBOOTING) for up to a minute, and sleeping then strands it.
@@ -213,6 +267,7 @@ async function main(): Promise<void> {
     serial,
     portPolicy,
     jobs,
+    jobsRetention,
     startedAt: Date.now(),
     hubSourceDir,
     idf: () => idf,
@@ -253,6 +308,7 @@ async function main(): Promise<void> {
   await hub.appServer.start();
   await hub.wsServer.start();
   eventsRing.start();
+  jobsRetention.start();
   await router.start(); // node links (TCP/UDP :7421) once the API is up
   bindings.start(); // its router hooks and event subscriptions, once the router runs
   cellTracker(hub); // POWER-1 (design power-p1 D9): cells' samples and sessions, power.* events, once the router runs
@@ -299,6 +355,8 @@ async function main(): Promise<void> {
     // stop_forced), so a hang is not mistaken for a clean stop.
     stopBackstop(5000);
     clearInterval(envTimer);
+    clearInterval(logTimer);
+    jobsRetention.stop();
     // Jobs still running here (`fr hub stop --force`, or a signal from elsewhere) are aborted: that
     // kills their build groups and sidecars, and lets them record "cancelled" while the db is open.
     jobs.cancelAll();

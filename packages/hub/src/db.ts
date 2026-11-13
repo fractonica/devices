@@ -43,6 +43,8 @@ const MIGRATIONS = [
   `CREATE INDEX IF NOT EXISTS logs_device ON logs(device, seq)`,
   `CREATE TABLE IF NOT EXISTS jobs (
      job_id TEXT PRIMARY KEY, kind TEXT NOT NULL, status TEXT NOT NULL, created_at TEXT NOT NULL, json TEXT NOT NULL)`,
+  // Retention (retention.ts) picks the oldest finished jobs; job_list reads newest first.
+  `CREATE INDEX IF NOT EXISTS jobs_created ON jobs(created_at)`,
   `CREATE TABLE IF NOT EXISTS job_logs (
      job_id TEXT NOT NULL, line INTEGER NOT NULL, ts TEXT NOT NULL, stream TEXT NOT NULL, text TEXT NOT NULL,
      PRIMARY KEY (job_id, line))`,
@@ -165,6 +167,9 @@ const VERSION_STEPS: ((db: Db) => void)[] = [migrateRoleCheck, migrateNetworks];
 
 export function openDb(file: string): Db {
   const db = new Database(file);
+  // Only takes effect on a new, empty database (before its first table): pruning then gives free pages back to the
+  // file system (retention.ts). An older database keeps its mode until `fr hub compact`.
+  db.pragma('auto_vacuum = INCREMENTAL');
   db.pragma('journal_mode = WAL');
   db.pragma('synchronous = NORMAL');
   for (const sql of MIGRATIONS) {

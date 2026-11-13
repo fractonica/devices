@@ -14,6 +14,10 @@
 // one, and is queued when the window ends (opening the next), so the last value is always stored. A pending row
 // keeps the seq and cursor its subscribers saw, and query() and tail() already return it, so a wait that reads
 // the backlog after the STATE was published still finds it. Subscribers and the router's mirror see every STATE.
+//
+// Live-only events (`durable: false`): per-frame telemetry, such as a camera's frame counter, which changes with every
+// frame a stream takes. Subscribers (/ws, /app, a wait already subscribed) get them; no row is written, so they never
+// fill hub.db. A wait that reads the backlog does not find them.
 
 import { performance } from 'node:perf_hooks';
 
@@ -72,6 +76,8 @@ export class EventStore implements Events, Lifecycle {
   #stateWindows = new Map<string, { pending: Row | null; timer: NodeJS.Timeout }>();
   /** STATE rows left out by thinning (a pending row that a newer one replaced), since start. */
   stateThinned = 0;
+  /** Events published live only (`durable: false`: per-frame telemetry), never written, since start. */
+  liveOnly = 0;
 
   constructor(db: Db, seq: Seq, run: number) {
     this.#db = db;
@@ -93,12 +99,15 @@ export class EventStore implements Events, Lifecycle {
     this.flush();
   }
 
-  publish(e: Omit<HubEvent, 'cursor' | 'seq'>, opts: { thin?: boolean } = {}): HubEvent {
+  publish(e: Omit<HubEvent, 'cursor' | 'seq'>, opts: { thin?: boolean; durable?: boolean } = {}): HubEvent {
     const seq = this.#seq.next();
     const event: HubEvent = { ...e, seq, cursor: formatCursor({ run: this.run, seq }) };
     const { cursor: _c, seq: _s, type, device, t_hub_us, ...body } = event;
     const row: Row = { seq, run: this.run, ts_us: nowUs(), t_hub_us: Math.round(t_hub_us), type, device: device ?? null, json: JSON.stringify(body) };
-    if (opts.thin && e.part === 'state') {
+    if (opts.durable === false) {
+      // Live only (per-frame telemetry): subscribers see it, no row is written.
+      this.liveOnly++;
+    } else if (opts.thin && e.part === 'state') {
       this.#thin(row);
     } else {
       this.#queue(row);

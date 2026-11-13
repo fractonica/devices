@@ -19,7 +19,7 @@ import { addCsiCommands, CSI_CLI_OPS } from './csi.ts';
 import { addCodegenClientCommand, CODEGEN_CLIENT_OPS } from './codegen-client.ts';
 import { addDisplayWindowCommand } from './display.ts';
 import { genAll, genFirmware } from './gen.ts';
-import { restartHub, startHub, stopHub } from './hub.ts';
+import { compactHub, restartHub, startHub, stopHub } from './hub.ts';
 import type { CliKit } from './kit.ts';
 import { addAppDeployCommand } from './app-deploy.ts';
 import { addMcpCommand } from './mcp.ts';
@@ -359,6 +359,10 @@ hub
   .description('Restart the hub daemon (picks up new code; refuses while jobs are queued or working)')
   .option('--force', 'restart even if that aborts queued or working jobs')
   .action(async (opts: { force?: boolean }) => emit(await restartHub(Boolean(opts.force)), 'hub_restart'));
+hub
+  .command('compact')
+  .description('Rewrite hub.db to give the space pruning freed back to the disk (VACUUM; only while the hub is stopped)')
+  .action(async () => emit(await compactHub(), 'hub_compact'));
 
 // Ops whose commands are hand-written (design c6 §3.3) get none generated.
 const handWritten = new Set<string>([...SERIAL_OPS, ...CODEGEN_CLIENT_OPS, ...AUDIO_CLI_OPS, ...CSI_CLI_OPS]);

@@ -26,6 +26,7 @@ import { TCP_LOG_LIMITS, tcpOnlyDevices } from './logs/source.ts';
 import { staleNetLine, type StoredLine, toLogLine } from './logstore.ts';
 import { CHIPS_5G, devicesWithout5g, listNetworks, type NetworkRecord, networkDevices, passwordNames, readNetwork, writeNetwork, writeWifiPassword } from './network.ts';
 import { assertPortFree, listPorts, nameBusyHolder } from './ports/holders.ts';
+import { dbSpace, type PruneReport, spaceWarning } from './retention.ts';
 import { PORTS_HANDLERS } from './ports/ops.ts';
 import { INVENTORY_HANDLERS } from './registry/catalog-ops.ts';
 import { type FlashStartInput, startFlash } from './registry/flashing.ts';
@@ -270,6 +271,18 @@ export const HANDLERS: Record<OpName, Handler> = {
     if (otaListenError) {
       warnings.push(`OTA over Wi-Fi is unavailable: ${otaListenError}`);
     }
+    // hub.db's size and free space (retention.ts): a large free part in a database without incremental vacuum is
+    // worth `fr hub compact`.
+    let db: (ReturnType<typeof dbSpace> & { jobs_pruned?: PruneReport }) | undefined;
+    try {
+      db = hub.db?.open ? { ...dbSpace(hub.db), ...(hub.jobsRetention?.last ? { jobs_pruned: hub.jobsRetention.last } : {}) } : undefined;
+      const w = db ? spaceWarning(db) : null;
+      if (w) {
+        warnings.push(w);
+      }
+    } catch {
+      db = undefined;
+    }
     let registered = 0;
     try {
       registered = hub.registry?.list().length ?? 0;
@@ -315,7 +328,8 @@ export const HANDLERS: Record<OpName, Handler> = {
       ...(hub.sleepGuard ? { sleep_guard: { active: hub.sleepGuard.active() } } : {}),
       ...(router ? { router: { counters: router.counters, scale: router.scale, reorder: router.reorder } } : {}),
       // STATE rows the event store thinned (design m2-c3-inputs D6): streaming STATEs replaced before being written.
-      ...(hub.events?.stateThinned !== undefined ? { events: { state_thinned: hub.events.stateThinned } } : {}),
+      ...(db ? { db } : {}),
+      ...(hub.events?.stateThinned !== undefined ? { events: { state_thinned: hub.events.stateThinned, live_only: hub.events.liveOnly ?? 0 } } : {}),
       // Scale (design m2-c2 D16): /ws, REST calls per op, and the process.
       ...(ws ? { ws } : {}),
       rest: restStats(hub).view(),

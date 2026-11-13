@@ -1,11 +1,11 @@
 // Local hub lifecycle: start (detached daemon), stop, restart (spec 08 §8.2).
 
-import { spawn } from 'node:child_process';
+import { spawn, spawnSync } from 'node:child_process';
 import { mkdirSync, openSync, readFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-import { paths, run } from '@fractonica/host';
+import { paths, readConfig, rotateLog, run } from '@fractonica/host';
 import type { Job, Result } from '@fractonica/protocol';
 
 import { hubCall, hubHealth } from './client.ts';
@@ -80,6 +80,10 @@ export async function startHub(foreground: boolean): Promise<StartInfo> {
     return { started: true };
   }
   mkdirSync(paths.home(), { recursive: true });
+  // A hub.log past its size (config.json log) is rotated before the new hub appends to it; the running hub rotates
+  // its own log from then on.
+  const { max_bytes, keep } = readConfig().config.log;
+  rotateLog(paths.log(), { maxBytes: max_bytes, keep, how: 'rename' });
   const log = openSync(paths.log(), 'a');
   // detached => setsid(): the hub outlives the shell, the agent session and `fr mcp`.
   const child = spawn(process.execPath, args, { detached: true, stdio: ['ignore', log, log] });
@@ -176,4 +180,31 @@ export async function restartHub(force = false): Promise<Result<StartInfo | Stop
   }
   const r = await startHub(false);
   return r.started ? { ok: true, data: r, cursor: '' } : { ok: false, cursor: '', error: { code: 'HUB_UNREACHABLE', message: `hub did not start; see ${r.log}`, retryable: true } };
+}
+
+/**
+ * `fr hub compact`: rewrites hub.db (VACUUM) and turns on incremental auto_vacuum, so the space pruning freed goes
+ * back to the disk now and after each prune from then on. Only with no hub running (it would block the hub for as
+ * long as the VACUUM takes): refuses with LOCKED while one answers or holds hub.lock.
+ */
+export async function compactHub(): Promise<Result<Record<string, unknown>>> {
+  const health = await hubHealth();
+  if (health) {
+    return {
+      ok: false,
+      cursor: '',
+      error: { code: 'LOCKED', message: `the hub (pid ${health.pid}) is running; compacting would stop it for as long as it takes`, retryable: true, remediation: [{ cli: 'fr hub stop' }, { cli: 'fr hub compact' }, { cli: 'fr hub start' }] },
+    };
+  }
+  const r = spawnSync(process.execPath, ['--conditions=@fractonica/source', HUB_MAIN, '--compact'], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'inherit'] });
+  const last = r.stdout.trim().split('\n').at(-1) ?? '';
+  try {
+    const out = JSON.parse(last) as { ok: boolean; data?: Record<string, unknown>; error?: { code: string; message: string } };
+    if (out.ok) {
+      return { ok: true, data: out.data ?? {}, cursor: '' };
+    }
+    return { ok: false, cursor: '', error: { code: out.error?.code === 'LOCKED' ? 'LOCKED' : 'INTERNAL', message: out.error?.message ?? 'compact failed', retryable: true } };
+  } catch {
+    return { ok: false, cursor: '', error: { code: 'INTERNAL', message: `compact failed (exit ${r.status}): ${last || 'no output'}`, retryable: false } };
+  }
 }

@@ -520,6 +520,18 @@ function commandId(cap: string, name: string): number {
  */
 const STREAMING_CAPS: ReadonlySet<number> = new Set(CATALOG.capabilities.filter((c) => c.config.some((f) => f.name === 'report_hz')).map((c) => c.id));
 
+/**
+ * Per-frame telemetry (STATE members that change with every frame a stream takes): published live only, never
+ * stored. A camera streaming at 20 fps wrote three rows per frame before, most of hub.db's events. camera_status reads
+ * them from the device mirror, which every STATE still updates.
+ */
+export const LIVE_ONLY_STATE: ReadonlySet<string> = new Set(
+  [{ cap: 'fr.camera', members: ['frames', 'fps_x10', 'last_bytes'] }].flatMap(({ cap, members }) => {
+    const c = CATALOG.capabilities.find((x) => x.name === cap);
+    return c ? members.map((m) => `${c.id}:${m}`) : [];
+  }),
+);
+
 const NODE_GET_STATE = commandId('fr.node', 'get_state');
 const NODE_SET_ALIAS = commandId('fr.node', 'set_alias');
 const NODE_DESCRIBE = commandId('fr.node', 'describe');
@@ -2344,7 +2356,11 @@ export class HubRouter implements Router, HubBroadcast, Lifecycle, LinkSink {
         ...(part === 'state' && this.#resyncBrought(peer, h.seq, tUs, now) ? { resync: true } : {}),
       },
       // A streaming capability's STATE rows are thinned in the store (m2-c3-inputs D6); the bus still has every one.
-      { thin: part === 'state' && !!inst && STREAMING_CAPS.has(inst.cap_id) },
+      // Per-frame telemetry is not stored at all (LIVE_ONLY_STATE).
+      {
+        thin: part === 'state' && !!inst && STREAMING_CAPS.has(inst.cap_id),
+        ...(part === 'state' && inst && LIVE_ONLY_STATE.has(`${inst.cap_id}:${name}`) ? { durable: false } : {}),
+      },
     );
     // After the bus (D7: /app and /ws first), with what it does not carry: the link and the arrival µs.
     if (this.#capListeners.size) {
