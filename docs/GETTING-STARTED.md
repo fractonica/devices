@@ -8,7 +8,8 @@ slower or needs more than it should, this guide says so.
 - **The hub** is a Node process on your Mac. It keeps the device registry (`~/.fractonica/hub.db`), reads the USB
   serial ports of the boards it knows, builds and flashes firmware, updates boards over Wi-Fi, and serves a dashboard
   at <http://127.0.0.1:7420/>.
-- **`fr`** is the command line for the hub (and for the local tasks that need no hub: `fr doctor`, `fr gen`).
+- **`fr`** is the command line for the hub (and for the local tasks that need no hub: `fr doctor`, `fr gen`,
+  `fr time`).
 - **The boards** run the node firmware, built per *profile* (`firmware/profiles/`) with ESP-IDF 6.1.
 
 ## 1. Prerequisites
@@ -44,6 +45,11 @@ pnpm fr doctor --fix
 
 Doctor exits 1 while ESP-IDF is missing; that is expected until you build firmware. After a `git pull` that moved
 the checkout or changed the dashboard, run `fr doctor --fix` again.
+
+**Fractonica time works now**, before doctor, a hub or ESP-IDF, and offline: `pnpm fr time` prints the Fractonica
+reading from the temporal core (its WebAssembly build is in the checkout, `packages/time`), `pnpm fr time --earth`
+adds the civil time, and `pnpm fr time ladder` lists every level. The [user manual §20](user-manual.md#20-fractonica-time)
+has the rest.
 
 From here `fr` works from any directory. A command that needs a checkout (`fr gen`, `fr build`, `fr deploy`,
 `fr test run`) uses the checkout around the current directory, or else the one the shim points at, and says so.
@@ -191,9 +197,16 @@ passwords never go through MCP. See [plugin/README.md](../plugin/README.md).
 
 ## 9. Upgrading
 
-- **The registry changed** (new port operations), so `REGISTRY_HASH` differs: after pulling, run `fr hub restart`,
-  then reconnect the MCP server (`/mcp` in Claude Code). Until then every call but `hub_status` answers
-  `HUB_VERSION_MISMATCH`.
+- **The registry changed** (the Fractonica time operations `time_now`, `time_convert`, `time_ladder`, `time_next`;
+  before them the port operations), so `REGISTRY_HASH` differs: after pulling, run `fr hub restart`, then reconnect
+  the MCP server (`/mcp` in Claude Code), which then lists the `time_*` tools. Until the restart every hub call but
+  `hub_status` answers `HUB_VERSION_MISMATCH`; `fr time` and the `time_*` MCP tools work either way, as they need no
+  hub.
+- **New events:** the hub publishes `time.threshold` as Fractonica thresholds pass. α to η are stored (about 20 rows
+  a day), θ and ι are live only; `"time": {"thresholds": false}` in `~/.fractonica/config.json` turns them off.
+- **The SDK's error class is `HubError`** (its `name` is `'HubError'`). `FractonicaError` is still exported as a
+  deprecated alias of the same class, so `instanceof` checks keep working; a check of `err.name ===
+  'FractonicaError'` needs updating.
 - **The shim changed**: run `fr doctor --fix` once; it rewrites `~/.local/bin/fr` to run `packages/cli/bin/fr.mjs`.
 - **The hub now leaves unknown boards' ports alone.** Boards already in your registry are watched as before. Add
   `"ports": {"mode": "all"}` to `~/.fractonica/config.json` for the old behaviour, or `fr ports ignore` a board the

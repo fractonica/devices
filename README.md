@@ -12,6 +12,8 @@ clock firmware that is to become one of them.
   the air, routes and logs, with a React dashboard (`packages/dashboard`).
 - **One operation registry** (`packages/protocol`), served as REST, as the `fr` CLI (`packages/cli`) and as MCP
   tools, plus an app SDK (`packages/sdk`) and a Claude Code plugin (`plugin/`).
+- **Fractonica time** (`packages/time`): the temporal core's WebAssembly build, vendored from the web repository and
+  locked, behind `fr time` (no hub needed), the hub's `time_*` operations and its `time.threshold` events.
 - **The clock** (`clock/`): the Fractonica clock firmware with its host simulator, a standalone ESP-IDF 5.5
   project. It has run on an ESP32-C6 with a round GC9A01. Stage 5 of the merge plan folds it into the framework,
   on ESP-IDF 6.1, as a face capability of the framework node.
@@ -25,7 +27,7 @@ clock firmware that is to become one of them.
 firmware/    ESP-IDF 6.1: apps (node, gateway, hwprobe), components fr_*, profiles, partitions, host C++ tests
 hardware/    boards, drivers, parts, wiring guides; bench/bench.example.yaml (an example HIL bench)
 schema/      protocol, registry and capabilities (the source of truth), golden vectors (generated)
-packages/    TypeScript: protocol, codegen, sdk, host, hub, cli, dashboard
+packages/    TypeScript: protocol, codegen, sdk, host, hub, cli, dashboard, time (the temporal core's wasm build)
 web/bench/   the hub-served bench app (wiring guides, parts)
 apps/        example apps for a Linux hub (fr app deploy)
 tests/       e2e and HIL gate scenarios (opt-in, need boards), the virtual-fleet sim
@@ -65,9 +67,16 @@ Checked at the merge, on the owner's Mac:
   from any directory through `packages/cli/bin/fr.mjs`; `fr serial idf <board>` runs `idf.py flash monitor` on a lent
   port. A broken hand edit of `config.json` keeps the settings read before it. Setup is in
   [docs/GETTING-STARTED.md](docs/GETTING-STARTED.md).
-- Not done yet (stages 3 to 6 of the plan): the dashboard redesign, the temporal core in the CLI and hub, the clock
-  on the framework, a setup command with prebuilt firmware images (a first board still needs ESP-IDF 6.1 and a
-  build), CI.
+- Since stage 2 (stage 3 of the plan): the temporal core in the CLI and the hub. `packages/time` vendors the web
+  repository's `fractonica.wasm` and its binding byte for byte, pinned by `time.lock` (core 0.2.0, SPEC 2.2.0), and
+  `fr gen --check` reports drift from `../web` when that checkout is beside this one. `fr time` (now, `--earth`,
+  `--watch`, `stamp`, `parse`, `ladder`, `next`, `span`, `sync`) runs without a hub in about 100 ms here; the hub
+  serves `time_now`, `time_convert`, `time_ladder` and `time_next` (which `fr mcp` also answers itself) and publishes
+  `time.threshold` events. Its tests pin SPEC vectors A, B, C and the anchor. The SDK's `FractonicaError` is now
+  `HubError` (the old name stays as a deprecated alias).
+- Not done yet (stages 4 to 6 of the plan): the dashboard redesign, the clock on the framework (with pushing time to
+  devices, devices reporting their core version, and `fr clock` becoming `fr rtc`), a setup command with prebuilt
+  firmware images (a first board still needs ESP-IDF 6.1 and a build), CI.
 
 ## Security
 
@@ -91,7 +100,8 @@ Checked at the merge, on the owner's Mac:
 
 ## Upgrading
 
-The operation registry changed (the port operations), so `REGISTRY_HASH` differs from a hub started from older code:
+The operation registry changed (the Fractonica time operations, and before them the port operations), so
+`REGISTRY_HASH` differs from a hub started from older code:
 after pulling, run `fr hub restart` and reconnect the MCP server (`/mcp` in Claude Code), and run `fr doctor --fix`
 once to point the `fr` shim at `packages/cli/bin/fr.mjs`. [GETTING-STARTED §9](docs/GETTING-STARTED.md#9-upgrading)
 lists the other changes in behaviour (the port policy, `fr mcp` no longer starting the hub, job retention).

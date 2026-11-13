@@ -39,6 +39,18 @@ Every result is `{ok, data, error: {code, message, retryable, hint, remediation[
 
 Errors carry `remediation[]` (a `tool` with `args`, a `cli` command or a `human` step). The usual ones: `DEVICE_OFFLINE` → `wait_for_device`; `LOCKED` → `job_wait` on `details.holder_job`; `PORT_BUSY_EXTERNAL` → ask the user to close the app the message names (a Chrome Web Serial tab); `PORT_LEASED` → `serial_release` if it is yours; `FLASH_FAILED` → `device_reset {mode: bootloader}` or "hold BOOT, tap RST"; `HUB_RESTARTED` → continue from `details.resume_cursor`; `HUB_UNREACHABLE` → `fr hub start` from Terminal; `HUB_VERSION_MISMATCH` → `fr hub restart`, then reconnect the MCP server.
 
+## Fractonica time
+
+The temporal core's answers, with no hub needed: `fr mcp` and `fr time` compute them locally (the hub gives the same ones over REST). Every value is the core's; never compute Fractonica numbers, names or spans yourself. An instant is `now`, Unix **seconds** (`1791460800`; a bare number is always seconds, use `1791460800000ms` or `…us` otherwise), a stamp (`α#6 β#4 γ#9 δ#3 ε#5 34η 29ι 21λ 3ν`) or an ISO date; answers give instants as Unix µs in decimal strings. Readings exist only from 1613 to 2857 (the Saros 141 catalogue): outside it is `INVALID_ARGS` with `details.reason: "out_of_catalogue"`. Pure Fractonica by default; `earth: true` adds civil translations in an `earth` block.
+
+| Need | Op | CLI |
+|---|---|---|
+| The reading now or at an instant: stamp, majors, Helion and θ countdowns, solar sync, next thresholds; `next_change_us` | `time_now {at?, earth?}` | `fr time [--at I] [--earth] --json` |
+| Convert: a stamp to Unix µs and ISO, or an instant to its stamp | `time_convert {at, context?}` | `fr time parse <stamp> --json`, `fr time stamp <I> --json` |
+| Every level α..ν (or `to`): cycle, quarter, span to the quarter's end | `time_ladder {at?, to?, earth?}` | `fr time ladder [--to L] --json` |
+| The next thresholds of a level (`level`: `η`, `Helion` or depth `7`) | `time_next {level, quarter?, count?, at?}` | `fr time next η --quarter end --count 3 --json` |
+| Wait for a threshold as it passes (α..η stored, θ and ι live only) | `wait_for_event {types: "time.threshold", where: {symbol: "η"}, since}` | `fr wait event time.threshold --since C --where '{"symbol":"η"}'` |
+
 ## Build and deploy
 
 - Happy path: `fr deploy <sel> --via wifi --expect-event node.boot --json` (op `deploy`): build per profile, OTA, wait for the new fw_id, check the expectation; one result per device (`updated | already_current | rolled_back | failed`).

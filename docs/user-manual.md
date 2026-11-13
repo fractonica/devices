@@ -25,6 +25,7 @@ Contents:
 17. [AI agents](#17-ai-agents)
 18. [Troubleshooting](#18-troubleshooting)
 19. [The bench](#19-the-bench)
+20. [Fractonica time](#20-fractonica-time)
 
 `fr` runs from any directory once `fr doctor --fix` has written its shim (section 1); commands that build use the checkout around the current directory, or else the one the shim points at. Add `--json` to any of them for machine-readable output, and `--help` to see all options.
 
@@ -98,6 +99,7 @@ first board and troubleshooting.
 | Rename a board | `fr devices set pad-c3 --alias kitchen-pad` |
 | Running and recent jobs (builds, OTA, streams) | `fr jobs ls` |
 | Restart the hub after pulling new code | `fr hub restart` |
+| Fractonica time now (no hub needed) | `fr time` ([section 20](#20-fractonica-time)) |
 
 A **selector** names one or more boards: an alias (`cam-esp32`), `id:<12 hex>`, `tag:<tag>`, `chip:esp32c3`, `online`, or `all`, comma-separated, with `!` to negate.
 
@@ -761,3 +763,103 @@ Every `fr` command is also an MCP tool, served by `fr mcp`.
 | (fixture) | ESP32-S3 DevKitC-1 | s3k-fixture | HIL fixture: presses buttons and sets voltages on wired lines |
 
 Boards that are not plugged in show as `unknown` or `offline` in `fr devices ls`; that is normal.
+
+---
+
+## 20. Fractonica time
+
+`fr time` reads the Fractonica clock: the eclipse-anchored harmonic clock of the sibling repository
+[`core`](https://github.com/fractonica/core), the same one the site [fractonica.com](https://fractonica.com) shows.
+Every number and word comes from the core itself, through its WebAssembly build (`packages/time`, a copy of the web
+repository's module pinned by `packages/time/time.lock`); `fr` only reads your arguments and lays the answer out.
+It needs no hub and no network: it works right after `pnpm install`.
+
+1. **Now.** The stamp first, then the Pentad, the four majors with the quarter each is in, the Helion and θ counting
+   down to the end of their quarter, the solar sync, and the next thresholds of the coarser levels, as the site's NOW
+   screen lists them. At SPEC test vector A (`--at 2026-10-08T12:00:00Z`):
+
+   ```text
+   α#6 β#4 γ#9 δ#3 ε#5 34η 29ι 21λ 3ν
+
+   PENTAD II  ·  HELION 2 OF 5
+
+   α  ALPHA HEXAFRACTON  VALLEY
+   β  BETA TETRAFRACTON  VALLEY
+   γ  GAMMA NONAFRACTON  VALLEY
+   δ  DELTA TRIFRACTON   END
+
+   η  HELION   1 OF 11  END IN   6ι 43λ
+   θ  BETWEEN  8 OF 9   NODE IN  43λ 21ν
+
+   SOLAR SYNC  4 820
+   DRIFT       −6 235λ
+   NODE IN     2η 24ι
+
+   NEXT THRESHOLDS
+   ζ    PEAK    1η 33ι
+   SUN  NODE    2η 24ι
+   ε    NODE    4η 24ι
+   δ    END     43η 6ι
+   γ    VALLEY  4ε 23η
+   ```
+
+   Pure Fractonica by default: no Gregorian date, clock time, time zone or Earth unit. `--earth` adds the civil
+   translation of each line, marked ⊕ (`⊕ THU 8 OCT 2026 · 12:00:00 UTC`, `⊕ 12:56:12 · 56 min 12 s`), in the Mac's
+   local time zone.
+
+2. **Watch it.** `fr time --watch` redraws at the instant the core says the reading next changes (about every
+   Blink, 0.31 s), never on a fixed timer. Ctrl-C ends it.
+
+3. **The ladder.** `fr time ladder` lists every level from α down to ν (the Blink; `--to <level>` for fewer or more,
+   down to χ): the running cycle's place in its parent, the quarter it is in, and how long until that quarter ends.
+   A level is named by its symbol (`η`), its word (`Eta`, `Helion`) or its depth (`7`), as the DEPTH column numbers
+   them.
+
+   ```text
+   LADDER  ·  α#6 β#4 γ#9 δ#3 ε#5 34η 29ι 21λ 3ν
+
+   DEPTH  RUNG  KIND     CYCLE    QUARTER  ENDS IN
+       1  α     ALPHA    6 OF 18  VALLEY   1γ 4ε
+       2  β     BETA     4 OF 5   VALLEY   1γ 4ε
+       3  γ     GAMMA    9 OF 13  VALLEY   4ε 23η
+       4  δ     DELTA    3 OF 5   END      43η 6ι
+       5  ε     NUCLIDE  5 OF 5   NODE     4η 24ι
+       6  ζ     BETWEEN  4 OF 7   PEAK     1η 33ι
+       7  η     HELION   1 OF 11  END      6ι 43λ
+       8  θ     BETWEEN  8 OF 9   NODE     43λ 21ν
+       9  ι     PREON    2 OF 4   NODE     11λ 9ν
+      10  κ     BETWEEN  2 OF 5   VALLEY   1λ 15ν
+      11  λ     FLAVON   9 OF 13  PEAK     2.8ν
+      12  μ     BETWEEN  1 OF 5   VALLEY   0.29ν
+      13  ν     BLINK    4 OF 5   NODE     0.037ν
+   ```
+
+4. **Convert.** `fr time stamp 2026-10-08T12:00:00Z` prints the stamp and the date in words;
+   `fr time parse 'α#6 β#4 γ#9 δ#3 ε#5 34η 29ι 21λ 3ν'` prints the instant it names (the first microsecond of its
+   finest unit) in Unix µs, UTC and local time. A partial stamp (`'ε#5 34η'`) is read in today's date, or in the date
+   of `--context <instant>`; ASCII letters work too (`a#6 b#4 g#9 …`).
+
+5. **Plan.** `fr time next η --quarter end --count 3` lists the next three Helion ends, each with its stamp and how
+   far away it is; `fr time span <from> <to>` says the span between two instants (`+6ι 43λ`); `fr time sync` shows
+   the solar sync, its Pentad and drift.
+
+**Instants.** Every `--at`, `<from>`, `<to>` and `<instant>` takes `now`; Unix time in **seconds**
+(`1791460800`, `1791460800.25`; a bare number is always seconds, whatever its length), or in milliseconds or
+microseconds with a suffix (`1791460800000ms`, `1791460800000000us`); a stamp; or an ISO date
+(`2026-10-08T12:00:00Z`; one without an offset is read in the local time zone). Readings exist only inside the
+catalogue of Saros 141, from 1613 to 2857 (`α#1` to `α#18`): an instant outside it is refused
+(`INVALID_ARGS`, exit 64, "OUT OF CATALOGUE"), never extrapolated.
+
+**`--json`** prints the standard envelope (`{ok, data, cursor}`); instants in it are Unix µs as decimal strings
+(the catalogue runs past 2^53 µs). The same answers come from the hub and from agents: the operations `time_now`,
+`time_convert`, `time_ladder` and `time_next` (REST and MCP; `fr mcp` answers them itself, with no hub).
+
+**Threshold events.** While it runs, the hub publishes `time.threshold` as each quarter boundary of a level passes:
+
+```bash
+fr wait event time.threshold --since "$(fr events --json | jq -r .data.next_cursor)" --where '{"symbol":"η"}' --timeout 110
+```
+
+α down to η (the Helion) are stored with the other events (about 20 a day); θ and ι are live only (seen by `/ws`, the
+dashboard's Live view and a wait already waiting, never stored); finer levels are not announced. Change this in
+`~/.fractonica/config.json`: `"time": {"durable_to": "δ", "live_to": "η"}`, or `"thresholds": false` for none.

@@ -29,7 +29,10 @@ read [plugin/AGENTS.md](plugin/AGENTS.md).
 4. **Never edit the sibling repositories** (`../core`, `../web`, `../ios`) or the owner's workspace files
    (`../design`, `../reference`, `../SPEC.md`).
 5. The temporal core (`../core`) owns every Fractonica number, name and text. The framework must not re-implement
-   clock arithmetic (see the clock's rules in `clock/AGENTS.md`).
+   clock arithmetic (see the clock's rules in `clock/AGENTS.md`). In TypeScript it is `packages/time`: the web
+   repository's `fractonica.wasm` and binding, vendored byte for byte and pinned by `packages/time/time.lock`. Never
+   edit the vendored files; to take a newer core, update `../web` and run `pnpm fr gen` (it copies them and rewrites
+   the lock; `fr gen --check` reports drift).
 6. Do not push. Changes to `.github/workflows/*` need the owner to push them (the local token lacks that scope).
 7. Security scope: a LAN lab, unauthenticated (README "Security"). Do not describe it as more.
 
@@ -54,7 +57,7 @@ environment (`packages/host/src/idf.ts`), or put the uv Python 3.12 first on PAT
 ```sh
 pnpm typecheck                         # tsc: root, packages/dashboard, web/bench
 pnpm test                              # vitest (no boards needed); under load run one area at a time:
-pnpm vitest run packages/hub           #   packages/{protocol,codegen,sdk,host,hub,cli,dashboard}
+pnpm vitest run packages/hub           #   packages/{protocol,codegen,sdk,host,hub,cli,dashboard,time}
 node tools/host-test.mjs               # host C++ suite (ASan + UBSan); builds build/host-tests/fr_net_node,
                                        #   which the hub's interop tests use
 pnpm fr gen --check                    # generated files: 0 stale
@@ -83,6 +86,7 @@ The clock: `cd clock/sim && make test`, and its own ESP-IDF 5.5 builds (`clock/A
 | `packages/protocol` | ops registry, frames, generated types; `packages/codegen`: the YAML → C++/TS/vectors generator |
 | `packages/hub` | the daemon (serial, links, registry, jobs, OTA, bench modules: camera, audio, CSI, scale, power, fixture, app host) |
 | `packages/cli` | `fr` and `fr mcp`; `packages/host`: doctor, IDF env, pytools; `packages/sdk`; `packages/dashboard` |
+| `packages/time` | the temporal core (vendored wasm and binding, `time.lock`), its readings and layouts: `fr time`, the `time_*` ops |
 | `web/bench` | the bench app the hub serves at `/apps/bench/` |
 | `tests/` | `e2e/` gate scenarios, `sim/` virtual fleet, `spikes/` |
 | `docs/` | `spec/` (start at its README), `design/`, `user-manual.md` |
@@ -90,8 +94,10 @@ The clock: `cd clock/sim && make test`, and its own ESP-IDF 5.5 builds (`clock/A
 
 ## 5. Known gaps
 
-The review's findings still open (the dashboard design, the temporal core in the CLI and hub, the clock on the
-framework, a setup command with prebuilt images, CI) are its stages 3 to 6; stage 2 (port policy, crash handling,
-`hub.db` growth, MCP safety, `fr` from anywhere) is done. The docs under `docs/spec` and
+The review's findings still open (the dashboard design, the clock on the framework, a setup command with prebuilt
+images, CI) are its stages 4 to 6; stage 2 (port policy, crash handling, `hub.db` growth, MCP safety, `fr` from
+anywhere) and stage 3 (the temporal core in the CLI and hub: `packages/time`, `fr time`, the `time_*` ops,
+`time.threshold` events, the SDK's `HubError`) are done. Left for stage 5 with the clock: pushing time to devices
+(`time_push`), devices reporting their core version, `fr clock` → `fr rtc`, and a scheduler on thresholds. The docs under `docs/spec` and
 `docs/design` still cite `docs/research`, `docs/spikes` and `hosts/`, which are not in this repository (they stay
 in the archived `fractonica/hardware`); the docs rewrite is stage 6.
