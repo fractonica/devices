@@ -277,7 +277,7 @@ export const HANDLERS: Record<OpName, Handler> = {
       // a registry that cannot list yet: the count is unknown, not an error of hub_status
     }
     // C6 parts (design c6 §3.3): each may add warnings (LNP_DENIED, the advert, a stale dashboard, ...).
-    for (const part of [hub.prompts, hub.leases, hub.lnp, hub.advert, hub.appServer, hub.wsServer, hub.staticSite, hub.latencyProbe, hub.fixture]) {
+    for (const part of [hub.portPolicy, hub.prompts, hub.leases, hub.lnp, hub.advert, hub.appServer, hub.wsServer, hub.staticSite, hub.latencyProbe, hub.fixture]) {
       warnings.push(...(part?.warnings?.() ?? []));
     }
     const lnp = hub.lnp?.status();
@@ -293,7 +293,14 @@ export const HANDLERS: Record<OpName, Handler> = {
       source_dir: hub.hubSourceDir,
       idf,
       pytools: py,
-      ports: { total: ports.length, open: ports.filter((p) => p.state === 'open').length },
+      ports: {
+        total: ports.length,
+        open: ports.filter((p) => p.state === 'open').length,
+        // The port policy (config.json ports): mode, and the ports it leaves closed.
+        mode: hub.portPolicy ? hub.portPolicy.config().config.ports.mode : 'all',
+        unwatched: ports.filter((p) => p.state === 'unwatched').length,
+        ignored: ports.filter((p) => p.state === 'ignored').length,
+      },
       devices: { registered, online: hub.router?.online().length ?? 0 },
       // Gateways (design m2-c4-gateway D15, D17): per gateway port key, its bridge's state and last GW_STATUS.
       ...(router ? { links: { ...router.links, sessions: router.sessions, gateways: router.gateways } } : {}),

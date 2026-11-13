@@ -89,7 +89,7 @@ export function portHolder(p: PortInfo): string {
   if (p.holder) {
     return p.holder;
   }
-  return p.state === 'open' ? 'hub' : '–';
+  return p.state === 'open' ? 'hub' : p.state === 'unwatched' ? 'nobody (not watched)' : p.state === 'ignored' ? 'nobody (ignored)' : '–';
 }
 
 /**

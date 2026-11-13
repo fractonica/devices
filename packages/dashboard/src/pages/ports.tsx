@@ -12,7 +12,33 @@ import { useAct, useNow, useOp } from '../hooks.ts';
 import { agoIso, portHolder } from '../state/format.ts';
 import type { WizardKnown } from '../state/wizard.ts';
 
-const STATE_TONE: Record<string, BadgeTone> = { open: 'ok', closed: 'muted', leased: 'info', busy_external: 'warn', error: 'bad' };
+const STATE_TONE: Record<string, BadgeTone> = { open: 'ok', closed: 'muted', leased: 'info', busy_external: 'warn', error: 'bad', unwatched: 'muted', ignored: 'muted' };
+
+/** The port policy's actions on one port (config.json ports): Lend it for 10 min, Ignore it, or let the hub Claim it. */
+export function PolicyButtons({ port }: { port: PortInfo }) {
+  const lend = useAct('port_lend', { done: (r) => `${r.path} lent until ${r.expires_at}`, refresh: ['port_list'] });
+  const ignore = useAct('port_ignore', { done: () => `${port.path} ignored`, refresh: ['port_list'] });
+  const claim = useAct('port_claim', { done: () => `${port.path} watched by the hub`, refresh: ['port_list'] });
+  const busy = lend.isPending || ignore.isPending || claim.isPending;
+  return (
+    <>
+      {port.state !== 'leased' ? (
+        <Button disabled={busy} onClick={() => lend.mutate({ port: port.path, ttl_s: 600 })} data-action="lend">
+          Lend
+        </Button>
+      ) : null}
+      {port.state === 'unwatched' || port.state === 'ignored' ? (
+        <Button disabled={busy} onClick={() => claim.mutate({ port: port.path, remove: false })} data-action="claim">
+          Claim
+        </Button>
+      ) : port.state !== 'leased' ? (
+        <Button disabled={busy} onClick={() => ignore.mutate({ port: port.path, remove: false })} data-action="ignore">
+          Ignore
+        </Button>
+      ) : null}
+    </>
+  );
+}
 
 export function ReleaseButton({ leaseId }: { leaseId: string }) {
   const act = useAct('serial_release', { done: (r) => `${r.lease_id} released`, refresh: ['port_list'] });
@@ -64,6 +90,7 @@ export function PortsPage() {
                   <td className="text-xs text-muted">{p.lines}</td>
                   <td className="whitespace-nowrap">
                     {p.lease ? <ReleaseButton leaseId={p.lease.lease_id} /> : null}
+                    <PolicyButtons port={p} />
                     <Button tone={known ? 'default' : 'primary'} onClick={() => setWizard({ port: p, known })} data-action="provision">
                       Provision
                     </Button>
@@ -75,7 +102,8 @@ export function PortsPage() {
         ) : null}
       </section>
       <p className="text-xs text-muted">
-        The dashboard never opens a port itself (no Web Serial). To use a port from another program, lend it: <Mono>fr serial lease &lt;device&gt; -- &lt;command&gt;</Mono>.
+        The dashboard never opens a port itself (no Web Serial). The hub reads only the ports of registered boards (unwatched: a board it does not know; Claim lets it
+        say HELLO). To use a port from another program, lend it: <Mono>fr serial lease &lt;device&gt; -- &lt;command&gt;</Mono>.
       </p>
     </div>
   );

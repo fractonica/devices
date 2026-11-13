@@ -1,4 +1,5 @@
 export * from './doctor.ts';
+export * from './config.ts';
 export * from './idf.ts';
 export * from './inventory.ts';
 export * from './paths.ts';

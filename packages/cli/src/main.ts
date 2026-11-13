@@ -368,6 +368,11 @@ for (const op of OPS) {
   }
 }
 
+// `fr ports` alone lists them (`fr ports ls`).
+group(['ports'])
+  .description('USB serial ports: list them, lend one to another program, ignore one, or let the hub claim one')
+  .action(() => invoke(findOp('port_list')!, {}, false));
+
 const kit: CliKit = {
   json: isJson,
   run: (name, input) => invoke(findOp(name)!, input, false),

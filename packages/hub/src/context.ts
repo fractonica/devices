@@ -32,6 +32,7 @@ import type { AudioStreams } from './audio/streams.ts';
 import type { Db } from './db.ts';
 import type { JobRunner } from './jobs.ts';
 import type { LogStore } from './logstore.ts';
+import type { PortPolicyHandle } from './ports/policy.ts';
 import type { SerialPortManager } from './serial.ts';
 
 /** One cursor space for logs and events (spec 08 §8.7): `c:<run>.<seq>`, seq monotonic across runs. */
@@ -541,6 +542,8 @@ export interface HubContext {
   db: Db;
   logs: LogStore;
   serial: SerialPortManager;
+  /** The port policy over config.json (ports/policy.ts); absent in test contexts that watch every port. */
+  portPolicy?: PortPolicyHandle;
   jobs: JobRunner;
   startedAt: number;
   hubSourceDir: string;

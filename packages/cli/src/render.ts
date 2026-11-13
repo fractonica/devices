@@ -430,18 +430,50 @@ function renderMonitor(r: Row): string {
   return typeof r.warning === 'string' ? `${line}\nwarning: ${r.warning}` : line;
 }
 
+/** A lease's end as a local time of day (`14:05:09`). */
+export function clockTime(iso: string): string {
+  const d = new Date(iso);
+  return Number.isNaN(d.getTime()) ? iso : d.toLocaleTimeString('en-GB', { hour12: false });
+}
+
 /**
- * port_list as a table: the device id (a chip's own USB carries it in its USB serial; a USB-UART bridge port learns it
- * from its board's HELLO, `-` before that), the path, VIA (`usb`, or the bridge: ch340, cp210x, ...; design camera-c1 D3),
- * the state (with its holder) and the lines read.
+ * A port's state in words (the port policy, config.json ports): watched by the hub, lent to a program or a job, held
+ * by another program, ignored, or not opened because no registered board is known on it.
+ */
+export function portStateText(p: PortInfo): string {
+  switch (p.state) {
+    case 'open':
+      return `watched by hub${p.holder ? ` (${p.holder})` : ''}`;
+    case 'leased': {
+      const l = p.lease;
+      if (!l) {
+        return `in use by ${p.holder ?? 'a job'}`;
+      }
+      return `lent${l.holder_pid !== undefined ? ` to pid ${l.holder_pid}` : ''} until ${clockTime(l.expires_at)}`;
+    }
+    case 'busy_external':
+      return `held by ${p.holder ?? 'another program'}`;
+    case 'ignored':
+      return `ignored${p.holder ? `, held by ${p.holder}` : ''}`;
+    case 'unwatched':
+      return p.holder ? `held by ${p.holder}` : 'not opened (board not adopted)';
+    default:
+      return `${p.state}${p.holder ? ` (${p.holder})` : ''}`;
+  }
+}
+
+/**
+ * port_list as a table: the path, the board (its alias, else the device id: a chip's own USB carries it in its USB
+ * serial, a USB-UART bridge port learns it from its board's HELLO; `-` before that), VIA (`usb`, or the bridge: ch340,
+ * cp210x, ...; design camera-c1 D3), the state in words (portStateText) and the lines read.
  */
 function renderPorts(ports: PortInfo[]): string {
   if (!ports.length) {
     return 'no Espressif USB or USB-UART bridge ports';
   }
   return aligned(
-    ['DEVICE', 'PATH', 'VIA', 'STATE', 'LINES'],
-    ports.map((p) => [p.device_id ?? '-', p.path, p.bridge ?? 'usb', `${p.state}${p.holder ? ` (${p.holder})` : ''}`, String(p.lines)]),
+    ['PATH', 'BOARD', 'VIA', 'STATE', 'LINES'],
+    ports.map((p) => [p.path, p.alias ?? p.device_id ?? '-', p.bridge ?? 'usb', portStateText(p), String(p.lines)]),
   ).join('\n');
 }
 

@@ -1,11 +1,22 @@
 // UNOQ-2 (design uno-q-services): the app_* ops, their CLI paths, the manifest, and the registry hash they move.
+import { createHash } from 'node:crypto';
+
 import { describe, expect, it } from 'vitest';
+import { z } from 'zod';
 
 import { APP_HOST_OPS, AppManifestSchema, findOp, JOB_KINDS, OPS, REGISTRY_HASH } from '../src/index.ts';
 
+const hashOf = (ops: readonly { name: string; input: z.ZodType }[]) =>
+  createHash('sha256')
+    .update(JSON.stringify(ops.map((o) => [o.name, z.toJSONSchema(o.input)])))
+    .digest('hex')
+    .slice(0, 12);
+/** The port policy ops came after (protocol-ports.test.ts). */
+const beforePorts = OPS.filter((o) => !/^port_(lend|ignore|claim)$/.test(o.name));
+
 describe('app ops (design uno-q-services)', () => {
   it('adds ten ops at the end (nine app_ and device_adopt), on their CLI paths, and moves REGISTRY_HASH', () => {
-    expect(OPS).toHaveLength(115);
+    expect(beforePorts).toHaveLength(115);
     expect(OPS.slice(-10).map((o) => o.name)).toEqual(APP_HOST_OPS.map((o) => o.name));
     const want: Record<string, [string[], string, string]> = {
       app_upload: [['app', 'upload'], 'command', 'mutate'],
@@ -24,7 +35,7 @@ describe('app ops (design uno-q-services)', () => {
       expect(findOp(name)!.summary.length, name).toBeLessThan(1000);
     }
     expect(JOB_KINDS).toContain('app');
-    expect(REGISTRY_HASH).toBe('c930b40dea94');
+    expect(hashOf(beforePorts)).toBe('c930b40dea94');
     expect(REGISTRY_HASH).not.toBe('9e6905ab39fd'); // LCD-1's
   });
 

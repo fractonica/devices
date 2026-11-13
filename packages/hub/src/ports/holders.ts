@@ -224,10 +224,11 @@ const listCache = new WeakMap<PortHolders, { at: number; paths: string; found: M
 
 /**
  * port_list (design c6 D5): SerialPortManager.list() with `external`, the other programs that have a port
- * open too (a Web Serial page opened after the hub did: macOS lets a second open through, since the hub
- * sets no TIOCEXCL). lsof runs at most every 2 s; the serial manager keeps what it found for hub_status.
+ * open too, and each board's alias. The hub opens with serialport's flock (LOCK_EX|LOCK_NB), which stops another
+ * exclusive opener (esptool, idf.py) but not a plain open() (screen, a Web Serial page), so a second holder is
+ * possible. lsof runs at most every 2 s; the serial manager keeps what it found for hub_status.
  */
-export async function listPorts(hub: Pick<HubContext, 'serial'> & Partial<Pick<HubContext, 'portHolders'>>, now = Date.now()): Promise<{ ports: PortInfo[] }> {
+export async function listPorts(hub: Pick<HubContext, 'serial'> & Partial<Pick<HubContext, 'portHolders' | 'registry'>>, now = Date.now()): Promise<{ ports: PortInfo[] }> {
   const probe = hub.portHolders;
   const paths = hub.serial
     .list()
@@ -243,5 +244,16 @@ export async function listPorts(hub: Pick<HubContext, 'serial'> & Partial<Pick<H
     }
     hub.serial.noteExternal?.(cached.found);
   }
-  return { ports: hub.serial.list() };
+  // The board's registry alias, when the hub knows the device on the port.
+  return {
+    ports: hub.serial.list().map((p) => {
+      let alias: string | undefined;
+      try {
+        alias = p.device_id ? (hub.registry?.get(p.device_id)?.alias ?? undefined) : undefined;
+      } catch {
+        alias = undefined;
+      }
+      return alias ? { ...p, alias } : p;
+    }),
+  };
 }

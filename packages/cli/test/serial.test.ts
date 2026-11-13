@@ -159,11 +159,20 @@ describe('fr serial (subprocess)', { timeout: 30_000 }, () => {
     const r = await fr(['serial', 'monitor', 'pad-c3b']);
     expect(r.stdout).toBe('c:1.7 1cdbd4000134 I (1) app: one\nc:1.9 1cdbd4000134 I (2) app: two\n');
     expect(r.code).not.toBe(0);
-    expect(requests.map((q) => q.body)).toEqual([
+    expect(requests.filter((q) => q.op === 'logs_read').map((q) => q.body)).toEqual([
       { selector: 'pad-c3b', max_lines: 50 },
       { selector: 'pad-c3b', since: 'c:1.7', direction: 'forward' },
       { selector: 'pad-c3b', since: 'c:1.9', direction: 'forward' },
     ]);
+  });
+
+  it('monitor says when the hub does not read the port (unwatched by the port policy), and how to read it anyway', async () => {
+    replies.set('port_list', [ok({ ports: [{ path: '/dev/cu.usbmodem1201', device_id: '1cdbd4000135', alias: 'pad-new', state: 'unwatched', lines: 0 }] })]);
+    replies.set('logs_read', [{ status: 200, body: { ok: false, cursor: '', error: { code: 'NOT_FOUND', message: 'no device', retryable: false } } }]);
+    const r = await fr(['serial', 'monitor', 'pad-new']);
+    expect(r.stderr).toContain('the hub does not read /dev/cu.usbmodem1201 (unwatched)');
+    expect(r.stderr).toContain('fr ports claim /dev/cu.usbmodem1201');
+    expect(r.stderr).toContain("fr serial lease /dev/cu.usbmodem1201 -- idf.py -p '$FR_PORT' monitor");
   });
 
   it('wait event --prompt-human says on stderr what the person is asked', async () => {

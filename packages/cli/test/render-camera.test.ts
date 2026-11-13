@@ -4,9 +4,9 @@
 
 import { describe, expect, it } from 'vitest';
 
-import type { Job } from '@fractonica/protocol';
+import type { Job, PortInfo } from '@fractonica/protocol';
 
-import { renderResult } from '../src/render.ts';
+import { clockTime, portStateText, renderResult } from '../src/render.ts';
 
 const JOB = { job_id: 'j_0123456789ab', kind: 'camera', status: 'completed', targets: ['a0b1c2d3e4f5'], created_at: '2026-11-03T00:00:00Z' };
 
@@ -74,11 +74,33 @@ describe('fr camera output', () => {
       { path: '/dev/cu.usbserial-120', usb_serial: null, device_id: 'a0b1c2d3e4f5', bridge: 'cp210x', vid: '10c4', pid: 'ea60', state: 'leased', holder: 'job j_1', lines: 0 },
     ];
     expect(renderResult('port_list', { ok: true, cursor: '', data: { ports } }).out.split('\n')).toEqual([
-      'DEVICE        PATH                   VIA     STATE             LINES',
-      '1cdbd4000134  /dev/cu.usbmodem1234   usb     open              120',
-      '-             /dev/cu.usbserial-110  ch340   open              7',
-      'a0b1c2d3e4f5  /dev/cu.usbserial-120  cp210x  leased (job j_1)  0',
+      'PATH                   BOARD         VIA     STATE              LINES',
+      '/dev/cu.usbmodem1234   1cdbd4000134  usb     watched by hub     120',
+      '/dev/cu.usbserial-110  -             ch340   watched by hub     7',
+      '/dev/cu.usbserial-120  a0b1c2d3e4f5  cp210x  in use by job j_1  0',
     ]);
     expect(renderResult('port_list', { ok: true, cursor: '', data: { ports: [] } }).out).toBe('no Espressif USB or USB-UART bridge ports');
+  });
+});
+
+describe('port_list under the port policy', () => {
+  it('says per port: watched, lent to a pid until a time, held by a program, ignored, not opened', () => {
+    const until = '2026-11-13T12:00:00.000Z';
+    const ports = [
+      { path: '/dev/cu.usbmodem1101', usb_serial: '1C:DB:D4:00:01:34', device_id: '1cdbd4000134', alias: 'pad-c6', state: 'open', policy: 'adopted', lines: 3 },
+      { path: '/dev/cu.usbmodem1201', usb_serial: '1C:DB:D4:00:01:35', device_id: '1cdbd4000135', state: 'leased', lease: { lease_id: 'l_000000000001', holder_pid: 4242, expires_at: until }, lines: 0 },
+      { path: '/dev/cu.usbmodem1301', usb_serial: '1C:DB:D4:00:01:36', device_id: '1cdbd4000136', state: 'unwatched', policy: 'not_adopted', lines: 0 },
+      { path: '/dev/cu.usbmodem1401', usb_serial: '1C:DB:D4:00:01:37', device_id: '1cdbd4000137', state: 'unwatched', holder: 'Python (pid 77)', lines: 0 },
+      { path: '/dev/cu.usbserial-110', usb_serial: null, bridge: 'ch340', state: 'ignored', policy: 'ignored', lines: 0 },
+      { path: '/dev/cu.usbmodem1501', state: 'busy_external', holder: 'Google Chrome (pid 715)', lines: 0 },
+    ] as PortInfo[];
+    const out = renderResult('port_list', { ok: true, cursor: '', data: { ports } }).out.split('\n');
+    expect(out[1]).toMatch(/^\/dev\/cu\.usbmodem1101 +pad-c6 +usb +watched by hub +3$/);
+    expect(out[2]).toContain(`lent to pid 4242 until ${clockTime(until)}`);
+    expect(out[3]).toContain('not opened (board not adopted)');
+    expect(out[4]).toContain('held by Python (pid 77)');
+    expect(out[5]).toMatch(/ch340 +ignored/);
+    expect(out[6]).toContain('held by Google Chrome (pid 715)');
+    expect(portStateText({ path: 'p', state: 'leased', lease: { lease_id: 'l_1', expires_at: until }, lines: 0 })).toBe(`lent until ${clockTime(until)}`);
   });
 });

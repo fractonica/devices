@@ -15,7 +15,7 @@
 // would reach the real boards' DIRECTORY).
 
 import { type ChildProcessWithoutNullStreams, spawn } from 'node:child_process';
-import { existsSync, mkdirSync, mkdtempSync, readdirSync, rmSync, statSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, readdirSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { homedir, tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -68,6 +68,11 @@ export interface PrivateHubOptions {
   /** What the hub's children inherit too (test_run's gate scenarios read FR_T_<GATE>_ARGS). */
   env?: Record<string, string>;
   timeoutMs?: number;
+  /**
+   * The hub's port policy (config.json ports.mode). Default `all` with a serialBridge: a virtual USB hub's boards are
+   * not in the temp registry, and these tests expect the hub to read every port as it did before the policy.
+   */
+  portMode?: 'adopted' | 'all';
   /** A virtual USB hub's address (virtual-usb.ts, or fr_fleet's bridge): `--serial-bridge` instead of `--no-serial`. */
   serialBridge?: string;
   /** A process group of its own (the sim runner, D9/D14); default false (a vitest worker's child). */
@@ -272,6 +277,10 @@ async function launchHub(opts: PrivateHubOptions, dir: string, home: string, tmp
     delete env[k];
   }
   Object.assign(env, opts.env);
+  const config = join(home, 'config.json');
+  if ((opts.serialBridge || opts.portMode) && !existsSync(config)) {
+    writeFileSync(config, JSON.stringify({ ports: { mode: opts.portMode ?? 'all' } }) + '\n');
+  }
   const killAfterMs = opts.killAfterMs ?? 10_000;
   const lines: Record<string, unknown>[] = [];
   let err = '';

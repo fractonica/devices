@@ -14,7 +14,7 @@ import { constants } from 'node:os';
 
 import { type Command, InvalidArgumentError } from 'commander';
 
-import { type Lease, type LogLine, type OpName, REGISTRY_HASH, type Result } from '@fractonica/protocol';
+import { type Lease, type LogLine, type OpName, type PortInfo, REGISTRY_HASH, type Result } from '@fractonica/protocol';
 
 import { hubCall, hubHealth } from './client.ts';
 import type { CliKit } from './kit.ts';
@@ -138,6 +138,17 @@ async function leaseAndRun(kit: CliKit, input: { device: string; ttl_s?: number 
 /** `fr serial monitor <dev>`: the device's log tail, then new lines until interrupted (`fr logs <dev> --follow`). */
 async function monitor(kit: CliKit, device: string): Promise<never> {
   await checkHub(kit, 'logs_read');
+  // The hub reads only the ports it watches (config.json ports): say so for one it leaves closed.
+  const ports = await hubCall('port_list', {}, CALL_MS);
+  const want = device.replace(/^(id|port|mac):/, '').toLowerCase();
+  const port = ports.ok
+    ? ((ports.data as { ports?: PortInfo[] } | null)?.ports ?? []).find((p) => [p.alias, p.device_id, p.path, p.usb_serial].some((v) => typeof v === 'string' && v.toLowerCase() === want))
+    : undefined;
+  if (port && (port.state === 'unwatched' || port.state === 'ignored')) {
+    process.stderr.write(
+      `fr: the hub does not read ${port.path} (${port.state}); nothing new is logged until \`fr ports claim ${port.path}\`, or run a monitor of your own: fr serial lease ${port.path} -- idf.py -p '$FR_PORT' monitor\n`,
+    );
+  }
   const print = (res: Result) => {
     const data = res.data as { lines: LogLine[]; next_cursor: string };
     for (const l of data.lines) {

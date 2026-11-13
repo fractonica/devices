@@ -212,7 +212,7 @@ export { INPUT_GESTURES, INPUT_LAYERS, TOUCH_GESTURES, type InputGesture, type I
 export type { LogsOpName } from './ops/logs.ts';
 export { BROADCAST_ALIAS, LatencyStatsSchema, PROBE_MODES, type NetOpName, type ProbeOpName } from './ops/net.ts';
 export type { OtaOpName } from './ops/ota.ts';
-export { LeaseSchema, type Lease, type PortsOpName } from './ops/ports.ts';
+export { LeaseSchema, PortPolicyResultSchema, type Lease, type PortPolicyOpName, type PortsOpName } from './ops/ports.ts';
 export { CapInstanceSchema, DeviceLinkInfoSchema, GatewayInfoSchema, type InventoryOpName, type RegistryOpName } from './ops/registry.ts';
 export { TEST_TIERS, TestReportSchema, type TestsOpName, type TestTier } from './ops/tests.ts';
 

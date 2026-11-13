@@ -118,6 +118,9 @@ const ADDED_COLUMNS: { table: string; column: string; decl: string }[] = [
   { table: 'jobs', column: 'origin', decl: 'TEXT' },
   // CSI-1 (design csi-c1 D5): the network a device's fr_ident names.
   { table: 'devices', column: 'network', decl: "TEXT NOT NULL DEFAULT 'default'" },
+  // The port policy (ports/policy.ts): the device a port was last seen carrying (a bridge port's HELLO, a provision's
+  // probe), so in mode adopted a known board's port is opened again after a re-plug.
+  { table: 'ports_seen', column: 'device_id', decl: 'TEXT' },
 ];
 
 /**

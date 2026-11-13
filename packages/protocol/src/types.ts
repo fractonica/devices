@@ -33,7 +33,12 @@ export const JobSchema = z.object({
 });
 export type Job = z.infer<typeof JobSchema>;
 
-export const PORT_STATES = ['open', 'closed', 'leased', 'busy_external', 'error'] as const;
+/**
+ * A port's state: `open` (watched: the hub reads it), `closed` (between opens), `leased` (lent to a program or a job),
+ * `busy_external` (another program holds it), `error`; and from the port policy (config.json ports): `unwatched` (no
+ * registered board on it in mode adopted, so the hub leaves it closed) and `ignored` (on ports.ignore: never opened).
+ */
+export const PORT_STATES = ['open', 'closed', 'leased', 'busy_external', 'error', 'unwatched', 'ignored'] as const;
 
 /** A serial lease on a port (design c6 D4): the hub's handle stays closed until it ends. */
 export const PortLeaseSchema = z.object({
@@ -71,6 +76,13 @@ export const PortInfoSchema = z.object({
   /** The USB-UART bridge the port is behind (BRIDGES: ch340, ...); absent on a chip's own USB. */
   bridge: z.string().optional(),
   state: z.enum(PORT_STATES),
+  /** The registry alias of the board on the port, when the hub knows it. */
+  alias: z.string().optional(),
+  /**
+   * Why the hub opens the port or not (config.json ports): `adopted` (a registered board), `claimed` (ports.claim, or
+   * fr ports claim), `all` (mode all), `not_adopted` (mode adopted and no registered board known on it), `ignored`.
+   */
+  policy: z.enum(['adopted', 'claimed', 'all', 'not_adopted', 'ignored']).optional(),
   /** For display: the hub, `lease l_… (pid N)`, or the external program. */
   holder: z.string().optional(),
   lines: z.number(),

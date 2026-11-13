@@ -60,6 +60,24 @@ const LATE_POLL_MS = 2000;
 
 type State = PortInfo['state'];
 
+/** What the port policy (ports/policy.ts) says of a port: watch it (and why), or leave it closed (and why). */
+export type PortDecision = { watch: true; why: 'adopted' | 'claimed' | 'all' } | { watch: false; why: 'not_adopted' | 'ignored' };
+
+/** The port as the policy sees it. */
+export interface PolicyPort {
+  key: string;
+  path: string;
+  usbSerial?: string;
+  vid?: string;
+  pid?: string;
+  bridge?: string;
+}
+
+/** Decides per poll which ports the hub opens (config.json ports). Without one, every listed port is watched. */
+export interface PortPolicy {
+  decide(port: PolicyPort): PortDecision;
+}
+
 export interface Entry {
   key: string;
   path: string;
@@ -92,6 +110,8 @@ export interface Entry {
   claimed?: boolean;
   /** Other programs that have the port open (D5): from the failed open, or port_list's lsof. */
   external?: PortHolder[];
+  /** The policy's last answer for it (absent without a policy). */
+  policy?: PortDecision['why'];
 }
 
 /** "1C:DB:D4:00:01:34" -> "1cdbd4000134"; anything else is returned unchanged. */
@@ -158,13 +178,65 @@ export class SerialPortManager {
    * loopback (`--serial-bridge`, links/serial-bridge.ts, design m2-c1-hil §5.1).
    */
   #binding: SerialBinding | null;
+  /** Which ports to open (config.json ports, ports/policy.ts); null: all of them. */
+  #policy: PortPolicy | null;
 
-  constructor(logs: LogStore, db: Db, opts: { holders?: PortHolders; binding?: SerialBinding } = {}) {
+  constructor(logs: LogStore, db: Db, opts: { holders?: PortHolders; binding?: SerialBinding; policy?: PortPolicy } = {}) {
     this.#logs = logs;
     this.#db = db;
     this.#holders = opts.holders ?? new LsofHolders();
     this.#askEveryLease = opts.holders !== undefined;
     this.#binding = opts.binding ?? null;
+    this.#policy = opts.policy ?? null;
+  }
+
+  /**
+   * Applies the policy to a listed port that no lease holds: an unwatched or ignored port is closed (and so stays),
+   * a port the policy now watches leaves that state and opens at once.
+   */
+  async #applyPolicy(e: Entry): Promise<void> {
+    if (!this.#policy || e.state === 'leased' || e.claimed) {
+      return;
+    }
+    const d = this.#policy.decide({ key: e.key, path: e.path, usbSerial: e.usbSerial, vid: e.vid, pid: e.pid, bridge: e.bridge });
+    e.policy = d.why;
+    if (d.watch) {
+      if (e.state === 'unwatched' || e.state === 'ignored') {
+        e.state = 'closed';
+        e.nextOpenAt = 0;
+        e.holder = undefined;
+      }
+      return;
+    }
+    const want: State = d.why === 'ignored' ? 'ignored' : 'unwatched';
+    if (e.state !== want) {
+      if (e.port || e.opening) {
+        await this.#close(e);
+      }
+      e.state = want;
+      e.holder = undefined;
+    }
+  }
+
+  /** Re-applies the policy now (a port op changed config.json); resolves after that poll. */
+  async recheck(): Promise<void> {
+    while (this.#polling) {
+      await sleep(10); // a poll under way may have decided before the change: wait it out, then poll again
+    }
+    await this.poll();
+  }
+
+  /**
+   * Records that `key`'s port carries device `deviceId` (ports_seen.device_id): the policy then treats the port as
+   * that board's, so it is watched again after a re-plug once the board is registered. Provisioning calls it with the
+   * probed MAC; a bridge port's first HELLO does too (learnDevice).
+   */
+  notePortDevice(key: string, deviceId: string): void {
+    const id = normalizeMac(deviceId);
+    const e = this.#entries.get(key);
+    this.#db
+      .prepare('INSERT INTO ports_seen (usb_serial, last_path, vid, pid, last_seen, device_id) VALUES (?, ?, ?, ?, ?, ?) ON CONFLICT(usb_serial) DO UPDATE SET device_id = excluded.device_id')
+      .run(key, e?.path ?? key, e?.vid ?? null, e?.pid ?? null, new Date().toISOString(), id);
   }
 
   /**
@@ -295,6 +367,7 @@ export class SerialPortManager {
           e.nextOpenAt = 0;
         }
         e.vanished = false;
+        await this.#applyPolicy(e);
         if ((e.state === 'closed' || e.state === 'busy_external' || e.state === 'error') && now >= e.nextOpenAt) {
           this.#open(e);
         }
@@ -586,6 +659,11 @@ export class SerialPortManager {
     const id = normalizeMac(deviceId);
     if (e.deviceId !== id) {
       e.deviceId = id;
+      try {
+        this.notePortDevice(key, id);
+      } catch (err) {
+        console.error(JSON.stringify({ event: 'port_device_note_failed', key, ...errorFields(err) }));
+      }
       this.#changed();
     }
   }
@@ -806,6 +884,11 @@ export class SerialPortManager {
 
   /** The hub's own handle on `e` once it is open, waiting up to `ms` for an open in progress. */
   async #waitOpen(e: Entry, ms: number, what: string): Promise<SerialPort> {
+    if (e.state === 'unwatched' || e.state === 'ignored') {
+      throw new FrError('DEVICE_OFFLINE', `${e.path} is ${e.state === 'ignored' ? 'on the ignore list' : 'not watched by the hub (no registered board on it)'}; ${what}`, {
+        remediation: [{ tool: 'port_claim', args: { port: e.path }, cli: `fr ports claim ${e.path}` }],
+      });
+    }
     const deadline = Date.now() + ms;
     while (!(e.state === 'open' && e.port?.isOpen)) {
       if (Date.now() > deadline) {
@@ -819,7 +902,13 @@ export class SerialPortManager {
   list(): PortInfo[] {
     return [...this.#entries.values()].map((e) => {
       // An open port another program has open too (D5) says so; a busy one names its holder.
-      const holder = e.holder ?? (e.state === 'open' && e.external?.length ? `also ${holderText(e.external)}` : undefined);
+      const holder =
+        e.holder ??
+        (e.state === 'open' && e.external?.length
+          ? `also ${holderText(e.external)}`
+          : (e.state === 'unwatched' || e.state === 'ignored') && e.external?.length
+            ? holderText(e.external)
+            : undefined);
       const deviceId = e.deviceId ?? (DEVICE_ID.test(e.key) ? e.key : undefined);
       return {
         path: e.path,
@@ -829,6 +918,7 @@ export class SerialPortManager {
         ...(e.vid ? { vid: e.vid } : {}),
         ...(e.pid ? { pid: e.pid } : {}),
         state: e.state,
+        ...(e.policy ? { policy: e.policy } : {}),
         ...(holder ? { holder } : {}),
         lines: e.lines,
         ...(e.lease ? { lease: { ...e.lease } } : {}),

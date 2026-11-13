@@ -349,6 +349,11 @@ async function provisionJob(hub: HubContext, ctx: JobCtx, input: ProvisionInput,
     if (!isDeviceId(deviceId)) {
       throw new FrError('FLASH_FAILED', `the probe reported no usable MAC (${probe.mac})`);
     }
+    // The port carries this board from now on (ports_seen.device_id): once the registry row below exists, the port
+    // policy watches it in mode adopted, also a bridge port keyed by its path, after a re-plug too.
+    if (portKey !== deviceId) {
+      hub.serial.notePortDevice?.(portKey, deviceId);
+    }
     if (isDeviceId(portKey) && portKey !== deviceId) {
       warnings.push(`the port's USB serial ${portKey} differs from the chip MAC ${deviceId}; the MAC is the device id`);
     }

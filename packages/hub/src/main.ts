@@ -33,6 +33,7 @@ import { LogStore } from './logstore.ts';
 import { createOta, NODE_HTTP_PORT } from './ota/index.ts';
 import { createPortHolders } from './ports/holders.ts';
 import { createLeases } from './ports/leases.ts';
+import { createPortPolicy } from './ports/policy.ts';
 import { createPrompts } from './prompts.ts';
 import { createRegistry, sweepIdentAtStart } from './registry/index.ts';
 import { RingRetention } from './ring.ts';
@@ -130,7 +131,12 @@ async function main(): Promise<void> {
   // Every `@fr1:` line passes the log store's frame decoder: the tap there feeds the serial node link.
   const frames = new SerialFrameTap(db);
   const logs = new LogStore(db, run, { frames, seq });
-  const serial = new SerialPortManager(logs, db, serialBridge ? { binding: bridgeBinding(serialBridge) } : {});
+  // Which ports the hub opens (config.json ports; mode adopted unless the file says all).
+  const portPolicy = createPortPolicy(db);
+  for (const problem of portPolicy.warnings()) {
+    console.error(JSON.stringify({ event: 'config_problem', message: problem }));
+  }
+  const serial = new SerialPortManager(logs, db, { policy: portPolicy, ...(serialBridge ? { binding: bridgeBinding(serialBridge) } : {}) });
   const jobs = new JobRunner(db);
   const registry = createRegistry(db);
   const events = createEvents(db, seq, run);
@@ -205,6 +211,7 @@ async function main(): Promise<void> {
     db,
     logs,
     serial,
+    portPolicy,
     jobs,
     startedAt: Date.now(),
     hubSourceDir,
@@ -272,7 +279,7 @@ async function main(): Promise<void> {
       node_http_port: ota.httpPort(),
       // A node HTTP port that is taken leaves the hub up; OTA over Wi-Fi fails with no_http_listener.
       ...(ota.listenError() ? { node_http_error: ota.listenError() } : {}),
-      ...(useSerial ? {} : { serial: false }),
+      ...(useSerial ? { ports_mode: portPolicy.config().config.ports.mode } : { serial: false }),
       ...(serialBridge ? { serial_bridge: `${serialBridge.host}:${serialBridge.port}` } : {}),
       ...(v6.error ? { v6_error: v6.error } : {}),
       run,

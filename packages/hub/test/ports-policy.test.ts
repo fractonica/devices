@@ -1,0 +1,308 @@
+// The port policy (config.json ports, ports/policy.ts): in mode adopted the hub opens only ports of registered boards
+// and lists the others closed (`unwatched`), never opens an ignored port (path, MAC or VID:PID), reopens an adopted
+// board after a USB re-enumeration (a new path), opens a bridge port once its board is known, lends an unwatched port
+// and leaves it closed when the lend expires, and port_claim / port_ignore write config.json (unknown keys kept) and
+// act at once. A config file that is not JSON is reported (hub_status shows the policy's warnings), not fatal. SerialPort.list and the ports are
+// fakes: no real serial port is opened.
+
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+
+import { afterAll, afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+
+import type { HubContext, HubRunOptions, PortHolders } from '../src/context.ts';
+import { openDb } from '../src/db.ts';
+import { EventStore } from '../src/events/index.ts';
+import { JobRunner } from '../src/jobs.ts';
+import { LogStore } from '../src/logstore.ts';
+import { HANDLERS } from '../src/ops.ts';
+import { listPorts } from '../src/ports/holders.ts';
+import { createLeases } from '../src/ports/leases.ts';
+import { createPortPolicy, portMatches } from '../src/ports/policy.ts';
+import { createRegistry } from '../src/registry/index.ts';
+import { CursorSeq } from '../src/seq.ts';
+import { SerialPortManager } from '../src/serial.ts';
+
+const h = vi.hoisted(() => {
+  type Listener = (...args: unknown[]) => void;
+  class FakePort {
+    static listed: { path: string; vendorId?: string; productId?: string; serialNumber?: string }[] = [];
+    static list = async () => FakePort.listed;
+    static opened: string[] = [];
+    static instances: FakePort[] = [];
+    path: string;
+    isOpen = false;
+    #listeners = new Map<string, Listener[]>();
+    constructor(opts: { path: string }) {
+      this.path = opts.path;
+      FakePort.instances.push(this);
+    }
+    open(cb: (err: Error | null) => void): void {
+      this.isOpen = true;
+      FakePort.opened.push(this.path);
+      queueMicrotask(() => cb(null));
+    }
+    close(cb: () => void): void {
+      this.isOpen = false;
+      queueMicrotask(() => {
+        cb();
+        this.emit('close');
+      });
+    }
+    set(_flags: unknown, cb: (err: Error | null) => void): void {
+      cb(null);
+    }
+    write(_data: string, cb: (err: Error | null) => void): void {
+      queueMicrotask(() => cb(null));
+    }
+    on(event: string, fn: Listener): this {
+      this.#listeners.set(event, [...(this.#listeners.get(event) ?? []), fn]);
+      return this;
+    }
+    emit(event: string, ...args: unknown[]): void {
+      for (const fn of this.#listeners.get(event) ?? []) {
+        fn(...args);
+      }
+    }
+  }
+  return { FakePort };
+});
+
+vi.mock('serialport', () => ({ SerialPort: h.FakePort }));
+
+const KNOWN = '1cdbd4000134';
+const STRANGER = '1cdbd4000999';
+const OWN = (n: number, mac: string) => ({ path: `/dev/tty.usbmodem${n}`, vendorId: '303a', productId: '1001', serialNumber: mac.match(/../g)!.join(':').toUpperCase() });
+const CH340 = { path: '/dev/tty.usbserial-110', vendorId: '1a86', productId: '7523' };
+const RUN: HubRunOptions = { apiHost: '127.0.0.1', apiPort: 0, nodeHost: '127.0.0.1', nodePort: 0, nodeHttpPort: 0, noAdvert: true, serial: true };
+
+const dir = mkdtempSync(join(tmpdir(), 'fr-policy-test-'));
+afterAll(() => rmSync(dir, { recursive: true, force: true }));
+const cleanups: (() => Promise<void> | void)[] = [];
+afterEach(async () => {
+  for (const c of cleanups.splice(0).reverse()) {
+    await c();
+  }
+});
+beforeEach(() => {
+  h.FakePort.listed = [];
+  h.FakePort.opened = [];
+  h.FakePort.instances = [];
+});
+
+class NoHolders implements PortHolders {
+  async holders(): Promise<Map<string, never[]>> {
+    return new Map();
+  }
+}
+
+interface Rig {
+  hub: HubContext;
+  serial: SerialPortManager;
+  config: string;
+  clock: { now: number };
+  state(path: string): string | undefined;
+  register(deviceId: string, alias: string): void;
+}
+
+async function rig(config?: unknown): Promise<Rig> {
+  const home = mkdtempSync(join(dir, 'home-'));
+  const file = join(home, 'config.json');
+  if (config !== undefined) {
+    writeFileSync(file, typeof config === 'string' ? config : JSON.stringify(config));
+  }
+  const db = openDb(join(home, 'hub.db'));
+  const seq = new CursorSeq(db);
+  const logs = new LogStore(db, 1, { retention: false, seq });
+  const events = new EventStore(db, seq, 1);
+  const portPolicy = createPortPolicy(db, file);
+  const serial = new SerialPortManager(logs, db, { policy: portPolicy, holders: new NoHolders() });
+  const registry = createRegistry(db);
+  const clock = { now: Date.now() };
+  const router = { presence: () => 'online', endSerialSession: async () => true };
+  const hub = { idf: () => null, pytools: () => null, hubSourceDir: dir, db, logs, seq, serial, portPolicy, jobs: new JobRunner(db), registry, router, events, portHolders: new NoHolders() } as unknown as HubContext;
+  hub.leases = createLeases(() => hub, RUN, { alive: () => true, now: () => clock.now, sweepMs: 10, portGoneMs: 600_000 });
+  hub.leases.start();
+  const register = (deviceId: string, alias: string) =>
+    db.prepare('INSERT INTO devices (device_id, alias, created_at) VALUES (?, ?, ?)').run(deviceId, alias, new Date().toISOString());
+  cleanups.push(async () => {
+    hub.leases.stop();
+    await serial.stop();
+    events.stop();
+    logs.close();
+    db.close();
+  });
+  return { hub, serial, config: file, clock, state: (path) => serial.list().find((p) => p.path === path)?.state, register };
+}
+
+describe('portMatches', () => {
+  const own = { key: KNOWN, path: '/dev/cu.usbmodem1101', usbSerial: '1C:DB:D4:00:01:34', vid: '303a', pid: '1001' };
+  const bridge = { key: 'path:usbserial-110', path: '/dev/cu.usbserial-110', vid: '1a86', pid: '7523', bridge: 'ch340' };
+  it('matches a path (cu or tty), a MAC or USB serial, a VID:PID, path:<basename> and a bare basename', () => {
+    expect(portMatches('/dev/tty.usbmodem1101', own)).toBe(true);
+    expect(portMatches('/dev/cu.usbmodem1101', own)).toBe(true);
+    expect(portMatches('1C:DB:D4:00:01:34', own)).toBe(true);
+    expect(portMatches(KNOWN, own)).toBe(true);
+    expect(portMatches('303A:1001', own)).toBe(true);
+    expect(portMatches('1a86:7523', own)).toBe(false);
+    expect(portMatches('1a86:7523', bridge)).toBe(true);
+    expect(portMatches('path:usbserial-110', bridge)).toBe(true);
+    expect(portMatches('usbserial-110', bridge)).toBe(true);
+    expect(portMatches('usbmodem1101', own)).toBe(true);
+    expect(portMatches('/dev/cu.usbmodem1201', own)).toBe(false);
+  });
+});
+
+describe('mode adopted (the default)', () => {
+  it('opens a registered board, leaves an unknown one closed, never opens an ignored path or VID:PID', async () => {
+    const r = await rig({ ports: { ignore: ['/dev/cu.usbmodem1301', '1a86:7523'] } });
+    r.register(KNOWN, 'pad-c6');
+    h.FakePort.listed = [OWN(1101, KNOWN), OWN(1201, STRANGER), OWN(1301, '1cdbd4000777'), CH340];
+    await r.serial.poll();
+    expect(h.FakePort.opened).toEqual(['/dev/cu.usbmodem1101']);
+    const ports = (await listPorts(r.hub)).ports;
+    expect(ports.map((p) => [p.path, p.state, p.policy, p.alias])).toEqual([
+      ['/dev/cu.usbmodem1101', 'open', 'adopted', 'pad-c6'],
+      ['/dev/cu.usbmodem1201', 'unwatched', 'not_adopted', undefined],
+      ['/dev/cu.usbmodem1301', 'ignored', 'ignored', undefined],
+      ['/dev/cu.usbserial-110', 'ignored', 'ignored', undefined],
+    ]);
+    // Polls go on: nothing else is opened.
+    await r.serial.poll();
+    expect(h.FakePort.opened).toEqual(['/dev/cu.usbmodem1101']);
+    expect(r.hub.portPolicy!.config().config.ports.mode).toBe('adopted');
+  });
+
+  it('reopens an adopted board after a USB re-enumeration at another path', async () => {
+    const r = await rig();
+    r.register(KNOWN, 'pad-c6');
+    h.FakePort.listed = [OWN(1101, KNOWN)];
+    await r.serial.poll();
+    expect(r.state('/dev/cu.usbmodem1101')).toBe('open');
+    // A chip reset: its USB goes (the hub's handle reports a disconnect) and comes back under another location.
+    const old = h.FakePort.instances.at(-1)!;
+    old.isOpen = false;
+    old.emit('close', { disconnected: true });
+    h.FakePort.listed = [OWN(1201, KNOWN)];
+    await r.serial.recheck();
+    // Reopened once the close's 250 ms back-off is over (the hub polls every 500 ms).
+    await vi.waitFor(
+      async () => {
+        await r.serial.poll();
+        expect(r.state('/dev/cu.usbmodem1201')).toBe('open');
+      },
+      { timeout: 5000, interval: 100 },
+    );
+    expect(h.FakePort.opened).toContain('/dev/cu.usbmodem1201');
+  });
+
+  it("watches a bridge port once the board seen on it is registered (ports_seen.device_id), also after a re-plug", async () => {
+    const r = await rig();
+    h.FakePort.listed = [CH340];
+    await r.serial.poll();
+    expect(r.state('/dev/cu.usbserial-110')).toBe('unwatched');
+    // A provision's probe (or a HELLO on a claimed port) names the board; then it is registered.
+    r.serial.notePortDevice('path:usbserial-110', 'A0:B1:C2:D3:E4:F5');
+    await r.serial.poll();
+    expect(r.state('/dev/cu.usbserial-110')).toBe('unwatched');
+    r.register('a0b1c2d3e4f5', 'cam-esp32');
+    await r.serial.poll();
+    expect(r.state('/dev/cu.usbserial-110')).toBe('open');
+    h.FakePort.listed = [];
+    await r.serial.poll();
+    await new Promise((res) => setTimeout(res, 1600)); // past the gone debounce
+    await r.serial.poll();
+    expect(r.serial.list()).toEqual([]);
+    h.FakePort.listed = [CH340];
+    h.FakePort.opened = [];
+    await r.serial.poll();
+    expect(h.FakePort.opened).toEqual(['/dev/cu.usbserial-110']);
+  });
+
+  it('lends an unwatched port and leaves it closed when the lend expires', async () => {
+    const r = await rig();
+    h.FakePort.listed = [OWN(1201, STRANGER)];
+    await r.serial.poll();
+    const lend = (await HANDLERS.port_lend({ port: '/dev/cu.usbmodem1201', ttl_s: 60 }, r.hub)) as { lease_id: string; path: string; ttl_s: number };
+    expect(lend).toMatchObject({ path: '/dev/cu.usbmodem1201', ttl_s: 60 });
+    expect(r.state('/dev/cu.usbmodem1201')).toBe('leased');
+    r.clock.now += 61_000;
+    await vi.waitFor(() => expect(r.hub.leases.list()).toEqual([]));
+    await r.serial.poll();
+    expect(r.state('/dev/cu.usbmodem1201')).toBe('unwatched');
+    expect(h.FakePort.opened).toEqual([]);
+  });
+
+  it('lets a provision lease an unwatched port, and watches it once the board is registered', async () => {
+    const r = await rig();
+    h.FakePort.listed = [OWN(1201, STRANGER)];
+    await r.serial.poll();
+    const lease = await r.serial.lease(STRANGER, 'job j_1');
+    expect(r.state('/dev/cu.usbmodem1201')).toBe('leased');
+    r.register(STRANGER, 'pad-new'); // the provision's registry stage
+    lease.release();
+    await vi.waitFor(() => expect(r.state('/dev/cu.usbmodem1201')).toBe('open'));
+  });
+});
+
+describe('port_claim and port_ignore', () => {
+  it('claim opens an unknown board now and writes ports.claim, keeping unknown keys; remove takes it back', async () => {
+    const r = await rig({ ports: { ignore: ['/dev/cu.usbmodem1201'] }, mine: { keep: 1 } });
+    h.FakePort.listed = [OWN(1201, STRANGER)];
+    await r.serial.poll();
+    expect(r.state('/dev/cu.usbmodem1201')).toBe('ignored');
+    const res = await HANDLERS.port_claim({ port: '/dev/tty.usbmodem1201', remove: false }, r.hub);
+    expect(res).toMatchObject({ port: STRANGER, path: '/dev/cu.usbmodem1201', state: 'open', ignore: [], claim: [STRANGER] });
+    expect(JSON.parse(readFileSync(r.config, 'utf8'))).toEqual({ ports: { ignore: [], claim: [STRANGER] }, mine: { keep: 1 } });
+    expect(r.serial.list()[0]).toMatchObject({ state: 'open', policy: 'claimed' });
+    await HANDLERS.port_claim({ port: STRANGER, remove: true }, r.hub);
+    expect(r.state('/dev/cu.usbmodem1201')).toBe('unwatched');
+  });
+
+  it('ignore closes a watched port now (also in mode all) and remove opens it again', async () => {
+    const r = await rig({ ports: { mode: 'all' } });
+    h.FakePort.listed = [OWN(1101, KNOWN), CH340];
+    await r.serial.poll();
+    expect(r.serial.list().map((p) => p.state)).toEqual(['open', 'open']);
+    const res = await HANDLERS.port_ignore({ port: '1C:DB:D4:00:01:34', remove: false }, r.hub);
+    expect(res).toMatchObject({ port: KNOWN, mode: 'all', ignore: [KNOWN] });
+    expect(r.state('/dev/cu.usbmodem1101')).toBe('ignored');
+    await HANDLERS.port_ignore({ port: '1a86:7523', remove: false }, r.hub);
+    expect(r.state('/dev/cu.usbserial-110')).toBe('ignored');
+    await HANDLERS.port_ignore({ port: '/dev/cu.usbmodem1101', remove: true }, r.hub);
+    await vi.waitFor(() => expect(r.state('/dev/cu.usbmodem1101')).toBe('open'));
+    expect(JSON.parse(readFileSync(r.config, 'utf8')).ports).toEqual({ mode: 'all', ignore: ['1a86:7523'] });
+  });
+
+  it('refuses to claim a lent port, and an unknown one', async () => {
+    const r = await rig();
+    h.FakePort.listed = [OWN(1201, STRANGER)];
+    await r.serial.poll();
+    await HANDLERS.port_lend({ port: STRANGER, ttl_s: 60 }, r.hub);
+    await expect(HANDLERS.port_claim({ port: STRANGER, remove: false }, r.hub)).rejects.toMatchObject({ code: 'PORT_LEASED' });
+    await expect(HANDLERS.port_claim({ port: '/dev/cu.nothing', remove: false }, r.hub)).rejects.toMatchObject({ code: 'NOT_FOUND' });
+  });
+});
+
+describe('a config file that is not right', () => {
+  it('is reported in hub_status and not fatal: the defaults apply (mode adopted)', async () => {
+    const r = await rig('{ "ports": { "mode": "al');
+    h.FakePort.listed = [OWN(1201, STRANGER)];
+    await r.serial.poll();
+    expect(r.state('/dev/cu.usbmodem1201')).toBe('unwatched');
+    // hub_status lists the policy's warnings with the other parts'.
+    expect(r.hub.portPolicy!.warnings().some((w) => w.includes('is not valid JSON'))).toBe(true);
+    // A port op does not overwrite it.
+    await expect(HANDLERS.port_claim({ port: STRANGER, remove: false }, r.hub)).rejects.toMatchObject({ code: 'INVALID_ARGS' });
+    expect(readFileSync(r.config, 'utf8')).toBe('{ "ports": { "mode": "al');
+  });
+
+  it('a wrong value falls back to its default and is named', async () => {
+    const r = await rig({ ports: { mode: 'everything', ignore: 'x' } });
+    const warnings = r.hub.portPolicy!.warnings().join('\n');
+    expect(warnings).toMatch(/ports\.mode is "everything"/);
+    expect(warnings).toMatch(/ports\.ignore is not a list/);
+    expect(r.hub.portPolicy!.config().config.ports.mode).toBe('adopted');
+  });
+});
