@@ -331,7 +331,7 @@ describe('a config file that is not right', () => {
     expect(h.FakePort.opened).toEqual(['/dev/cu.usbmodem1101']); // only the first open, before the ignore
     const warnings = r.hub.portPolicy!.warnings().join('\n');
     expect(warnings).toMatch(/is not valid JSON/);
-    expect(warnings).toMatch(/keeping the ports, retention, log, mcp settings read before/);
+    expect(warnings).toMatch(/keeping the ports, retention, log, mcp, time settings read before/);
     // A wrong value in the ports section alone holds that section too.
     writeFileSync(r.config, JSON.stringify({ ports: { ignore: KNOWN } }));
     r.hub.portPolicy!.refresh();
