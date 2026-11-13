@@ -1,7 +1,8 @@
 // `fr mcp` (spec 09 §9.6, 08 §8.2; design c6 §6 S4): the hub's ops as MCP tools over stdio, for the Claude
 // Code plugin (plugin/) and other agents. A thin adapter: one tool per op, generated from the registry at
 // runtime; each call goes to the running hub over REST (X-Fr-Client: mcp, so the jobs it starts are the
-// Agents page's), and the hub stays the only validator. It never fills source_dir or wait_s as the CLI
+// Agents page's), and the hub stays the only validator; the time_* ops alone are answered here, from the temporal
+// core, so they work with no hub (localTimeOp). It never fills source_dir or wait_s as the CLI
 // does: over MCP source_dir is required and wait_s defaults to 0 (09 §9.2).
 //
 // Built on @modelcontextprotocol/server's low-level Server, whose tools/list answer goes out as given, so
@@ -22,6 +23,7 @@ import {
   findOp,
   HUB_VERSION,
   type Job,
+  LOCAL_TIME_OPS,
   type OpDef,
   OPS,
   REGISTRY_HASH,
@@ -350,6 +352,9 @@ export async function callTool(name: string, rawArgs: Record<string, unknown>, c
       ], false),
     );
   }
+  if ((LOCAL_TIME_OPS as readonly string[]).includes(op.name)) {
+    return toolResult(await localTimeOp(op, args), op.name);
+  }
   const health = await gate.check();
   if (!health) {
     return toolResult(
@@ -396,6 +401,29 @@ export async function callTool(name: string, rawArgs: Record<string, unknown>, c
   } finally {
     answered = true;
     clearInterval(timer);
+  }
+}
+
+/**
+ * A time_* op answered here, from the temporal core, as the hub would answer it (the same function): Fractonica time
+ * needs no hub, so these tools work while it is down. The op's schema checks the arguments as the hub's would.
+ */
+export async function localTimeOp(op: OpDef, args: Record<string, unknown>): Promise<Result> {
+  const parsed = op.input.safeParse(args);
+  if (!parsed.success) {
+    return failed('INVALID_ARGS', parsed.error.issues.map((i) => `${i.path.join('.') || 'input'}: ${i.message}`).join('; '), undefined, false);
+  }
+  const { runTimeOp, TimeError, isTimeOp } = await import('@fractonica/time');
+  if (!isTimeOp(op.name)) {
+    return failed('NOT_FOUND', `no local op ${op.name}`, undefined, false);
+  }
+  try {
+    return { ok: true, data: await runTimeOp(op.name, parsed.data as Record<string, unknown>), cursor: '' };
+  } catch (e) {
+    if (e instanceof TimeError) {
+      return { ok: false, cursor: '', error: { code: e.code, message: e.message, retryable: false, details: { reason: e.reason, ...e.details } } };
+    }
+    return failed('INTERNAL', e instanceof Error ? e.message : String(e), undefined, false);
   }
 }
 

@@ -26,6 +26,16 @@ const h = vi.hoisted(() => ({
   fail: null as Error | null,
   benches: [] as { sourceDir: string; profile: string }[],
   benchFail: null as Error | null,
+  vendor: [] as { sourceDir: string; write?: boolean }[],
+  vendorStale: [] as string[],
+}));
+
+// The vendored temporal core's check too: a write would copy from ../web into this checkout.
+vi.mock('@fractonica/time/vendor', () => ({
+  checkVendor: async (sourceDir: string, opts: { write?: boolean } = {}) => {
+    h.vendor.push({ sourceDir, ...opts });
+    return { lock: 'packages/time/time.lock', web: null, stale: h.vendorStale, written: [], core: '0.2.0', spec: '2.2.0' };
+  },
 }));
 
 vi.mock('@fractonica/codegen', async (importOriginal) => ({
@@ -67,6 +77,8 @@ beforeEach(() => {
   h.fail = null;
   h.benches = [];
   h.benchFail = null;
+  h.vendor = [];
+  h.vendorStale = [];
 });
 
 describe('fr gen', () => {
@@ -75,7 +87,9 @@ describe('fr gen', () => {
   it('regenerates from the checkout found above the working directory', async () => {
     const r = await genAll({ check: false, cwd });
     expect(h.all).toEqual([{ sourceDir: REPO, check: false }]);
-    expect(r).toEqual({ ok: true, cursor: '', data: { source_dir: REPO, files: 2, written: ['a'], warnings: [] } });
+    expect(h.vendor).toEqual([{ sourceDir: REPO, write: true }]);
+    const time = { core: '0.2.0', spec: '2.2.0', compared_with: 'time.lock only (no ../web checkout)' };
+    expect(r).toEqual({ ok: true, cursor: '', data: { source_dir: REPO, files: 2, written: ['a'], time, warnings: [] } });
     expect(exitCodeForResult(r)).toBe(0);
   });
 
@@ -91,6 +105,10 @@ describe('fr gen', () => {
     );
     h.stale = [];
     expect(await genAll({ check: true, cwd })).toMatchObject({ ok: true, data: { stale: [] } });
+    // the vendored core's drift is stale too
+    h.vendorStale = ['packages/time/vendor/lib/fractonica.js (differs from ../web/public/lib/fractonica.js)'];
+    expect(await genAll({ check: true, cwd })).toMatchObject({ ok: false, data: { stale: h.vendorStale } });
+    expect(h.vendor.at(-1)).toEqual({ sourceDir: REPO, write: false });
   });
 
   it('reports schema problems as INVALID_SOURCE with every issue', async () => {

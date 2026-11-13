@@ -1,12 +1,20 @@
 // The port policy ops (config.json ports): port_lend, port_ignore and port_claim on `fr ports …`, the port states
 // and policy reasons port_list carries, and the REGISTRY_HASH they move.
+import { createHash } from 'node:crypto';
+
 import { describe, expect, it } from 'vitest';
+import { z } from 'zod';
 
 import { findOp, OPS, PORT_STATES, PortInfoSchema, PortPolicyResultSchema, REGISTRY_HASH } from '../src/index.ts';
 
+const hashOf = (ops: readonly { name: string; input: z.ZodType }[]) =>
+  createHash('sha256').update(JSON.stringify(ops.map((o) => [o.name, z.toJSONSchema(o.input)]))).digest('hex').slice(0, 12);
+/** The registry before the time ops (protocol-time.test.ts) came after the port ops. */
+const beforeTime = OPS.filter((o) => !o.name.startsWith('time_'));
+
 describe('port policy ops', () => {
   it('adds three ops on `fr ports lend|ignore|claim <port>` and moves REGISTRY_HASH', () => {
-    expect(OPS).toHaveLength(118);
+    expect(beforeTime).toHaveLength(118);
     expect(findOp('port_lend')).toMatchObject({ kind: 'command', tier: 'mutate', cli: { path: ['ports', 'lend'], positional: ['port'] } });
     expect(findOp('port_ignore')).toMatchObject({ kind: 'command', tier: 'mutate', cli: { path: ['ports', 'ignore'], positional: ['port'] } });
     expect(findOp('port_claim')).toMatchObject({ kind: 'command', tier: 'mutate', cli: { path: ['ports', 'claim'], positional: ['port'] } });
@@ -16,7 +24,7 @@ describe('port policy ops', () => {
     for (const name of ['port_lend', 'port_ignore', 'port_claim']) {
       expect(findOp(name)!.summary.length, name).toBeLessThan(1000);
     }
-    expect(REGISTRY_HASH).toBe('050452ab10c2');
+    expect(hashOf(beforeTime)).toBe('050452ab10c2');
     expect(REGISTRY_HASH).not.toBe('c930b40dea94'); // before the port policy
   });
 

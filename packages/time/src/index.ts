@@ -4,6 +4,9 @@
 
 export { type Core, CoreError, loadCore, WASM_URL } from './core.ts';
 export { EARTH_SIGN } from './earth.ts';
+/** The core's enumerations (fractonica.h), for callers that ask the core directly. */
+export { DateForm, Quarter, Unit } from '../vendor/lib/fractonica.js';
+export { isTimeOp, runTimeOp, TIME_OP_NAMES, type TimeOp } from './ops.ts';
 export { TimeError, type TimeErrorReason } from './errors.ts';
 export { engrave, formatLadder, formatNext, formatNow, formatParse, formatSpanReading, formatStamp, formatSync, table } from './format.ts';
 export {

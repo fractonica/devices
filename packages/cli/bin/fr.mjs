@@ -6,39 +6,56 @@
 // The child gets stdin, stdout and stderr as they are (fr mcp speaks JSON-RPC over them; prompts read the TTY). Its
 // exit code is this process's; a signal that ended it ends this process the same way. SIGTERM and SIGHUP are passed
 // on; SIGINT only when no terminal sent it to the whole group already.
+// `fr time …` runs in this process instead (no second Node to start: it is meant to answer in well under 150 ms): a
+// resolve hook adds the @fractonica/source condition the child would get from its command line, then src/main.ts runs
+// here. A Node without module.registerHooks takes the child path like every other command.
 
 import { spawn } from 'node:child_process';
+import * as nodeModule from 'node:module';
 import { dirname, join } from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 
 const main = join(dirname(fileURLToPath(import.meta.url)), '..', 'src', 'main.ts');
-const viaPnpm = process.env.npm_lifecycle_event === 'fr' && process.env.INIT_CWD;
-const child = spawn(process.execPath, ['--conditions=@fractonica/source', ...process.execArgv, main, ...process.argv.slice(2)], {
-  stdio: 'inherit',
-  ...(viaPnpm ? { cwd: process.env.INIT_CWD } : {}),
-});
+const timeCommand = process.argv.slice(2).find((a) => !a.startsWith('-')) === 'time';
 
-const forward = (sig) => () => {
-  if (child.exitCode === null && child.signalCode === null && (sig !== 'SIGINT' || !process.stdin.isTTY)) {
-    child.kill(sig);
-  }
-};
-const handlers = ['SIGINT', 'SIGTERM', 'SIGHUP'].map((sig) => [sig, forward(sig)]);
-for (const [sig, fn] of handlers) {
-  process.on(sig, fn);
+if (timeCommand && typeof nodeModule.registerHooks === 'function') {
+  nodeModule.registerHooks({
+    resolve: (specifier, context, next) => next(specifier, { ...context, conditions: [...context.conditions, '@fractonica/source'] }),
+  });
+  await import(pathToFileURL(main).href);
+} else {
+  runChild();
 }
 
-child.on('error', (err) => {
-  process.stderr.write(`fr: cannot start node: ${err.message}\n`);
-  process.exit(127);
-});
-child.on('exit', (code, signal) => {
+function runChild() {
+  const viaPnpm = process.env.npm_lifecycle_event === 'fr' && process.env.INIT_CWD;
+  const child = spawn(process.execPath, ['--conditions=@fractonica/source', ...process.execArgv, main, ...process.argv.slice(2)], {
+    stdio: 'inherit',
+    ...(viaPnpm ? { cwd: process.env.INIT_CWD } : {}),
+  });
+
+  const forward = (sig) => () => {
+    if (child.exitCode === null && child.signalCode === null && (sig !== 'SIGINT' || !process.stdin.isTTY)) {
+      child.kill(sig);
+    }
+  };
+  const handlers = ['SIGINT', 'SIGTERM', 'SIGHUP'].map((sig) => [sig, forward(sig)]);
   for (const [sig, fn] of handlers) {
-    process.off(sig, fn);
+    process.on(sig, fn);
   }
-  if (signal) {
-    process.kill(process.pid, signal);
-    return;
-  }
-  process.exit(code ?? 1);
-});
+
+  child.on('error', (err) => {
+    process.stderr.write(`fr: cannot start node: ${err.message}\n`);
+    process.exit(127);
+  });
+  child.on('exit', (code, signal) => {
+    for (const [sig, fn] of handlers) {
+      process.off(sig, fn);
+    }
+    if (signal) {
+      process.kill(process.pid, signal);
+      return;
+    }
+    process.exit(code ?? 1);
+  });
+}

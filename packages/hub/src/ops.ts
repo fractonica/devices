@@ -45,6 +45,7 @@ import { type ProcessView, restStats, type WsStatsView } from './router/scale.ts
 import { OTA_HANDLERS } from './ota/ops.ts';
 import { normalizeMac, pathKey } from './serial.ts';
 import { TESTS_HANDLERS } from './tests/ops.ts';
+import { TIME_HANDLERS } from './time/ops.ts';
 
 // Moved to context.ts (design c3 §4); re-exported for existing importers.
 export type { Handler, HubContext } from './context.ts';
@@ -591,6 +592,7 @@ export const HANDLERS: Record<OpName, Handler> = {
   // Checkpoint C6 (design c6 §3.3), one module per area.
   ...APPS_HANDLERS, // client_generate (S1)
   ...APP_HOST_HANDLERS, // app_* (design uno-q-services): apps as systemd units on a Linux hub
+  ...TIME_HANDLERS, // time_*: Fractonica time from the temporal core
   ...HUB_HANDLERS, // hub_doctor (S2)
   ...INVENTORY_HANDLERS, // board_list, profile_list, capability_list (S2)
   ...LOGS_HANDLERS, // logs_assert (S4)

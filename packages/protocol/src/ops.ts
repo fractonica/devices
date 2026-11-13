@@ -128,6 +128,7 @@ import { CLOCK_OPS } from './ops/clock.ts';
 import { INVENTORY_OPS, REGISTRY_OPS } from './ops/registry.ts';
 import { SCALE_OPS } from './ops/scale.ts';
 import { TESTS_OPS } from './ops/tests.ts';
+import { TIME_OPS } from './ops/time.ts';
 import { JOB_ORIGINS, JobSchema, PortInfoSchema } from './types.ts';
 
 export { GeneratedFileSchema, type AppsOpName, type GeneratedFile } from './ops/apps.ts';
@@ -215,6 +216,7 @@ export type { OtaOpName } from './ops/ota.ts';
 export { LeaseSchema, PortPolicyResultSchema, type Lease, type PortPolicyOpName, type PortsOpName } from './ops/ports.ts';
 export { CapInstanceSchema, DeviceLinkInfoSchema, GatewayInfoSchema, type InventoryOpName, type RegistryOpName } from './ops/registry.ts';
 export { TEST_TIERS, TestReportSchema, type TestsOpName, type TestTier } from './ops/tests.ts';
+export { LOCAL_TIME_OPS, TIME_OPS, TIME_QUARTERS, type TimeOpName } from './ops/time.ts';
 
 export const OPS = [
   op({
@@ -472,6 +474,8 @@ export const OPS = [
   ...STORAGE_OPS,
   ...CLOCK_OPS,
   ...APP_HOST_OPS,
+  // Fractonica time from the temporal core (packages/time): answered by the hub, and by `fr time` and `fr mcp` without one.
+  ...TIME_OPS,
 ] as const;
 
 export type OpName = (typeof OPS)[number]['name'];

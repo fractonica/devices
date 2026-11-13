@@ -12,12 +12,12 @@ const hashOf = (ops: readonly { name: string; input: z.ZodType }[]) =>
     .digest('hex')
     .slice(0, 12);
 /** The port policy ops came after (protocol-ports.test.ts). */
-const beforePorts = OPS.filter((o) => !/^port_(lend|ignore|claim)$/.test(o.name));
+const beforePorts = OPS.filter((o) => !/^port_(lend|ignore|claim)$|^time_/.test(o.name));
 
 describe('app ops (design uno-q-services)', () => {
   it('adds ten ops at the end (nine app_ and device_adopt), on their CLI paths, and moves REGISTRY_HASH', () => {
     expect(beforePorts).toHaveLength(115);
-    expect(OPS.slice(-10).map((o) => o.name)).toEqual(APP_HOST_OPS.map((o) => o.name));
+    expect(OPS.slice(-14, -4).map((o) => o.name)).toEqual(APP_HOST_OPS.map((o) => o.name)); // the four time ops follow
     const want: Record<string, [string[], string, string]> = {
       app_upload: [['app', 'upload'], 'command', 'mutate'],
       app_deploy: [['app', 'install'], 'job', 'mutate'],
