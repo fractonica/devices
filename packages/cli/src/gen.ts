@@ -5,8 +5,9 @@
 import { existsSync, readdirSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 
-import { findSourceDir } from '@fractonica/host';
 import { FrError, type Result } from '@fractonica/protocol';
+
+import { resolveSourceDir } from './source.ts';
 
 type Codegen = typeof import('@fractonica/codegen');
 
@@ -26,7 +27,7 @@ const ok = (data: unknown): Result => ({ ok: true, data, cursor: '' });
 const failed = (e: unknown, codegen: Codegen): Result => ({ ok: false, cursor: '', error: toError(e, codegen).toToolError() });
 
 function sourceDir(cwd: string): string {
-  const src = findSourceDir(cwd);
+  const src = resolveSourceDir(cwd);
   if (!src) {
     throw new FrError('INVALID_SOURCE', `${cwd} is not inside a Fractonica checkout`, { remediation: [{ human: 'cd into the repo' }] });
   }

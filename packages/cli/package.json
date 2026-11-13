@@ -4,7 +4,7 @@
   "private": true,
   "license": "Apache-2.0",
   "type": "module",
-  "bin": { "fr": "./src/main.ts" },
+  "bin": { "fr": "./bin/fr.mjs" },
   "exports": {
     ".": { "@fractonica/source": "./src/main.ts", "default": "./dist/main.js" }
   },

@@ -8,7 +8,7 @@
     "node": ">=24.12"
   },
   "scripts": {
-    "fr": "node --conditions=@fractonica/source packages/cli/src/main.ts",
+    "fr": "node packages/cli/bin/fr.mjs",
     "hub": "node --conditions=@fractonica/source packages/hub/src/main.ts --foreground",
     "typecheck": "tsc -p tsconfig.json && tsc -p packages/dashboard && tsc -p web/bench",
     "test": "vitest run",

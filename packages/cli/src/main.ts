@@ -4,13 +4,12 @@
 // `fr codegen client`, `fr display window` (design m2-c5-display D6) and `fr audio record|play|tone` (design
 // audio-a1 D9) are hand-written in their own modules (design c6 §3.3).
 
-import { dirname, resolve as resolvePath } from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { resolve as resolvePath } from 'node:path';
 
 import { Command, CommanderError, InvalidArgumentError, Option } from 'commander';
 import { z } from 'zod';
 
-import { findSourceDir, runDoctor, type HubSelfTests } from '@fractonica/host';
+import { runDoctor, type HubSelfTests } from '@fractonica/host';
 import { cliFlag, findOp, MAX_WAIT_S, OPS, REGISTRY_HASH, type ErrorCode, type OpDef, type Result } from '@fractonica/protocol';
 
 import { callTimeoutMs, hubCall, hubHealth } from './client.ts';
@@ -25,6 +24,7 @@ import { addAppDeployCommand } from './app-deploy.ts';
 import { addMcpCommand } from './mcp.ts';
 import { cliExitCode, renderChecks, renderResult } from './render.ts';
 import { addSerialCommands, SERIAL_OPS } from './serial.ts';
+import { resolveSourceDir, sourceDirFor } from './source.ts';
 
 const program = new Command('fr')
   .description('Fractonica: build, flash, monitor and drive ESP32 device networks')
@@ -170,9 +170,9 @@ async function invoke(op: OpDef, input: Record<string, unknown>, follow: boolean
     }
   }
   if ('source_dir' in shape && input.source_dir === undefined) {
-    const src = findSourceDir(process.cwd());
+    const src = resolveSourceDir();
     if (!src) {
-      return fail('INVALID_SOURCE', `${process.cwd()} is not inside a Fractonica checkout`, op.name, [{ human: 'cd into the repo or pass --source-dir' }]);
+      return fail('INVALID_SOURCE', `${process.cwd()} is not inside a Fractonica checkout, and neither is this fr`, op.name, [{ human: 'cd into the repo or pass --source-dir' }]);
     }
     input.source_dir = src;
   }
@@ -316,9 +316,8 @@ program
       return r.ok ? ((r.data ?? null) as HubSelfTests | null) : null;
     };
     // Outside a checkout (the shim runs from anywhere), the checks are about the checkout this CLI runs from.
-    const here = findSourceDir(process.cwd());
-    const sourceDir = here ?? findSourceDir(dirname(fileURLToPath(import.meta.url)));
-    const checks = await runDoctor({ sourceDir, sourceFrom: here ? 'cwd' : 'cli', fix: Boolean(opts.fix), hub: hubSelfTests });
+    const src = sourceDirFor();
+    const checks = await runDoctor({ sourceDir: src?.dir ?? null, sourceFrom: src?.from ?? 'cwd', fix: Boolean(opts.fix), hub: hubSelfTests });
     const ok = !checks.some((c) => c.level === 'error');
     await exit(ok ? 0 : 1, (isJson() ? JSON.stringify({ ok, data: { checks }, cursor: '' }) : renderChecks(checks)) + '\n');
   });

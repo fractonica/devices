@@ -14,10 +14,10 @@ import { join, relative, resolve } from 'node:path';
 
 import type { Command } from 'commander';
 
-import { findSourceDir } from '@fractonica/host';
 import { RENDERER_BIN, RENDERER_BUILD, RENDERER_SOURCES, type Result } from '@fractonica/protocol';
 
 import type { CliKit } from './kit.ts';
+import { resolveSourceDir } from './source.ts';
 
 /** The op whose result shape this command answers with (display_render's, plus `errors`). */
 const OP = 'display_render';
@@ -204,9 +204,9 @@ export function addDisplayWindowCommand(display: Command, kit: CliKit): void {
     .option('--script <file>', 'JSON lines {"cmd": .., "args": {..}} drawn first (tools/display/README.md)')
     .option('--out <png>', 'the PNG of the last frame, written when the window closes (default: a temp file)')
     .action(async (opts: { profile: string; instance?: string; script?: string; out?: string }) => {
-      const src = findSourceDir(process.cwd());
+      const src = resolveSourceDir();
       if (!src) {
-        return kit.fail('INVALID_SOURCE', `${process.cwd()} is not inside a Fractonica checkout`, OP, [{ human: 'cd into the repo' }]);
+        return kit.fail('INVALID_SOURCE', `${process.cwd()} is not inside a Fractonica checkout, and neither is this fr`, OP, [{ human: 'cd into the repo' }]);
       }
       const tmp = opts.script === undefined || opts.out === undefined ? mkdtempSync(join(tmpdir(), 'fr-display-window-')) : '';
       const script = opts.script === undefined ? join(tmp, 'empty.jsonl') : resolve(opts.script);
