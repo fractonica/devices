@@ -31,6 +31,7 @@ import { resolveOne } from '../registry/hub.ts';
 import type { PortCap } from '../router/caps.ts';
 import { routerInfo } from '../router/index.ts';
 import { type CommandOutcome, instancesOf, sendCommandTo } from '../router/ops.ts';
+import { guarded } from '../crash.ts';
 
 export const SCALE_CAP = 'fr.scale';
 /** A command's RESULT (tare, calibrate, read, watch_start, watch_stop). */
@@ -291,12 +292,12 @@ async function watchJob(hub: HubContext, ctx: JobCtx, req: WatchRequest): Promis
       req.running.rows = rows.length;
     }
   });
-  const flusher = setInterval(flush, FLUSH_MS);
+  const flusher = setInterval(guarded('scale.watch', flush), FLUSH_MS);
   const t0Wall = Date.now();
-  const tick = setInterval(() => {
+  const tick = setInterval(guarded('scale.watch', () => {
     const pct = Math.min(99, Math.round(((Date.now() - t0Wall) / (req.seconds * 1000)) * 100));
     ctx.progress(pct, `${rows.length} samples${rows.length ? `, last ${(rows[rows.length - 1].weight_mg / 1000).toFixed(1)} g` : ''}`);
-  }, 1000);
+  }), 1000);
   let reason: ScaleWatchReason = 'done';
   try {
     ctx.stage('watch_start');

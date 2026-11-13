@@ -19,6 +19,7 @@ import { fenceLease } from '../fixture/fence.ts';
 import { attachedPort, isDeviceId, presenceOf, registryOf } from '../registry/hub.ts';
 import { nowUs } from '../ring.ts';
 import { holderText } from './holders.ts';
+import { guarded } from '../crash.ts';
 
 export const SWEEP_MS = 1000;
 /** A leased port absent this long is gone (unplugged), not re-enumerating after a chip reset. */
@@ -171,7 +172,7 @@ export function createLeases(hub: () => HubContext, _run: HubRunOptions, deps: L
       if (h.portHolders) {
         h.serial.useHolders?.(h.portHolders);
       }
-      timer = setInterval(sweep, deps.sweepMs ?? SWEEP_MS);
+      timer = setInterval(guarded('leases.sweep', sweep), deps.sweepMs ?? SWEEP_MS);
       timer.unref();
     },
 

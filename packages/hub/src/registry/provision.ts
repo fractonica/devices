@@ -30,6 +30,7 @@ import { isDeviceId, registryOf } from './hub.ts';
 import { identNet, type PytoolsRunner, renderIdent, type RenderedIdent } from './ident.ts';
 import { checkAlias } from './names.ts';
 import { aliasTaken, CHIP_IDS, markIdentWritten, prepareIdentity, type ProvisionRecord } from './store.ts';
+import { guarded } from '../crash.ts';
 
 /** How long the node has to say HELLO on serial after the reset, and to say it over TCP after that (06 §6.4). */
 export const SERIAL_HELLO_MS = 10_000;
@@ -155,7 +156,7 @@ function gatewayJoin(look: () => GatewayApStatus | null, sinceMs: number, ms: nu
     };
     const onAbort = () => done(signal.reason instanceof Error ? signal.reason : new FrError('INTERNAL', 'cancelled'));
     const timer = setTimeout(() => done(null), ms);
-    const poll = setInterval(check, 200);
+    const poll = setInterval(guarded('provision.hello_poll', check), 200);
     signal.addEventListener('abort', onAbort, { once: true });
     if (signal.aborted) {
       onAbort();
@@ -258,7 +259,7 @@ function watchHello(hub: HubContext, deviceId: string, portKey: string) {
         };
         const onAbort = () => done(signal.reason instanceof Error ? signal.reason : new FrError('INTERNAL', 'cancelled'));
         const timer = setTimeout(() => done(false), ms);
-        const poll = link === 'tcp' ? setInterval(check, 200) : undefined;
+        const poll = link === 'tcp' ? setInterval(guarded('provision.hello_poll', check), 200) : undefined;
         waiters.add(check);
         signal.addEventListener('abort', onAbort, { once: true });
         if (signal.aborted) {

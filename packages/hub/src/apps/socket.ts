@@ -35,6 +35,7 @@ import { type CommandOutcome, sendCommandTo } from '../router/ops.ts';
 import { type AppEventFrame, frameBytes } from './bridge.ts';
 import { appVisible } from './directory.ts';
 import { tokenMatches } from './token.ts';
+import { guarded } from '../crash.ts';
 
 export interface AppLimits {
   /** Bytes buffered on the socket before frames queue (256 KiB). */
@@ -246,7 +247,7 @@ export class AppSocket {
       this.close(4429, `more than ${this.#host.limits.maxQueued} frames queued`);
       return;
     }
-    this.#pump ??= setInterval(() => this.#drain(), PUMP_MS);
+    this.#pump ??= setInterval(guarded('apps.pump', () => this.#drain()), PUMP_MS);
   }
 
   ping(): void {

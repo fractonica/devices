@@ -16,6 +16,7 @@ import type { LnpState } from '@fractonica/protocol';
 
 import type { HubContext, HubRunOptions, Lnp, LnpStatus } from '../context.ts';
 import { nowUs } from '../ring.ts';
+import { guarded } from '../crash.ts';
 
 /** How often the self-test runs (08 §8.11). */
 export const LNP_INTERVAL_MS = 30_000;
@@ -121,7 +122,7 @@ export function createLnp(hub: () => HubContext, _run: HubRunOptions, opts: LnpO
   return {
     start() {
       void check();
-      timer = setInterval(() => void check(), opts.intervalMs ?? LNP_INTERVAL_MS);
+      timer = setInterval(guarded('lnp.check', () => void check()), opts.intervalMs ?? LNP_INTERVAL_MS);
       timer.unref();
     },
     stop() {

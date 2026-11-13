@@ -6,6 +6,7 @@
 // node links or HTTP behind one long DELETE.
 
 import { type Db, kvGet } from './db.ts';
+import { guarded } from './crash.ts';
 
 export interface Retention {
   days: number;
@@ -56,7 +57,7 @@ export class RingRetention {
     }
     const tick = () =>
       void this.prune().catch((e: Error) => console.error(JSON.stringify({ event: `${this.#table}_prune_failed`, message: e.message })));
-    this.#timers = [setTimeout(tick, PRUNE_FIRST_MS).unref(), setInterval(tick, PRUNE_EVERY_MS).unref()];
+    this.#timers = [setTimeout(tick, PRUNE_FIRST_MS).unref(), setInterval(guarded('ring.prune', tick), PRUNE_EVERY_MS).unref()];
   }
 
   stop(): void {

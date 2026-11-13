@@ -52,6 +52,7 @@ import { routerInfo } from '../router/index.ts';
 import { type CommandOutcome, instancesOf, sendCommandTo } from '../router/ops.ts';
 import type { AudioStreams, RecordEnd } from './streams.ts';
 import { probeWav, readWav, sweepWavTemps, toBoardPcm, WavError, type WavLayout } from './wav.ts';
+import { guarded } from '../crash.ts';
 
 /** A command's RESULT (stream_start, play, tone, set_volume, stop). */
 export const AUDIO_CMD_TIMEOUT_MS = 5000;
@@ -194,7 +195,7 @@ function publish(hub: HubContext, dev: Device, type: 'audio.stream_started' | 'a
 /** Ticks the job's progress once a second over `ms`; returns the stop. */
 function ticker(ctx: JobCtx, ms: number, what: string): () => void {
   const t0 = Date.now();
-  const t = setInterval(() => ctx.progress(Math.min(99, Math.round(((Date.now() - t0) / ms) * 100)), what), 1000);
+  const t = setInterval(guarded('audio.progress', () => ctx.progress(Math.min(99, Math.round(((Date.now() - t0) / ms) * 100)), what)), 1000);
   return () => clearInterval(t);
 }
 

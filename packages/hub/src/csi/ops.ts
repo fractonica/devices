@@ -44,6 +44,7 @@ import { normalizeMac } from '../serial.ts';
 import { CsiSink, sweepCsiTemps } from '../streams/csi-sink.ts';
 import { type LiveStream, liveStreams } from '../streams/live.ts';
 import type { StreamEndReason, StreamRoutes, StreamTicket } from '../streams/route.ts';
+import { guarded } from '../crash.ts';
 
 /** A command's RESULT (stream_start, stream_stop). */
 export const CSI_CMD_TIMEOUT_MS = 5000;
@@ -250,12 +251,12 @@ async function streamJob(hub: HubContext, ctx: JobCtx, req: CsiStreamRequest, p:
   const ended = nextCapEvent(hub, dev, `${inst.name}.stream_ended`, (f) => f.stream_id === id);
   const waiting = new AbortController(); // ends the deadline's timer once the stream ended sooner
   const t0 = Date.now();
-  const tick = setInterval(() => {
+  const tick = setInterval(guarded('csi.progress', () => {
     const c = sink.counts;
     const s = c.firstAt === null ? 0 : (Date.now() - c.firstAt) / 1000;
     const pct = req.seconds > 0 ? Math.min(99, Math.round(((Date.now() - t0) / (req.seconds * 1000)) * 100)) : 0;
     ctx.progress(pct, `${c.records} records, ${c.dropped} dropped, ${s > 0 ? (c.records / s).toFixed(1) : '0.0'}/s`);
-  }, 1000);
+  }), 1000);
   let started = false;
   let endFrame: { reason: CsiEndReason; records: number; dropped: number } = { reason: 'error', records: 0, dropped: 0 };
   try {

@@ -60,6 +60,7 @@ import { instancesOf, sendCommandTo } from '../router/ops.ts';
 import { JPEG_CHUNK_MAX_BYTES, jpegDimensions, JpegSink, sweepJpegTemps } from '../streams/jpeg-sink.ts';
 import { type LiveStream, liveStreams } from '../streams/live.ts';
 import type { StreamEndReason, StreamTicket } from '../streams/route.ts';
+import { guarded } from '../crash.ts';
 
 /** A command's RESULT (stream_start, stream_stop, set, sd_*). */
 export const CAMERA_CMD_TIMEOUT_MS = 5000;
@@ -339,12 +340,12 @@ async function streamJob(hub: HubContext, ctx: JobCtx, req: CameraStreamRequest,
   const ended = nextCapEvent(hub, dev, `${inst.name}.stream_ended`, (f) => f.stream_id === id);
   const waiting = new AbortController(); // ends the deadline's timer once the stream ended sooner
   const t0 = Date.now();
-  const tick = setInterval(() => {
+  const tick = setInterval(guarded('camera.progress', () => {
     const c = sink.counts;
     const s = c.firstAt === null ? 0 : (Date.now() - c.firstAt) / 1000;
     const pct = req.seconds > 0 ? Math.min(99, Math.round(((Date.now() - t0) / (req.seconds * 1000)) * 100)) : req.maxFrames > 0 ? Math.min(99, Math.round((c.records / req.maxFrames) * 100)) : 0;
     ctx.progress(pct, `${c.records} frames, ${c.dropped} dropped, ${Math.round(c.bytes / 1024)} KB${s > 0 ? `, ${(c.records / s).toFixed(1)} fps` : ''}`);
-  }, 1000);
+  }), 1000);
   let started = false;
   let lit = false;
   let endFrame: EndFrame = { reason: 'error', records: 0, dropped: 0, bytes: 0 };

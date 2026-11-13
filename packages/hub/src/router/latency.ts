@@ -7,6 +7,7 @@
 import { performance } from 'node:perf_hooks';
 
 import { Histogram, type HistogramView } from './scale.ts';
+import { guarded } from '../crash.ts';
 
 /** What a device's samples are of. */
 export type LatencyMetric = 'ping' | 'input' | 'binding';
@@ -185,7 +186,7 @@ export class LoopMonitor {
       return;
     }
     this.#last = this.#secondAt = performance.now();
-    this.#timer = setInterval(() => this.#probe(), PROBE_MS);
+    this.#timer = setInterval(guarded('latency.probe', () => this.#probe()), PROBE_MS);
     this.#timer.unref();
   }
 

@@ -15,6 +15,7 @@ import type { HubContext } from '../context.ts';
 import type { JobChange } from '../jobs.ts';
 import { nowUs } from '../ring.ts';
 import { type LoopDelay, routerLoopDelay } from '../router/index.ts';
+import { guarded } from '../crash.ts';
 
 /** D29: a p99 above this (ms) over the last minute is a warning. */
 export const LOOP_DELAY_WARN_MS = 5;
@@ -121,7 +122,7 @@ export function createFeeds(hub: () => HubContext, opts: FeedOptions = {}): Feed
       if (typeof jobs?.onChange === 'function') {
         offs.push(jobs.onChange(jobChanged));
       }
-      loopTimer = setInterval(checkLoop, opts.loopCheckMs ?? LOOP_CHECK_MS);
+      loopTimer = setInterval(guarded('feeds.loop_check', checkLoop), opts.loopCheckMs ?? LOOP_CHECK_MS);
       loopTimer.unref();
     },
     stop() {

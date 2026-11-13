@@ -23,6 +23,7 @@ import type { PortCap } from '../router/caps.ts';
 import { instancesOf } from '../router/ops.ts';
 import { addSample, cellById, closeSessionRow, curveOf, installAt, jsonOf, openInstalls, openSessionRow, orphanSessions, pruneSamples, samplesCurve, SAMPLES_KEEP_MS, sessionRow, type SessionRow } from './cells.ts';
 import { chargerActions, chargerName, keepSample, levelActions, levelName, type OpenSession, type Sample, type SessionAction } from './learn.ts';
+import { guarded } from '../crash.ts';
 
 export const BATTERY_CAP = 'fr.battery';
 export const HAPTIC_CAP = 'fr.haptic';
@@ -117,7 +118,7 @@ export class CellTracker {
         this.#dropPending(p);
       }
     }, this.#o.resumeWindowMs);
-    const prune = setInterval(() => this.#prune(), this.#o.pruneEveryMs);
+    const prune = setInterval(guarded('power.prune', () => this.#prune()), this.#o.pruneEveryMs);
     resume.unref?.();
     prune.unref?.();
     this.#timers = [resume, prune];

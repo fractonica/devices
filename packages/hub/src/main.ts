@@ -14,6 +14,7 @@ import { sweepAudioTempsAtStart } from './audio/ops.ts';
 import { sweepJpegTempsAtStart } from './camera/ops.ts';
 import { sweepCsiTempsAtStart } from './csi/ops.ts';
 import { createBindings } from './bindings/index.ts';
+import { guarded, installCrashHandlers, stopBackstop } from './crash.ts';
 import type { HubContext, HubRunOptions } from './context.ts';
 import { nextHubEpoch, nextHubRun, openDb } from './db.ts';
 import { createEvents } from './events/index.ts';
@@ -53,7 +54,13 @@ function arg(name: string, fallback: string): string {
   return i >= 0 && process.argv[i + 1] ? process.argv[i + 1] : fallback;
 }
 
+/** What an uncaught exception still writes before the exit: set once the stores exist. */
+let crashFlush: (() => void) | null = null;
+
 async function main(): Promise<void> {
+  // First: an uncaught exception from here on is logged, the queued rows are written, and the exit is non-zero (70);
+  // an unhandled rejection is logged and the hub keeps running.
+  installCrashHandlers({ flush: () => crashFlush?.() });
   const port = Number(arg('--port', String(HUB_API_PORT)));
   // TCP and UDP for node links, and the node HTTP port (spec 08 §8.10). Other values only for a second
   // hub in a test setup (with FR_HOME elsewhere): `--node-host 127.0.0.1` keeps it to loopback FakeNodes,
@@ -127,6 +134,15 @@ async function main(): Promise<void> {
   const jobs = new JobRunner(db);
   const registry = createRegistry(db);
   const events = createEvents(db, seq, run);
+  crashFlush = () => {
+    for (const step of [() => events.stop(), () => logs.close(), () => db.close()]) {
+      try {
+        step();
+      } catch {
+        // the crash is what gets logged; a store that cannot be written now stays as it is
+      }
+    }
+  };
   const eventsRing = new RingRetention(db, 'events', () => seq.head());
   const sleepGuard = new SleepGuard();
   // The Mac stays awake while a node session is up or an OTA job runs (design c4 §4): an OTA's node may
@@ -181,7 +197,7 @@ async function main(): Promise<void> {
     pytools = await pytoolsStatus().catch(() => null);
   };
   await refreshEnv();
-  const envTimer = setInterval(() => void refreshEnv().catch(() => undefined), 60_000);
+  const envTimer = setInterval(guarded('env.refresh', refreshEnv), 60_000);
 
   // The C6 parts (design c6 §3.3), each from the module its stream owns; they reach the rest through `hub`.
   const ctx = () => hub;
@@ -272,8 +288,9 @@ async function main(): Promise<void> {
     }
     stopping = true;
     console.log(JSON.stringify({ event: 'stopping', signal }));
-    // Backstop: a close that hangs must not keep the address and the ports from the next hub.
-    setTimeout(() => process.exit(0), 5000).unref();
+    // Backstop: a close that hangs must not keep the address and the ports from the next hub. It exits 1 (and logs
+    // stop_forced), so a hang is not mistaken for a clean stop.
+    stopBackstop(5000);
     clearInterval(envTimer);
     // Jobs still running here (`fr hub stop --force`, or a signal from elsewhere) are aborted: that
     // kills their build groups and sidecars, and lets them record "cancelled" while the db is open.

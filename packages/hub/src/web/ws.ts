@@ -48,6 +48,7 @@ import { nowUs } from '../ring.ts';
 import { routerInfo } from '../router/index.ts';
 import type { WsStatsView } from '../router/scale.ts';
 import { createFeeds, type FeedOptions, PORT_EVENT_TYPES } from './feeds.ts';
+import { guarded } from '../crash.ts';
 
 /** What the server needs of a client socket: ws's WebSocket, or a test's fake. */
 export interface WsSocket {
@@ -191,7 +192,7 @@ export class WsHub {
     const c = new Client(sock, head);
     this.#clients.add(c);
     this.#out(sock, JSON.stringify({ t: 'hello', v: 1, run: hub.logs.run, head: mintCursor(hub), version: HUB_VERSION, registry_hash: REGISTRY_HASH, t_hub_us: nowUs() }));
-    this.#tick ??= setInterval(() => this.#onTick(), this.#limits.logBatchMs);
+    this.#tick ??= setInterval(guarded('ws.tick', () => this.#onTick()), this.#limits.logBatchMs);
     this.#tick.unref();
     return {
       message: (text) => this.#message(c, text),

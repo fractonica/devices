@@ -24,6 +24,7 @@ import type { Db } from '../db.ts';
 import { nowUs } from '../ring.ts';
 import { WindowStat } from '../router/scale.ts';
 import { matchTypes, sqliteGlob } from './match.ts';
+import { guarded } from '../crash.ts';
 
 export { matchType, matchTypes, matchWhere, parseTypes } from './match.ts';
 
@@ -115,7 +116,7 @@ export class EventStore implements Events, Lifecycle {
 
   #queue(row: Row): void {
     this.#pending.push(row);
-    this.#timer ??= setTimeout(() => this.flush(), FLUSH_MS);
+    this.#timer ??= setTimeout(guarded('events.flush', () => this.flush()), FLUSH_MS);
   }
 
   /** A STATE row (D6): queued now when its key has no window open, else the window's pending row. */

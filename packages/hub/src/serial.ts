@@ -17,6 +17,7 @@ import { bridgeName, FrError, type PortHolder, type PortInfo, type PortLease, SE
 import { SerialPort } from 'serialport';
 
 import type { PortHolders } from './context.ts';
+import { errorFields, guarded } from './crash.ts';
 import type { Db } from './db.ts';
 import type { SerialBinding } from './links/serial-bridge.ts';
 import type { LogStore } from './logstore.ts';
@@ -142,6 +143,7 @@ export class SerialPortManager {
   #db: Db;
   #timer: NodeJS.Timeout | null = null;
   #polling = false;
+  #pollFailures = 0;
   #lastPoll = 0;
   /** When the last poll listed the ports (the `now` its lastSeen updates carry); 0 before the first. */
   #polledAt = 0;
@@ -185,7 +187,7 @@ export class SerialPortManager {
 
   start(): void {
     void this.poll();
-    this.#timer = setInterval(() => void this.poll(), POLL_MS);
+    this.#timer = setInterval(guarded('serial.poll', () => this.poll()), POLL_MS);
   }
 
   async stop(): Promise<void> {
@@ -321,9 +323,22 @@ export class SerialPortManager {
         }
       }
       this.#changed();
+    } catch (err) {
+      // SerialPort.list(), a close or the ports_seen insert failed: logged, and the next poll (500 ms) tries again.
+      // poll() runs from a timer and from close handlers: a rejection here would be unhandled.
+      // The first few in full, then one line a minute while it keeps failing.
+      this.#pollFailures++;
+      if (this.#pollFailures <= 3 || this.#pollFailures % 120 === 0) {
+        console.error(JSON.stringify({ event: 'serial_poll_failed', failures: this.#pollFailures, ...errorFields(err) }));
+      }
     } finally {
       this.#polling = false;
     }
+  }
+
+  /** Polls that failed since start (logged as serial_poll_failed). */
+  get pollFailures(): number {
+    return this.#pollFailures;
   }
 
   #open(e: Entry): void {

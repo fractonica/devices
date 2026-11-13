@@ -22,6 +22,7 @@ import { appVisible, capsSignature, ManifestCache, provisionedDevices, registryR
 import { AppSocket, type AppLimits, resumeSeq } from './socket.ts';
 import { StreamSocket } from './stream.ts';
 import { type AppTokenSource, loadAppToken } from './token.ts';
+import { guarded } from '../crash.ts';
 
 /** `hello.resume` (D8): at most this many missed events are replayed, none older than this. */
 export const REPLAY_MAX = 1000;
@@ -227,14 +228,14 @@ export function createAppServer(hub: () => HubContext, _run: HubRunOptions, opts
       readToken();
       // D7: the first subscriber of the bus (main.ts starts this part before anything else subscribes).
       off = hub().events.subscribe(onEvent);
-      pinger = setInterval(() => {
+      pinger = setInterval(guarded('apps.ping', () => {
         for (const s of sockets) {
           s.ping();
         }
         for (const s of streams) {
           s.ping();
         }
-      }, limits.pingMs);
+      }), limits.pingMs);
       pinger.unref();
     },
     async stop() {

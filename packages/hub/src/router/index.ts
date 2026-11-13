@@ -112,6 +112,7 @@ import { BINDING_PATHS, type DeviceLatency, LatencyRecorder, type LoopDelay, Loo
 import { ReorderBuffer, type ReorderCounters } from './reorder.ts';
 import { createScaleCounters, HIST_BOUNDS, type ScaleCounters, type ScaleView, type ScaleWindows, scaleWindows } from './scale.ts';
 import { cmp16, cmp32, ReplayWindow } from './window.ts';
+import { guarded } from '../crash.ts';
 
 /** Timing rules (spec 05 §5.11, §5.17; design c3 §6); tests shorten them. */
 export interface RouterConfig {
@@ -778,7 +779,7 @@ export class HubRouter implements Router, HubBroadcast, Lifecycle, LinkSink {
     this.#floodTokens = this.#cfg.floodBurst;
     this.#floodAt = this.#clock.now();
     this.#loop.start();
-    this.#ticker = setInterval(() => this.tick(), this.#cfg.tickMs);
+    this.#ticker = setInterval(guarded('router.tick', () => this.tick()), this.#cfg.tickMs);
     this.#ticker.unref();
   }
 

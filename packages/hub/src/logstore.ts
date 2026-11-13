@@ -24,6 +24,7 @@ import type { FrameDecoder } from './frames.ts';
 import { nowUs, RING_RETENTION, RingRetention, type Retention } from './ring.ts';
 import { scaleWindows } from './router/scale.ts';
 import { CursorSeq } from './seq.ts';
+import { guarded } from './crash.ts';
 
 export { nowUs } from './ring.ts';
 
@@ -323,7 +324,7 @@ export class LogStore {
       this.#sets(device)[source].add(key, this.#now(), line);
     }
     this.#pending.push(line);
-    this.#timer ??= setTimeout(() => this.flush(), 50);
+    this.#timer ??= setTimeout(guarded('logs.flush', () => this.flush()), 50);
     for (const fn of this.#listeners) {
       fn(line);
     }

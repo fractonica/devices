@@ -22,6 +22,7 @@ import { humanPrompt, type WaitPrompt } from '../prompts.ts';
 import { nowUs } from '../ring.ts';
 import { CapDirectory, instanceNamed, type PortCap } from './caps.ts';
 import { routerInfo, routerInstances } from './index.ts';
+import { guarded } from '../crash.ts';
 
 const isUp = (p: Presence) => p === 'online' || p === 'suspect';
 /** HELLO caps b4 (05 §5.7). */
@@ -602,7 +603,7 @@ export const LINKS_HANDLERS: Record<LinksOpName, Handler> = {
           wake = resolve;
           timer = setTimeout(resolve, input.timeout_s * 1000);
           // Presence changes publish events; this only catches a firmware id the registry learns late.
-          poll = setInterval(() => all() && resolve(), 250);
+          poll = setInterval(guarded('wait_for_state.poll', () => all() && resolve()), 250);
         });
       }
     } finally {

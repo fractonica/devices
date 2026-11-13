@@ -30,6 +30,7 @@ import { htmlSecurityHeaders } from './guard.ts';
 import { openApiDocument } from './openapi.ts';
 import { diagramPath, IMAGE_TYPES, partImagePath } from '../wiring/catalog.ts';
 import { catalogOf } from '../wiring/ops.ts';
+import { guarded } from '../crash.ts';
 
 /** How often the dashboard's source hash is recomputed for hub_status. */
 const STALE_CHECK_MS = 30_000;
@@ -149,7 +150,7 @@ export function createStaticSite(hub: () => HubContext, run: HubRunOptions, opts
   return {
     async start() {
       await refresh();
-      timer = setInterval(() => void refresh(), STALE_CHECK_MS);
+      timer = setInterval(guarded('static.stale_check', () => void refresh()), STALE_CHECK_MS);
       timer.unref();
     },
     stop() {
