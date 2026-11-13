@@ -6,6 +6,7 @@
   "type": "module",
   "exports": {
     ".": { "@fractonica/source": "./src/index.ts", "default": "./dist/index.js" },
-    "./vendor": { "@fractonica/source": "./src/vendor.ts", "default": "./dist/vendor.js" }
+    "./vendor": { "@fractonica/source": "./src/vendor.ts", "default": "./dist/vendor.js" },
+    "./browser": { "@fractonica/source": "./src/browser.ts", "default": "./dist/browser.js" }
   }
 }

@@ -9,7 +9,7 @@ import { fileURLToPath } from 'node:url';
 
 import { afterEach, describe, expect, it } from 'vitest';
 
-import { checkVendor, readLock } from '@fractonica/time/vendor';
+import { checkTokens, checkVendor, readLock, TOKENS_DIR } from '@fractonica/time/vendor';
 
 const PKG = join(dirname(fileURLToPath(import.meta.url)), '..');
 
@@ -28,8 +28,11 @@ function scratch(web: boolean): { repo: string; web: string } {
   mkdirSync(join(repo, 'packages', 'time'), { recursive: true });
   cpSync(join(PKG, 'time.lock'), join(repo, 'packages', 'time', 'time.lock'));
   cpSync(join(PKG, 'vendor'), join(repo, 'packages', 'time', 'vendor'), { recursive: true });
+  cpSync(join(PKG, '..', '..', TOKENS_DIR), join(repo, TOKENS_DIR), { recursive: true });
   const webDir = join(work, 'web');
   if (web) {
+    mkdirSync(join(webDir, 'public', 'app', 'design'), { recursive: true });
+    cpSync(join(PKG, '..', '..', TOKENS_DIR, 'tokens.js'), join(webDir, 'public', 'app', 'design', 'tokens.js'));
     mkdirSync(join(webDir, 'public', 'lib'), { recursive: true });
     cpSync(join(PKG, 'vendor', 'fractonica.wasm'), join(webDir, 'public', 'fractonica.wasm'));
     cpSync(join(PKG, 'vendor', 'lib', 'fractonica.js'), join(webDir, 'public', 'lib', 'fractonica.js'));
@@ -76,5 +79,32 @@ describe('the vendored core against time.lock and ../web', () => {
     expect(lock.web.commit).toBe(execFileSync('git', ['-C', web, 'rev-parse', 'HEAD'], { encoding: 'utf8' }).trim());
     expect(lock.files['vendor/lib/fractonica.js'].sha256).not.toBe(readLock(join(PKG, '..', '..')).files['vendor/lib/fractonica.js'].sha256);
     expect(await checkVendor(repo)).toMatchObject({ stale: [], written: [] });
+  });
+});
+
+describe('the dashboard tokens against tokens.lock and ../web', () => {
+  it('are in step in this checkout', () => {
+    expect(checkTokens(join(PKG, '..', '..')).stale).toEqual([]);
+  });
+
+  it('a hand edit is stale; drift from ../web is reported, and a write copies the file in and rewrites the lock', () => {
+    const { repo, web } = scratch(true);
+    expect(checkTokens(repo)).toMatchObject({ web: '../web', stale: [], written: [] });
+    appendFileSync(join(repo, TOKENS_DIR, 'tokens.js'), '\n');
+    expect(checkTokens(repo).stale).toEqual([`${TOKENS_DIR}/tokens.js (differs from ../web/public/app/design/tokens.js)`]);
+    // the write restores the web's file: the edit was the drift
+    expect(checkTokens(repo, { write: true }).written).toEqual([`${TOKENS_DIR}/tokens.js`, `${TOKENS_DIR}/tokens.lock`]);
+    expect(checkTokens(repo).stale).toEqual([]);
+    appendFileSync(join(web, 'public', 'app', 'design', 'tokens.js'), '// a newer table\n');
+    const write = checkTokens(repo, { write: true });
+    expect(write.written).toEqual([`${TOKENS_DIR}/tokens.js`, `${TOKENS_DIR}/tokens.lock`]);
+    expect(readFileSync(join(repo, TOKENS_DIR, 'tokens.js'), 'utf8')).toContain('a newer table');
+    expect(checkTokens(repo)).toMatchObject({ stale: [], written: [] });
+  });
+
+  it('without ../web: a hand edit is stale against the lock', () => {
+    const { repo } = scratch(false);
+    appendFileSync(join(repo, TOKENS_DIR, 'tokens.js'), '\n');
+    expect(checkTokens(repo).stale).toEqual([`${TOKENS_DIR}/tokens.js (sha256 differs from tokens.lock)`]);
   });
 });

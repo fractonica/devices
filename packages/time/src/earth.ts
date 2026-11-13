@@ -8,7 +8,7 @@
 
 import { CivilForm } from '../vendor/lib/fractonica.js';
 import type { CivilForm as CivilFormValue } from '../vendor/lib/fractonica.js';
-import type { Core } from './core.ts';
+import type { Core } from './core-types.ts';
 
 /** The Earth sign that leads every translation shown beside Fractonica notation. */
 export const EARTH_SIGN = '⊕';

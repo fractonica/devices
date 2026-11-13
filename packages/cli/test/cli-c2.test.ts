@@ -36,6 +36,7 @@ vi.mock('@fractonica/time/vendor', () => ({
     h.vendor.push({ sourceDir, ...opts });
     return { lock: 'packages/time/time.lock', web: null, stale: h.vendorStale, written: [], core: '0.2.0', spec: '2.2.0' };
   },
+  checkTokens: () => ({ lock: 'packages/dashboard/src/design/tokens.lock', web: null, stale: [], written: [] }),
 }));
 
 vi.mock('@fractonica/codegen', async (importOriginal) => ({

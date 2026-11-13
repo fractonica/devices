@@ -16,8 +16,8 @@
 //   2026-10-08 12:00            offset it is read in the local time zone of the machine
 
 import { Quarter } from '../vendor/lib/fractonica.js';
-import type { Core } from './core.ts';
-import { CoreError } from './core.ts';
+import type { Core } from './core-types.ts';
+import { CoreError } from './core-types.ts';
 import { EARTH_SIGN } from './earth.ts';
 import { TimeError } from './errors.ts';
 

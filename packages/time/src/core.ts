@@ -8,15 +8,10 @@
 
 import { readFileSync } from 'node:fs';
 
-import { type Catalogue, type Fractonica, FractonicaError, load } from '../vendor/lib/fractonica.js';
+import { load } from '../vendor/lib/fractonica.js';
+import type { Core } from './core-types.ts';
 
-export { FractonicaError as CoreError };
-
-/** The loaded core and the catalogue every reading uses (Saros 141, design ruling 8). */
-export interface Core {
-  frc: Fractonica;
-  cat: Catalogue;
-}
+export { type Core, CoreError } from './core-types.ts';
 
 /** Where the module is: vendor/fractonica.wasm, beside vendor/lib/ as in the web repository's public/. */
 export const WASM_URL = new URL('../vendor/fractonica.wasm', import.meta.url);

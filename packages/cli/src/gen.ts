@@ -37,7 +37,8 @@ function sourceDir(cwd: string): string {
 /**
  * `fr gen [--check]`: every committed output (C++ and TS codecs, catalog, schemas, golden vectors), and the vendored
  * temporal core (packages/time: its files against time.lock, and against ../web when that checkout is beside this
- * one; a write copies the web's files in and rewrites the lock).
+ * one; a write copies the web's files in and rewrites the lock), and the dashboard's design tokens the same way
+ * (packages/dashboard/src/design/tokens.js against tokens.lock and ../web).
  * With `check`, stale files make a failed Result without an error, which exits 1 like `fr doctor`.
  * Both first validate the HIL bench files (hardware/bench/*.bench.yaml, design m2-c1-hil D7) against the
  * boards and profiles: a bad bench is INVALID_SOURCE with every issue, like a bad schema, and the
@@ -49,8 +50,12 @@ export async function genAll(opts: { check: boolean; cwd: string }): Promise<Res
     const src = sourceDir(opts.cwd);
     const r = await codegen.generateAll({ sourceDir: src, check: opts.check });
     // The vendored temporal core (packages/time): its files against time.lock, and against ../web when it is there.
-    const { checkVendor } = await import('@fractonica/time/vendor');
+    const { checkTokens, checkVendor } = await import('@fractonica/time/vendor');
     const t = await checkVendor(src, { write: !opts.check });
+    // The dashboard's design tokens (packages/dashboard/src/design/tokens.js), the same way against tokens.lock.
+    const k = checkTokens(src, { write: !opts.check });
+    t.stale.push(...k.stale);
+    t.written.push(...k.written);
     const stale = [...r.stale, ...t.stale];
     const time = { core: t.core, spec: t.spec, compared_with: t.web ?? 'time.lock only (no ../web checkout)' };
     const data = opts.check

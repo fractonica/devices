@@ -12,8 +12,8 @@
 //   zone or Earth unit anywhere in it.
 
 import { DateForm, LevelKind, PentadForm, Quarter, Unit } from '../vendor/lib/fractonica.js';
-import type { Core } from './core.ts';
-import { CoreError } from './core.ts';
+import type { Core } from './core-types.ts';
+import { CoreError } from './core-types.ts';
 import { dateLine, dayMonthSeconds, duration, isoLocal, isoUtc, nextCivilSecond, signedDuration, when, zoneName } from './earth.ts';
 import { TimeError } from './errors.ts';
 import { type Clock, clockLevels, inCatalogue, nowOf, type ParsedInstant, parseLevel, parseQuarter, toInstant } from './instant.ts';

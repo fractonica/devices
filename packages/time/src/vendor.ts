@@ -67,17 +67,21 @@ async function moduleVersions(pkg: string): Promise<{ core: string; spec: string
   return { core: frc.version, spec: frc.specVersion };
 }
 
-/** Compares the vendored files with the lock and with `../web`; with `write`, brings them in step. */
-export async function checkVendor(sourceDir: string, opts: { write?: boolean } = {}): Promise<VendorResult> {
-  const pkg = join(sourceDir, TIME_DIR);
-  const lock = readLock(sourceDir);
-  const web = webCheckout(sourceDir);
+/** A lock's `files` against the vendored copies under `pkg` and their sources in `web`, as checkVendor describes. */
+function syncFiles(
+  pkg: string,
+  pkgRel: string,
+  files: Record<string, { from: string; sha256: string }>,
+  web: string | null,
+  write: boolean,
+  lockName: string,
+): { stale: string[]; written: string[]; lockChanged: boolean } {
   const stale: string[] = [];
   const written: string[] = [];
   let lockChanged = false;
-  for (const [rel, entry] of Object.entries(lock.files)) {
+  for (const [rel, entry] of Object.entries(files)) {
     const vendored = join(pkg, rel);
-    const path = `${TIME_DIR}/${rel}`;
+    const path = `${pkgRel}/${rel}`;
     if (web) {
       const source = join(web, entry.from);
       if (!existsSync(source)) {
@@ -86,7 +90,7 @@ export async function checkVendor(sourceDir: string, opts: { write?: boolean } =
       }
       const same = existsSync(vendored) && sha256(source) === sha256(vendored);
       if (!same) {
-        if (opts.write) {
+        if (write) {
           copyFileSync(source, vendored);
           written.push(path);
         } else {
@@ -101,14 +105,25 @@ export async function checkVendor(sourceDir: string, opts: { write?: boolean } =
     }
     const hash = sha256(vendored);
     if (hash !== entry.sha256) {
-      if (opts.write && web) {
+      if (write && web) {
         entry.sha256 = hash;
         lockChanged = true;
       } else {
-        stale.push(`${path} (sha256 differs from time.lock)`);
+        stale.push(`${path} (sha256 differs from ${lockName})`);
       }
     }
   }
+  return { stale, written, lockChanged };
+}
+
+/** Compares the vendored files with the lock and with `../web`; with `write`, brings them in step. */
+export async function checkVendor(sourceDir: string, opts: { write?: boolean } = {}): Promise<VendorResult> {
+  const pkg = join(sourceDir, TIME_DIR);
+  const lock = readLock(sourceDir);
+  const web = webCheckout(sourceDir);
+  const synced = syncFiles(pkg, TIME_DIR, lock.files, web, Boolean(opts.write), 'time.lock');
+  const { stale, written } = synced;
+  let lockChanged = synced.lockChanged;
   const versions = stale.length ? { core: lock.core, spec: lock.spec } : await moduleVersions(pkg);
   if (!stale.length && (versions.core !== lock.core || versions.spec !== lock.spec)) {
     if (opts.write && web) {
@@ -125,4 +140,41 @@ export async function checkVendor(sourceDir: string, opts: { write?: boolean } =
     written.push(LOCK_FILE);
   }
   return { lock: LOCK_FILE, web: web ? '../web' : null, stale, written, core: versions.core, spec: versions.spec };
+}
+
+// ------------------------------------------------------------------------------------------------------------------
+// The dashboard's design tokens (packages/dashboard/src/design/tokens.js): the web repository's
+// public/app/design/tokens.js byte for byte, pinned by tokens.lock beside it, checked and refreshed the same way.
+
+export const TOKENS_DIR = 'packages/dashboard/src/design';
+export const TOKENS_LOCK_FILE = `${TOKENS_DIR}/tokens.lock`;
+
+export interface TokensLock {
+  schema: 'fractonica.tokens-lock/1';
+  web: { repository: string; commit: string };
+  files: Record<string, { from: string; sha256: string }>;
+}
+
+export interface TokensResult {
+  lock: string;
+  web: string | null;
+  stale: string[];
+  written: string[];
+}
+
+/** The token table against tokens.lock and `../web`; with `write`, copies the web's file in and rewrites the lock. */
+export function checkTokens(sourceDir: string, opts: { write?: boolean } = {}): TokensResult {
+  const lockPath = join(sourceDir, TOKENS_LOCK_FILE);
+  const web = webCheckout(sourceDir);
+  if (!existsSync(lockPath)) {
+    return { lock: TOKENS_LOCK_FILE, web: web ? '../web' : null, stale: [`${TOKENS_LOCK_FILE} (missing)`], written: [] };
+  }
+  const lock = JSON.parse(readFileSync(lockPath, 'utf8')) as TokensLock;
+  const { stale, written, lockChanged } = syncFiles(join(sourceDir, TOKENS_DIR), TOKENS_DIR, lock.files, web, Boolean(opts.write), 'tokens.lock');
+  if (opts.write && web && (lockChanged || written.length)) {
+    lock.web.commit = webCommit(web);
+    writeFileSync(lockPath, JSON.stringify(lock, null, 2) + '\n');
+    written.push(TOKENS_LOCK_FILE);
+  }
+  return { lock: TOKENS_LOCK_FILE, web: web ? '../web' : null, stale, written };
 }
