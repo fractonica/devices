@@ -6,7 +6,7 @@ import { camelKeys, snakeKeys } from './case.ts';
 import { Connection } from './connection.ts';
 import { DeviceDirectory, DeviceHandle, type DeviceHost } from './devices.ts';
 import { StreamClient } from './streams.ts';
-import { CommandError, FractonicaError } from './errors.ts';
+import { CommandError, HubError } from './errors.ts';
 import { CATALOG_HASH } from './gen/caps.ts';
 import type {
   AnyDevice,
@@ -131,7 +131,7 @@ export class HubClient implements Hub<Registry>, DeviceHost {
     return new Promise<void>((resolve, reject) => {
       const ms = this.#o.connectTimeoutMs ?? 10_000;
       const timer = setTimeout(() => {
-        this.#fail(new FractonicaError('HUB_UNREACHABLE', `no welcome from ${this.#o.url ?? defaultUrl()} within ${ms} ms${this.#lastClose ? ` (${this.#lastClose})` : ''}`));
+        this.#fail(new HubError('HUB_UNREACHABLE', `no welcome from ${this.#o.url ?? defaultUrl()} within ${ms} ms${this.#lastClose ? ` (${this.#lastClose})` : ''}`));
       }, ms);
       this.#ready = { resolve, reject, timer };
       this.#conn.start();
@@ -175,7 +175,7 @@ export class HubClient implements Hub<Registry>, DeviceHost {
   }
 
   close(): void {
-    this.#fail(new FractonicaError('CLOSED', 'hub.close() was called'));
+    this.#fail(new HubError('CLOSED', 'hub.close() was called'));
     this.#conn.close();
     this.streams.closeAll();
   }
@@ -369,7 +369,7 @@ export class HubClient implements Hub<Registry>, DeviceHost {
         return;
       case 'error': {
         const p = f.req !== undefined ? this.#pending.get(f.req) : undefined;
-        const err = new FractonicaError(f.code, f.message);
+        const err = new HubError(f.code, f.message);
         if (p && f.req !== undefined) {
           this.#pending.delete(f.req);
           clearTimeout(p.timer);
@@ -386,7 +386,7 @@ export class HubClient implements Hub<Registry>, DeviceHost {
 
   #welcome(f: WelcomeFrame): void {
     if (f.v !== APP_PROTOCOL_V) {
-      this.#fail(new FractonicaError('VERSION_MISMATCH', `the hub speaks fr-app/${f.v}, this SDK fr-app/${APP_PROTOCOL_V}`));
+      this.#fail(new HubError('VERSION_MISMATCH', `the hub speaks fr-app/${f.v}, this SDK fr-app/${APP_PROTOCOL_V}`));
       this.#conn.close();
       return;
     }
@@ -473,22 +473,22 @@ export class HubClient implements Hub<Registry>, DeviceHost {
     if (code === 4401 || code === 4409 || code === 4400) {
       const err =
         code === 4401
-          ? new FractonicaError('UNAUTHORIZED', `the hub refused the token (4401${reason ? `: ${reason}` : ''}); run \`fr codegen client\` or open the page from the hub`)
+          ? new HubError('UNAUTHORIZED', `the hub refused the token (4401${reason ? `: ${reason}` : ''}); run \`fr codegen client\` or open the page from the hub`)
           : code === 4409
-            ? new FractonicaError('VERSION_MISMATCH', `the hub speaks another fr-app version (4409${reason ? `: ${reason}` : ''})`)
-            : new FractonicaError('PROTOCOL', `the hub refused the hello (4400${reason ? `: ${reason}` : ''})`);
+            ? new HubError('VERSION_MISMATCH', `the hub speaks another fr-app version (4409${reason ? `: ${reason}` : ''})`)
+            : new HubError('PROTOCOL', `the hub refused the hello (4400${reason ? `: ${reason}` : ''})`);
       if (!this.#fail(err)) {
         this.#emit('error', err);
       }
       return;
     }
     if (!retry && this.#ready) {
-      this.#fail(new FractonicaError('HUB_UNREACHABLE', `could not reach the hub at ${this.#o.url ?? defaultUrl()} (${this.#lastClose})`));
+      this.#fail(new HubError('HUB_UNREACHABLE', `could not reach the hub at ${this.#o.url ?? defaultUrl()} (${this.#lastClose})`));
     }
   }
 
   /** Rejects connect() if it is still waiting; true when it was. */
-  #fail(err: FractonicaError): boolean {
+  #fail(err: HubError): boolean {
     const ready = this.#ready;
     if (!ready) {
       return false;

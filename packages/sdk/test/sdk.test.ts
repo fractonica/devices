@@ -10,7 +10,7 @@ import { type AddressInfo, createServer as createNetServer, type Socket } from '
 import { afterEach, describe, expect, it } from 'vitest';
 import WebSocket, { WebSocketServer } from 'ws';
 
-import { CATALOG_HASH, CommandError, connect, DEFAULT_URL, FractonicaError, type AnyDevice, type Hub } from '@fractonica/sdk';
+import { CATALOG_HASH, CommandError, connect, DEFAULT_URL, FractonicaError, HubError, type AnyDevice, type Hub } from '@fractonica/sdk';
 import type { AppFrame, CmdFrame, HelloFrame, HubFrame, WelcomeDevice } from '@fractonica/sdk/wire';
 
 import { globMatch } from '../src/devices.ts';
@@ -257,11 +257,13 @@ describe('connect', () => {
   it('rejects UNAUTHORIZED on 4401, VERSION_MISMATCH on 4409, HUB_UNREACHABLE without a hub', async () => {
     const s = await script();
     s.onHello = (ws) => ws.close(4401, 'bad token');
-    await expect(connect({ url: s.url, token: 'x' })).rejects.toMatchObject({ name: 'FractonicaError', code: 'UNAUTHORIZED' });
+    await expect(connect({ url: s.url, token: 'x' })).rejects.toMatchObject({ name: 'HubError', code: 'UNAUTHORIZED' });
     s.onHello = (ws) => ws.close(4409, 'fr-app/2');
     await expect(connect({ url: s.url, token: 'x' })).rejects.toMatchObject({ code: 'VERSION_MISMATCH' });
     const dead = connect({ url: 'ws://127.0.0.1:9/app', token: 'x', connectTimeoutMs: 300, reconnect: { minMs: 20, maxMs: 40 } });
-    await expect(dead).rejects.toBeInstanceOf(FractonicaError);
+    await expect(dead).rejects.toBeInstanceOf(HubError);
+    // the former name is the same class, kept as a deprecated alias
+    expect(FractonicaError).toBe(HubError);
     await expect(dead).rejects.toMatchObject({ code: 'HUB_UNREACHABLE' });
     await expect(connect({ url: 'ws://127.0.0.1:9/app', token: 'x', reconnect: false })).rejects.toMatchObject({ code: 'HUB_UNREACHABLE' });
   });

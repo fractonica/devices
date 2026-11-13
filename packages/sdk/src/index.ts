@@ -14,7 +14,7 @@ import type { ConnectOptions, Hub, Registry } from './types.ts';
 
 /**
  * Connects to the hub's `/app` and resolves on its welcome, with every provisioned device's presence and
- * property mirror; then reconnects by itself (backoff) until hub.close(). Rejects with FractonicaError:
+ * property mirror; then reconnects by itself (backoff) until hub.close(). Rejects with HubError:
  * HUB_UNREACHABLE (no welcome within connectTimeoutMs), UNAUTHORIZED (a bad token), VERSION_MISMATCH.
  */
 export async function connect<R extends Registry = Registry>(opts: ConnectOptions<R> = {}): Promise<Hub<R>> {
@@ -26,7 +26,7 @@ export async function connect<R extends Registry = Registry>(opts: ConnectOption
 export { CAP_META, CATALOG_HASH } from './gen/caps.ts';
 export type * from './gen/caps.ts';
 export { camel, snake } from './case.ts';
-export { CommandError, FractonicaError, type FractonicaErrorCode } from './errors.ts';
+export { CommandError, FractonicaError, type FractonicaErrorCode, HubError, type HubErrorCode } from './errors.ts';
 export { DEFAULT_URL } from './hub.ts';
 export {
   CSI_FILE_HEAD_BYTES,
