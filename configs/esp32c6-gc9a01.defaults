@@ -1,0 +1,23 @@
+# ESP32-C6 with a round 240 x 240 GC9A01 module, as wired by the owner (2026-11-13):
+#   GC9A01   ESP32-C6
+#   SCL   -> GPIO 6   (SPI clock)
+#   SDA   -> GPIO 7   (SPI MOSI)
+#   CS    -> GPIO 10
+#   DC    -> GPIO 2
+#   RST   -> GPIO 3
+#   BLK   -> not wired (the module keeps its backlight on)
+# Input: the board's BOOT button (GPIO 9) as the one button:
+#   click = NEXT, double click = SELECT, hold = LONG (PURE <-> EARTH).
+# Build:
+#   idf.py -B build/esp32c6 -DIDF_TARGET=esp32c6 -DSDKCONFIG=build/esp32c6/sdkconfig \
+#          -DSDKCONFIG_DEFAULTS="sdkconfig.defaults;configs/esp32c6-gc9a01.defaults" build
+CONFIG_FRACTONICA_DISPLAY_GC9A01=y
+CONFIG_FRACTONICA_SPI_HOST=2
+CONFIG_FRACTONICA_PIN_SCLK=6
+CONFIG_FRACTONICA_PIN_MOSI=7
+CONFIG_FRACTONICA_PIN_CS=10
+CONFIG_FRACTONICA_PIN_DC=2
+CONFIG_FRACTONICA_PIN_RST=3
+CONFIG_FRACTONICA_PIN_BL=-1
+CONFIG_FRACTONICA_INPUT_BUTTON_1=y
+CONFIG_FRACTONICA_PIN_BTN_A=9
