@@ -39,7 +39,10 @@ import sys
 import tempfile
 
 HERE = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-CORE = os.environ.get("CORE", os.path.join(HERE, "..", "core"))
+CORE = os.environ.get("CORE") or next(
+    (c for c in (os.path.join(HERE, "..", "core"), os.path.join(HERE, "..", "..", "core"))
+     if os.path.isfile(os.path.join(c, "include", "fractonica.h"))),
+    os.path.join(HERE, "..", "..", "core"))
 UI = os.path.join(HERE, "components", "fractonica_ui")
 MAIN = os.path.join(HERE, "main")
 

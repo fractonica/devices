@@ -11,18 +11,26 @@ solar sync), and switch between two modes:
 - **EARTH** adds the Gregorian / SI translation, every one led by ⊕, at a
   fixed UTC offset.
 
-All clock arithmetic, names and text come from the shared C core in the
-sibling checkout [`../core`](https://github.com/fractonica/core). The look is the Astrolabe design
-language, `../design/astrolabe/DESIGN.md` (in the owner's workspace; not published).
+All clock arithmetic, names and text come from the shared C core, the
+organisation's sibling checkout [`core`](https://github.com/fractonica/core)
+beside the devices repository (`../../core` from `clock/`). The look is the Astrolabe design
+language, `../../design/astrolabe/DESIGN.md` (in the owner's workspace; not published).
 
-> **Status: all five stages done; verified on the host only.** The firmware
+This project lives in `clock/` of the [devices](https://github.com/fractonica/devices)
+repository. It is still a standalone ESP-IDF 5.5 project: stage 5 of the merge plan
+folds it into the device framework at the repository root, on ESP-IDF 6.1, as a face
+capability of the framework node, and this directory then goes.
+
+> **Status: runs on one board; the rest is verified on the host.** The firmware
 > builds without a warning for ESP32, ESP32-S3 and ESP32-C3 with every
 > supported display, with `idf.py` and with PlatformIO, and every face has
 > been rendered and checked against the core at three SPEC test vectors.
-> **It has never run on a chip:** no board was attached to the machine it was
-> written on, and ESP-IDF's QEMU is not installed there. What is proven is
-> proven on the host: the same UI library and the same application loop run
-> in the simulator and its tests. Stage 5 answered two reviews (17 findings:
+> **It has run on hardware once:** on 2026-11-13 on an ESP32-C6 with a round
+> GC9A01 (`configs/esp32c6-gc9a01.defaults`, wiring under
+> [ESP32-C6 + GC9A01](#esp32-c6--gc9a01-the-board-it-ran-on)); the owner confirmed
+> the colours and the orientation on glass. Every other on-chip claim below is
+> still unverified: the other chips, the other displays, input timing, Wi-Fi,
+> light sleep and every on-chip measurement. Stage 5 answered two reviews (17 findings:
 > AGENTS.md section 11). See
 > [What is verified](#what-is-verified-and-what-is-not) and the
 > [bring-up checklist](#bring-up-checklist-first-flash-on-real-hardware).
@@ -110,14 +118,14 @@ change, once).
 
 ## Hardware
 
-The owner named no hardware, so **every default below is an assumption**:
-the common development kit of each chip and the cheapest module of each
-display. Everything is a build-time choice (`idf.py menuconfig` →
+Apart from the ESP32-C6 + GC9A01 configuration below, which has run on the
+owner's board, **every default below is an assumption**: the common
+development kit of each chip and the cheapest module of each display. Everything is a build-time choice (`idf.py menuconfig` →
 *Fractonica clock*); no C file holds a pin number.
 
 | | Choices | Default |
 |---|---|---|
-| Chip | ESP32, ESP32-S3, ESP32-C3 (ESP-IDF 5.5) | any of the three |
+| Chip | ESP32, ESP32-S3, ESP32-C3, ESP32-C6 (ESP-IDF 5.5) | any of them |
 | Display | GC9A01 240 x 240 round colour (SPI); ST7789 240 x 240 or 240 x 320 colour (SPI); SSD1306 128 x 64 one-bit (I2C) | GC9A01 |
 | Input | rotary encoder with push; three, two or one button; none (console only) | encoder |
 | Time | Wi-Fi + SNTP; the serial console; a compile-time demo instant | console |
@@ -199,16 +207,42 @@ idf.py -B build/oled -DIDF_TARGET=esp32c3 -DSDKCONFIG=build/oled/sdkconfig \
 `st7789-240x240`, `st7789-240x320`, `ssd1306` (displays); `buttons3`,
 `buttons2`, `button1` (input); `wifi`, `demo` (time); `band`, `lightsleep`.
 
+### ESP32-C6 + GC9A01 (the board it ran on)
+
+The first hardware run, 2026-11-13: an ESP32-C6 board with a round 240 x 240
+GC9A01 module. The console is the C6's built-in USB-Serial-JTAG.
+
+| GC9A01 | ESP32-C6 |
+|---|---|
+| SCL (SPI clock) | GPIO 6 |
+| SDA (SPI MOSI) | GPIO 7 |
+| CS | GPIO 10 |
+| DC | GPIO 2 |
+| RST | GPIO 3 |
+| BLK | not wired (the module keeps its backlight on) |
+
+Input is the board's BOOT button (GPIO 9) as the one button: click = NEXT,
+double click = SELECT, hold = LONG (PURE <-> EARTH). Colours and orientation
+were confirmed on glass by the owner. Build it with
+`configs/esp32c6-gc9a01.defaults` (see below).
+
 ## Build, flash, watch
 
-Needs ESP-IDF 5.5 (`source ~/esp/v5.5.1/esp-idf/export.sh`) and the core
-beside this directory (`../core`; or a submodule at `./core`; or
-`-DFRACTONICA_CORE_DIR=<path>` / the environment variable of that name).
+Needs ESP-IDF 5.5 (`source ~/esp/v5.5.1/esp-idf/export.sh`) and the core.
+The build takes the first of `-DFRACTONICA_CORE_DIR=<path>`, the environment
+variable of that name, a submodule at `./core`, `../core` (a core at the root
+of the devices repository) and `../../core` (the organisation's sibling
+checkout beside the devices repository, the usual case).
+
+If the Fractonica hub of this repository is running, it holds every ESP32 USB
+port: stop it (or lend the port) before `flash` or `monitor`.
 
 ```
 idf.py -B build/esp32   -DIDF_TARGET=esp32   -DSDKCONFIG=build/esp32/sdkconfig   build
 idf.py -B build/esp32s3 -DIDF_TARGET=esp32s3 -DSDKCONFIG=build/esp32s3/sdkconfig build
 idf.py -B build/esp32c3 -DIDF_TARGET=esp32c3 -DSDKCONFIG=build/esp32c3/sdkconfig build
+idf.py -B build/esp32c6 -DIDF_TARGET=esp32c6 -DSDKCONFIG=build/esp32c6/sdkconfig \
+       -DSDKCONFIG_DEFAULTS="sdkconfig.defaults;configs/esp32c6-gc9a01.defaults" build
 
 idf.py -B build/esp32 -p /dev/cu.usbserial-XXXX flash monitor      # flash, then the console
 
@@ -580,11 +614,16 @@ Blink behind.
   own `app_step` loop (boot with no time → `info` → `time` → input → `shot`
   → `tools/shot.py` → PNG), whole frame and bands.
 
-**Not verified (no hardware, no emulator): nothing of this has ever executed on real silicon.**
+**Verified on hardware (2026-11-13, one board):** the ESP32-C6 + GC9A01 build
+above boots and draws the clock; the owner confirmed the GC9A01's colours and
+orientation on glass. Nothing was measured on the chip.
 
-- Boot. Every line of `main/app_main.c` and `components/fractonica_hal/` has
-  been compiled and linked, never run: FreeRTOS task and queue wiring, the
-  static stacks, the interrupt handlers, the watchdog.
+**Not verified (no emulator; one board only): everything below, unless the
+ESP32-C6 run above covers it.**
+
+- Boot on any chip but the ESP32-C6, and on the C6 anything beyond "it boots
+  and draws": FreeRTOS task and queue timing, the static stacks' headroom, the
+  interrupt handlers, the watchdog were never measured.
 - The three display drivers: the GC9A01 init sequence (the documented
   commands are from the datasheet; the panel-maker registers are the widely
   published values, typed in, never checked against glass), colour order,
@@ -713,13 +752,13 @@ configs/                    build variants: displays, inputs, Wi-Fi, bands, ligh
 main/                       app_main and the UI task; the portable application loop and console
 components/fractonica_ui/   the portable UI library (C99; host and ESP-IDF)
 components/fractonica_hal/  ESP-IDF specific: display drivers, input, time, settings, console reader
-components/fractonica/      a three-line wrapper that registers ../core as the component "fractonica"
+components/fractonica/      a three-line wrapper that registers the core as the component "fractonica"
 sim/                        host simulator, firmware-loop simulator, core probe, tests, golden hashes
 tools/                      build matrix, size and stack reports, picture matrix, screenshot converter, font generator
 docs/                       simulator pictures of every face (this file shows them)
 ```
 
-The core is used where it is (`../core`); nothing is copied. To pin it
+The core is used where it is (usually `../../core`); nothing is copied. To pin it
 instead, add it as a git submodule at `./core` (found automatically) or at
 `components/fractonica` (replacing the wrapper; the core registers itself).
 

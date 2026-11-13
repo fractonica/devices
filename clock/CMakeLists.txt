@@ -12,8 +12,11 @@
 #   the checkout is. The first of these that exists is used:
 #     1. -DFRACTONICA_CORE_DIR=<path>  on the idf.py / cmake command line
 #     2. the environment variable FRACTONICA_CORE_DIR
-#     3. ./core       a git submodule of this repository
-#     4. ../core      the sibling checkout of the organisation (the default)
+#     3. ./core       a git submodule of this project
+#     4. ../core      a core beside this project (devices/core: a submodule or
+#                     checkout at the root of the devices repository)
+#     5. ../../core   the sibling checkout of the organisation, beside the
+#                     devices repository (the usual case today)
 #   (A submodule checked out AT components/fractonica also works: the core's
 #   own CMakeLists.txt then replaces the wrapper.)
 cmake_minimum_required(VERSION 3.16)
@@ -23,15 +26,18 @@ if(NOT FRACTONICA_CORE_DIR)
         set(FRACTONICA_CORE_DIR "$ENV{FRACTONICA_CORE_DIR}")
     elseif(EXISTS "${CMAKE_CURRENT_LIST_DIR}/core/include/fractonica.h")
         set(FRACTONICA_CORE_DIR "${CMAKE_CURRENT_LIST_DIR}/core")
-    else()
+    elseif(EXISTS "${CMAKE_CURRENT_LIST_DIR}/../core/include/fractonica.h")
         set(FRACTONICA_CORE_DIR "${CMAKE_CURRENT_LIST_DIR}/../core")
+    else()
+        set(FRACTONICA_CORE_DIR "${CMAKE_CURRENT_LIST_DIR}/../../core")
     endif()
 endif()
 get_filename_component(FRACTONICA_CORE_DIR "${FRACTONICA_CORE_DIR}" ABSOLUTE BASE_DIR "${CMAKE_CURRENT_LIST_DIR}")
 if(NOT EXISTS "${FRACTONICA_CORE_DIR}/include/fractonica.h")
     message(FATAL_ERROR
         "The Fractonica core was not found at ${FRACTONICA_CORE_DIR}.\n"
-        "Check it out beside this repository (../core), add it as the submodule ./core,\n"
+        "Check it out beside the devices repository (../../core from clock/), or at ../core,\n"
+        "add it as the submodule ./core,\n"
         "or pass -DFRACTONICA_CORE_DIR=<path>. See docs/GUIDE.md, \"Build, flash, watch\".")
 endif()
 # ESP-IDF reads each component's CMakeLists.txt once in a separate cmake

@@ -19,10 +19,12 @@
 #   make clean
 #
 # Needs only the system C compiler (and nm for the no-heap check). No library.
-# The core is the sibling checkout ../../core; override with CORE=<path>.
+# The core is the first of ../../core (devices/core) and ../../../core (the
+# organisation's sibling checkout beside the devices repository) that exists;
+# override with CORE=<path>.
 
 CC      ?= cc
-CORE    ?= ../../core
+CORE    ?= $(or $(patsubst %/include/fractonica.h,%,$(firstword $(wildcard ../../core/include/fractonica.h ../../../core/include/fractonica.h))),../../../core)
 UI      := ../components/fractonica_ui
 BUILD   ?= build
 # -ffp-contract=off: no fused multiply-add, so the arc geometry (the only float

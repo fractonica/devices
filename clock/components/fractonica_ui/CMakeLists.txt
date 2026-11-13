@@ -2,8 +2,8 @@
 #
 # Pure C99 with no ESP-IDF include: the same sources are built for the host by
 # sim/Makefile. As an ESP-IDF component it needs only the clock core, the
-# component named "fractonica" (the sibling checkout ../../../core; how the
-# project registers it under that name is described in esp32/AGENTS.md).
+# component named "fractonica" (the organisation's sibling checkout ../../../../core; how the
+# project registers it under that name is described in clock/AGENTS.md).
 #
 # The list is explicit because ESP-IDF wants its sources named. A new src/*.c
 # must be added here; sim/Makefile picks it up by itself.

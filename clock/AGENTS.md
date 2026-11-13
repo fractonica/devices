@@ -1,4 +1,9 @@
-# AGENTS.md — working on the Fractonica ESP32 clock
+# AGENTS.md — working on the Fractonica ESP32 clock (`clock/`)
+
+This project is the `clock/` directory of the devices repository. The repository
+root is the Fractonica device framework (its own AGENTS.md); the clock is a
+standalone ESP-IDF 5.5 project until stage 5 of the merge plan folds it into
+the framework on ESP-IDF 6.1. Paths below are relative to `clock/`.
 
 The guide for a coding agent (or engineer) picking this repository up. It tells
 you where everything is, how to build and test it, and what you must not break.
@@ -12,14 +17,17 @@ you where everything is, how to build and test it, and what you must not break.
   rendered at SPEC vectors A, B and C and checked against the core, and a
   review pass (stage 5) whose 17 findings are answered in section 11. It
   is built and tested against core 0.2.0 (section 11) and
-  builds for all three chips without a warning. **It has never run on a
-  chip** (no board, no QEMU on the machine it was written on): section 11
-  says exactly what is and is not verified, and docs/GUIDE.md has the bring-up
-  checklist for the first board.
+  builds for all three chips without a warning. **It has run on hardware
+  once**: on 2026-11-13 on an ESP32-C6 with a round GC9A01
+  (`configs/esp32c6-gc9a01.defaults`: SCL 6, SDA 7, CS 10, DC 2, RST 3, BOOT
+  GPIO 9 as the one button), where the owner confirmed colours and
+  orientation on glass. Section 11 says what else is and is not verified, and
+  docs/GUIDE.md has the bring-up checklist for the next board.
 - **The clock itself is not here.** All Fractonica arithmetic, tables, names
-  and text live in the sibling checkout `../core` (read `../core/AGENTS.md`,
-  "I need X → call Y"). The look is specified in `../design/astrolabe/DESIGN.md`
-  (section 11 is the small displays) with rulings in `../design/README.md`.
+  and text live in the organisation's sibling checkout `../../core` (read
+  `../../core/AGENTS.md`, "I need X → call Y"). The look is specified in
+  `../../design/astrolabe/DESIGN.md` (section 11 is the small displays) with
+  rulings in `../../design/README.md`.
 - **Before you say something works:** `cd sim && make test`; after a drawing
   change `make shots` (or `make matrix`, all 949) and LOOK at the PNGs in
   `sim/out/`, with `make probe` beside them for what the core says; after a
@@ -39,7 +47,7 @@ you where everything is, how to build and test it, and what you must not break.
    if you cannot proceed, put a stand-in in a new `src/fui_shim.c` (the one
    shim file; there is none today: every stand-in was replaced by a core call
    and deleted).
-2. **Never edit** `../core`, `../design`, `../reference`, `../ios`, `../web`, `../SPEC.md`.
+2. **Never edit** `../../core`, `../../design`, `../../reference`, `../../ios`, `../../web`, `../../SPEC.md`.
 3. **No heap after start-up.** `fractonica_ui`, `main/app*.c` (not
    `app_main.c`) and `fhal_button.c` reference no allocator at all (`make
    test` checks the objects with `nm`). All UI state is one caller-owned
@@ -77,9 +85,9 @@ you where everything is, how to build and test it, and what you must not break.
 ## 2. Layout
 
 ```
-CMakeLists.txt                   the ESP-IDF project; finds the core (../core, ./core, FRACTONICA_CORE_DIR)
+CMakeLists.txt                   the ESP-IDF project; finds the core (FRACTONICA_CORE_DIR, ./core, ../core, ../../core)
 sdkconfig.defaults               what every build starts from (size optimisation, 1 ms tick, 4 MB flash)
-sdkconfig.defaults.<target>      per chip: esp32, esp32s3, esp32c3
+sdkconfig.defaults.<target>      per chip: esp32, esp32s3, esp32c3, esp32c6
 configs/*.defaults               variants added with -DSDKCONFIG_DEFAULTS: displays, inputs, wifi, band ...
                                  (ci-wifi.defaults: the build matrix's placeholder network name, not for a clock)
 platformio.ini                   the same project for PlatformIO, one environment per board + display
@@ -229,6 +237,8 @@ source ~/esp/v5.5.1/esp-idf/export.sh
 idf.py -B build/esp32 -DIDF_TARGET=esp32 -DSDKCONFIG=build/esp32/sdkconfig build      # also esp32s3, esp32c3
 idf.py -B build/esp32 -DSDKCONFIG=build/esp32/sdkconfig menuconfig                    # "Fractonica clock"
 idf.py -B build/esp32 -p <port> flash monitor
+idf.py -B build/esp32c6 -DIDF_TARGET=esp32c6 -DSDKCONFIG=build/esp32c6/sdkconfig \
+       -DSDKCONFIG_DEFAULTS="sdkconfig.defaults;configs/esp32c6-gc9a01.defaults" build   # the board it ran on
 idf.py -B build/x -DIDF_TARGET=esp32c3 -DSDKCONFIG=build/x/sdkconfig \
        -DSDKCONFIG_DEFAULTS="sdkconfig.defaults;configs/ssd1306.defaults;configs/buttons2.defaults" build
 
@@ -262,8 +272,11 @@ the linker drops the Wi-Fi stack, which would leave that code unlinked. On
 the light-sleep rows of the C3 / S3 the script also checks that the HAL
 calls `gpio_sleep_sel_dis` (the display's pins kept driven in sleep).
 
-Nothing has been flashed: no board was attached when this was written, and
-ESP-IDF's QEMU is not installed (`~/.espressif/tools/qemu-xtensa` is empty).
+Flashed once, by the owner: the ESP32-C6 + GC9A01 build above (2026-11-13).
+The framework hub at the repository root holds every ESP32 USB port while it
+runs: stop it (or lend the port) before `flash` or `monitor`, and never flash
+without the owner's go-ahead. ESP-IDF's QEMU is not installed
+(`~/.espressif/tools/qemu-xtensa` is empty).
 
 ## 4. Using the library (the contract with the firmware)
 
@@ -865,17 +878,22 @@ were not re-run in this round.
 - `tools/build-all.sh --clean` left PlatformIO's build and sdkconfig, which
   fail on a new Kconfig option.
 
-**Not verified** (no board attached; ESP-IDF's QEMU not installed:
+**Verified on hardware, 2026-11-13:** the ESP32-C6 + GC9A01 build
+(`configs/esp32c6-gc9a01.defaults`) boots and draws the clock; the owner
+confirmed the GC9A01's colours and orientation on glass. Nothing was
+measured on the chip.
+
+**Not verified** beyond that one run (ESP-IDF's QEMU not installed:
 `~/.espressif/tools/qemu-xtensa` is an empty directory, no
 `qemu-system-xtensa` / `qemu-system-riscv32` on the PATH). **Nothing has
-executed on real silicon or in an emulator:**
+executed in an emulator, and only the run above on silicon:**
 
-- Booting at all. Every line of `components/fractonica_hal` and of
-  `main/app_main.c` has been compiled and linked, never executed.
-- The GC9A01 init sequence (documented commands from the datasheet; the
-  panel-maker registers are the widely published values, typed in, unchecked
-  against glass), colour order, inversion, mirror and rotation defaults of
-  all three panels; the ST7789's 80-row offset rule; SPI at 40 MHz on wires.
+- Booting on any chip but the ESP32-C6. The C6 run exercised boot and the
+  GC9A01 path of `components/fractonica_hal` and `main/app_main.c`; nothing
+  of it was measured, and the other paths have only been compiled and linked.
+- The GC9A01 init sequence on any board but that C6 (colour order and
+  orientation are confirmed there only); the colour order, inversion, mirror
+  and rotation defaults of the ST7789 and SSD1306; the ST7789's 80-row offset rule; SPI at 40 MHz on wires.
 - PCNT limits as detents, the GPIO encoder table on real contacts, debounce
   times; NVS; the RTC keeping time and `RTC_NOINIT_ATTR` across resets;
   Wi-Fi / SNTP; light sleep (wake-up sources, the UART lock); stack and heap

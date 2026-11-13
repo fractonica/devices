@@ -18,7 +18,7 @@
  *   fractonica-sim --bench                          time and arc count per face
  *
  * It links the same fractonica_ui sources the firmware builds, and the core
- * from ../core. Prints the stamp (and the state reached) so a shot can be
+ * from the core. Prints the stamp (and the state reached) so a shot can be
  * checked against SPEC S12 without opening the picture.
  */
 #include <stdio.h>

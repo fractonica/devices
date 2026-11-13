@@ -16,7 +16,11 @@ set -u
 
 here=$(cd "$(dirname "$0")/.." && pwd)
 ui="$here/components/fractonica_ui"
-core="${CORE:-$here/../core}"
+core="${CORE:-}"
+if [ -z "$core" ]; then
+    # devices/core if present, else the organisation's sibling checkout
+    if [ -f "$here/../core/include/fractonica.h" ]; then core="$here/../core"; else core="$here/../../core"; fi
+fi
 out="${TMPDIR:-/tmp}/fractonica-ui-size.$$"
 status=0
 

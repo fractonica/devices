@@ -1,6 +1,8 @@
-# Fractonica ESP32
+# Fractonica clock for ESP32
 
 Firmware for a small physical Fractonica clock: an ESP32 with a small display, plus a host simulator.
+It lives in `clock/` of the [devices](https://github.com/fractonica/devices) repository as a standalone ESP-IDF 5.5 project.
+Stage 5 of the merge plan folds it into the device framework at the repository root, on ESP-IDF 6.1.
 
 ![Three faces of the firmware drawn by the host simulator at 2026-10-08 12:00 UTC:
 on the left the round 240 x 240 face in pure mode, a ring of nested teal arcs
@@ -28,34 +30,37 @@ The same clock runs in the browser at [fractonica.com](https://fractonica.com).
 | [core](https://github.com/fractonica/core) | The clock itself: a dependency-free C99 library, and the specification |
 | [ios](https://github.com/fractonica/ios) | A SwiftUI app for iPhone, iPad and Mac, built on the core |
 | [web](https://github.com/fractonica/web) | The core as WebAssembly and the clock as a static site, live at [fractonica.com](https://fractonica.com) |
-| **[esp32](https://github.com/fractonica/esp32)** (this one) | ESP-IDF firmware for a small physical clock, with a host simulator; not yet run on hardware |
+| **[devices](https://github.com/fractonica/devices)** (this clock is its `clock/`) | The device framework (firmware, hub, CLI) and this clock firmware with its host simulator |
 
 ## Quick start
 
-Clone the core beside this repository. The build finds it at `../core`.
+Clone the core beside the devices repository. From `clock/` the build finds it at `../../core`.
 
 ```sh
 git clone https://github.com/fractonica/core.git
-git clone https://github.com/fractonica/esp32.git
+git clone https://github.com/fractonica/devices.git
 ```
 
 Try it without hardware. Only a C compiler is needed.
 
 ```sh
-cd esp32/sim
+cd devices/clock/sim
 make test           # unit tests, golden images, firmware loop, fuzz under ASan + UBSan
 make shots          # every face, screen and mode -> sim/out/*.png
 cd ..
 tools/simulate.sh --face round240 --screen now --mode pure --out now.png
 ```
 
-Build and flash with ESP-IDF 5.5:
+Build and flash with ESP-IDF 5.5, from `clock/`. The board it has run on is an ESP32-C6 with a round GC9A01:
 
 ```sh
 source ~/esp/v5.5.1/esp-idf/export.sh
-idf.py -B build/esp32 -DIDF_TARGET=esp32 -DSDKCONFIG=build/esp32/sdkconfig build
-idf.py -B build/esp32 -p /dev/cu.usbserial-XXXX flash monitor
+idf.py -B build/esp32c6 -DIDF_TARGET=esp32c6 -DSDKCONFIG=build/esp32c6/sdkconfig \
+       -DSDKCONFIG_DEFAULTS="sdkconfig.defaults;configs/esp32c6-gc9a01.defaults" build
+idf.py -B build/esp32c6 -p /dev/cu.usbmodemXXXX flash monitor
 ```
+
+If the device hub of this repository is running, it holds the board's USB port: stop it first.
 
 On the serial console (115200 baud), `time <unix seconds>` sets the clock; `date +%s` prints the number.
 PlatformIO works too: `pio run -e esp32-gc9a01`.
@@ -63,7 +68,7 @@ Choose the display, input and pins with `idf.py menuconfig`, under *Fractonica c
 
 ## What is in it
 
-- Three chips: ESP32, ESP32-S3 and ESP32-C3 (ESP-IDF 5.5).
+- Four chips: ESP32, ESP32-S3, ESP32-C3 and ESP32-C6 (ESP-IDF 5.5).
 - Four displays: GC9A01 240 x 240 round, ST7789 240 x 240 and 240 x 320, SSD1306 128 x 64 one-bit.
 - Input from a rotary encoder, three, two or one button, or the serial console alone.
 - Time from Wi-Fi + SNTP, the serial console or a compile-time demo instant.
@@ -74,10 +79,11 @@ Choose the display, input and pins with `idf.py menuconfig`, under *Fractonica c
 ## Status
 
 Version 0.1.0, built on core 0.2.0.
-All eleven build variants in `tools/build-all.sh` compile without a warning for the three chips, and every face has been rendered and checked against the core on the host.
-**The firmware has never run on a chip.** Boot, the display drivers, input timing, Wi-Fi, light sleep and every on-chip measurement are unverified.
-The default pin maps are assumptions: the common development kit of each chip.
-The guide has a bring-up checklist for the first board.
+All eleven build variants in `tools/build-all.sh` compile without a warning for the ESP32, S3 and C3, and every face has been rendered and checked against the core on the host.
+**It has run on hardware once**, on 2026-11-13: an ESP32-C6 with a round GC9A01 (SCL 6, SDA 7, CS 10, DC 2, RST 3; the BOOT button on GPIO 9 is the one button), `configs/esp32c6-gc9a01.defaults`.
+The owner confirmed the colours and the orientation on glass.
+The other chips and displays, input timing, Wi-Fi, light sleep and every on-chip measurement are still unverified, and the other default pin maps are assumptions.
+The guide has a bring-up checklist for the next board.
 
 ## Documentation
 
@@ -87,4 +93,4 @@ The guide has a bring-up checklist for the first board.
 
 ## Licence
 
-No licence has been chosen yet. All rights reserved; see [LICENSE](LICENSE).
+See [LICENSE](../LICENSE) at the root of the devices repository.
