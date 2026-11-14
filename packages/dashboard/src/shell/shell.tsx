@@ -10,6 +10,7 @@ import { useOp } from '../hooks.ts';
 import { hubClock, store } from '../runtime.ts';
 import { Ground } from './ground.tsx';
 import { linkRestDown, useLinkDown } from './link.ts';
+import { LookPicker } from './look-picker.tsx';
 import { useMode } from './mode.ts';
 import { Notices, Toasts } from './notices.tsx';
 import { ModeRing, Sigil, type SigilName } from './sigils.tsx';
@@ -89,6 +90,7 @@ export function Shell() {
         </main>
       </div>
       <Toasts hubDown={status.error?.code === 'HUB_UNREACHABLE'} />
+      <LookPicker />
     </>
   );
 }

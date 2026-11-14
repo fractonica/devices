@@ -1,0 +1,1191 @@
+/*
+ * Proposal C, "console": a bench instrument read from arm's length. Every selector is scoped to :root[data-look='c'].
+ *
+ * Type about +3 px (data 16, values 18, caps labels 12, titles 24); every control at least 44 px tall; buttons with a
+ * 1.5 px bone outline and larger engraved caps, the primary filled faintly with lumen; tabs as tabs on a full-width
+ * baseline with a 3 px lumen bar under the current one; switches larger with their word lit when on; link rows with a
+ * hover plate and a large ›; a 2 px lumen focus ring. Same layouts, same tokens, nothing bold, nothing that moves.
+ */
+
+/* ------------------------------------------------------------------ the scale */
+
+:root[data-look='c'] {
+  --fs-reading: 48px;
+  --fs-title: 24px;
+  --fs-value: 18px;
+  --fs-data: 16px;
+  --fs-earth: 15px;
+  --fs-label: 12px;
+  --fs-micro: 10px;
+  --row-min: 46px;
+  --rail: 104px;
+  /* the console's own: a control's caps, its height, its outline, the plates under a hand */
+  --con-fs: 13px;
+  --con-h: 44px;
+  --con-line: 1.5px;
+  --con-hover: color-mix(in srgb, var(--c-bone) 5%, transparent);
+  /* the same plate made opaque, where a bleed must hide the hairline drawn under it */
+  --con-hover-solid: color-mix(in srgb, var(--c-bone) 5%, var(--c-void));
+  --con-lit: color-mix(in srgb, var(--c-lumen) 10%, transparent);
+  --con-lit-hover: color-mix(in srgb, var(--c-lumen) 18%, transparent);
+  --con-outline: color-mix(in srgb, var(--c-bone) 72%, var(--c-void));
+  --con-pad: 12px;
+}
+
+@media (max-width: 699.98px) {
+  :root[data-look='c'] {
+    --fs-reading: 36px;
+    --fs-title: 19px;
+    --fs-value: 17px;
+    --fs-data: 16px;
+    --fs-earth: 14px;
+    --fs-label: 11px;
+    --fs-micro: 9px;
+    --gutter: 16px;
+    --rail: 0px;
+    --row-min: 50px;
+    --con-pad: 10px;
+  }
+}
+
+/* ------------------------------------------------------------------ focus: a 2 px lumen ring, everywhere */
+
+:root[data-look='c'] :focus-visible {
+  outline: 2px solid var(--c-lumen);
+  outline-offset: 3px;
+  border-radius: 2px;
+}
+
+/* a lit control (the primary, a switch that is on) is already lumen: its ring is bone, so it reads as focus and not
+   as a thicker outline */
+:root[data-look='c'] .ui-button[data-variant='primary']:focus-visible,
+:root[data-look='c'] .ui-toggle[aria-checked='true']:focus-visible {
+  outline-color: var(--c-bone);
+}
+
+/* ------------------------------------------------------------------ line heights that were set for the old sizes */
+
+:root[data-look='c'] .ui-row {
+  padding: 11px 0 10px;
+  line-height: 22px;
+}
+
+:root[data-look='c'] .ui-row-label,
+:root[data-look='c'] .ui-line-label {
+  line-height: 15px;
+}
+
+:root[data-look='c'] .ui-row-extra,
+:root[data-look='c'] .ui-row-earth,
+:root[data-look='c'] .ui-row-sub {
+  line-height: 19px;
+}
+
+:root[data-look='c'] .ui-line {
+  line-height: 22px;
+  padding: 12px 0 13px;
+}
+
+:root[data-look='c'] .devs-row {
+  line-height: 22px;
+  min-height: 62px;
+}
+
+:root[data-look='c'] .dev-summary,
+:root[data-look='c'] .dev-doc,
+:root[data-look='c'] .dev-does,
+:root[data-look='c'] .ui-disclosure-sub {
+  line-height: 21px;
+}
+
+:root[data-look='c'] .dev-prop {
+  min-height: 52px;
+}
+
+:root[data-look='c'] .dev-rung {
+  min-height: 66px;
+}
+
+:root[data-look='c'] .dev-event {
+  padding: 11px 0 10px;
+}
+
+:root[data-look='c'] .ui-section-head {
+  padding-bottom: 10px;
+}
+
+/* ------------------------------------------------------------------ buttons */
+
+:root[data-look='c'] .ui-button {
+  min-height: var(--con-h);
+  padding: 0 20px;
+  gap: 10px;
+  border: var(--con-line) solid var(--con-outline);
+  border-radius: 3px;
+  color: var(--c-bone);
+  font-size: var(--con-fs);
+  transition:
+    border-color 150ms linear,
+    color 150ms linear,
+    background-color 150ms linear;
+}
+
+:root[data-look='c'] .ui-button:hover:not(:disabled) {
+  border-color: var(--c-bone);
+  background: var(--con-hover);
+}
+
+:root[data-look='c'] .ui-button:active:not(:disabled) {
+  background: color-mix(in srgb, var(--c-bone) 10%, transparent);
+}
+
+/* the page's one primary act: lumen, outlined and faintly lit, a little wider; the same height as its neighbours */
+:root[data-look='c'] .ui-button[data-variant='primary'] {
+  min-height: var(--con-h);
+  padding: 0 26px;
+  border-color: var(--c-lumen);
+  background: var(--con-lit);
+  color: var(--c-lumen);
+}
+
+:root[data-look='c'] .ui-button[data-variant='primary']:hover:not(:disabled) {
+  border-color: var(--c-lumen);
+  background: var(--con-lit-hover);
+  color: var(--c-bone);
+}
+
+:root[data-look='c'] .ui-button[data-variant='destructive'] {
+  border-color: var(--c-fault);
+  color: var(--c-fault);
+}
+
+:root[data-look='c'] .ui-button[data-variant='destructive']:hover:not(:disabled) {
+  border-color: var(--c-fault);
+  background: color-mix(in srgb, var(--c-fault) 12%, transparent);
+  color: var(--c-bone);
+}
+
+/* quiet: a word on a thick underline, still 44 px tall to the finger */
+:root[data-look='c'] .ui-button[data-variant='quiet'] {
+  min-height: 40px;
+  padding: 0 6px;
+  border: 0;
+  border-bottom: var(--con-line) solid var(--c-ash);
+  border-radius: 0;
+  color: var(--c-bone);
+}
+
+:root[data-look='c'] .ui-button[data-variant='quiet']:hover:not(:disabled) {
+  border-color: transparent;
+  border-bottom-color: var(--c-lumen);
+  background: var(--con-hover);
+  color: var(--c-lumen);
+}
+
+:root[data-look='c'] .ui-button[data-variant='quiet'][data-tone='fault'] {
+  color: var(--c-fault);
+  border-bottom-color: var(--c-fault);
+}
+
+:root[data-look='c'] .ui-button[data-variant='quiet'][data-tone='fault']:hover:not(:disabled) {
+  border-bottom-color: var(--c-fault);
+  background: color-mix(in srgb, var(--c-fault) 10%, transparent);
+  color: var(--c-bone);
+}
+
+/* armed (asks before an irreversible act): fault, lit faintly */
+:root[data-look='c'] .ui-button[data-armed] {
+  border-color: var(--c-fault);
+  background: color-mix(in srgb, var(--c-fault) 14%, transparent);
+  color: var(--c-bone);
+}
+
+/* disabled: a dashed outline and a dimmed word, still legible; no plate on hover */
+:root[data-look='c'] .ui-button:disabled {
+  border-style: dashed;
+  border-color: var(--c-etch3);
+  background: none;
+  color: color-mix(in srgb, var(--c-ash) 80%, var(--c-void));
+}
+
+:root[data-look='c'] .ui-button[data-variant='quiet']:disabled,
+:root[data-look='c'] .ui-button[data-variant='quiet'][data-tone='fault']:disabled {
+  border-color: transparent;
+  border-bottom: var(--con-line) dashed var(--c-etch3);
+  color: color-mix(in srgb, var(--c-ash) 80%, var(--c-void));
+}
+
+/* busy (it is disabled while it works): its own colour kept, the outline dotted, the word not dimmed */
+:root[data-look='c'] .ui-button[data-busy] {
+  border-style: dotted;
+  border-color: var(--c-ash);
+  color: var(--c-bone);
+}
+
+:root[data-look='c'] .ui-button[data-variant='primary'][data-busy] {
+  border-color: var(--c-lumen-mid);
+  color: var(--c-lumen);
+  background: var(--con-lit);
+}
+
+:root[data-look='c'] .ui-button-row,
+:root[data-look='c'] .ui-page-actions,
+:root[data-look='c'] .ui-confirm,
+:root[data-look='c'] .dev-rename-buttons {
+  gap: var(--sp-3);
+}
+
+/* a row's or line's own acts (LEND · IGNORE): two underlines far enough apart to read as two controls */
+:root[data-look='c'] .ui-row-actions,
+:root[data-look='c'] .ui-line-actions {
+  gap: var(--sp-2) var(--sp-4);
+}
+
+/* while the record form is open its START RECORDING is the lit act, and WATCH above it steps back to a plain button */
+:root[data-look='c'] .cam-record [data-action='start-recording']:not(:disabled) {
+  border-color: var(--c-lumen);
+  background: var(--con-lit);
+  color: var(--c-lumen);
+}
+
+:root[data-look='c'] .cam-record [data-action='start-recording']:hover:not(:disabled) {
+  background: var(--con-lit-hover);
+  color: var(--c-bone);
+}
+
+:root[data-look='c'] .cam-record [data-action='start-recording']:focus-visible {
+  outline-color: var(--c-bone);
+}
+
+:root[data-look='c'] .cam-main:has(> .cam-record) .cam-transport [data-watch]:not(:disabled) {
+  border-color: var(--con-outline);
+  background: none;
+  color: var(--c-bone);
+}
+
+:root[data-look='c'] .cam-main:has(> .cam-record) .cam-transport [data-watch]:hover:not(:disabled) {
+  border-color: var(--c-bone);
+  background: var(--con-hover);
+}
+
+:root[data-look='c'] .cam-main:has(> .cam-record) .cam-transport [data-watch]:focus-visible {
+  outline-color: var(--c-lumen);
+}
+
+:root[data-look='c'] .cam-card-playing {
+  min-width: 80px;
+  min-height: var(--con-h);
+}
+
+/* ------------------------------------------------------------------ tabs */
+
+/* the page's tabs: larger words on a full-width baseline; the current one in lumen over a 3 px bar */
+:root[data-look='c'] .ui-subnav {
+  gap: 0;
+  border-bottom: var(--con-line) solid var(--c-etch2);
+}
+
+:root[data-look='c'] .ui-subnav-item {
+  display: inline-flex;
+  align-items: center;
+  min-height: 48px;
+  padding: 4px 18px 0;
+  border-bottom: 3px solid transparent;
+  margin-bottom: calc(var(--con-line) * -1);
+  color: var(--c-ash);
+  font-size: var(--con-fs);
+  transition:
+    color 150ms linear,
+    background-color 150ms linear,
+    border-color 150ms linear;
+}
+
+:root[data-look='c'] .ui-subnav-item:first-child {
+  padding-left: 2px;
+}
+
+:root[data-look='c'] .ui-subnav-item:hover {
+  color: var(--c-bone);
+  border-bottom-color: var(--c-etch3);
+  background: linear-gradient(to top, var(--con-hover), transparent);
+}
+
+:root[data-look='c'] .ui-subnav-item[aria-current='page'] {
+  color: var(--c-lumen);
+  border-bottom-color: var(--c-lumen);
+}
+
+:root[data-look='c'] .ui-subnav-item:focus-visible {
+  outline-offset: -2px;
+}
+
+/* the instrument strip under the page's tabs: the same tabs, one step quieter (a 2 px bar, a shorter tab) */
+:root[data-look='c'] .dev-strip .ui-subnav {
+  gap: 0;
+  border-bottom-color: var(--c-etch1);
+}
+
+:root[data-look='c'] .dev-strip .ui-subnav-item {
+  min-height: 42px;
+  font-size: var(--fs-label);
+  border-bottom-width: 2px;
+}
+
+/* ------------------------------------------------------------------ folds */
+
+:root[data-look='c'] .ui-disclosure-toggle {
+  min-height: 50px;
+  padding: 10px 0;
+  gap: 4px 12px;
+  border-bottom: var(--hair) solid var(--c-etch2);
+  color: var(--c-bone);
+  transition:
+    color 150ms linear,
+    background-color 150ms linear,
+    box-shadow 150ms linear;
+}
+
+:root[data-look='c'] .ui-disclosure-toggle .mark {
+  width: 14px;
+  height: 14px;
+  flex: none;
+  color: var(--c-lumen-mid);
+}
+
+:root[data-look='c'] .ui-disclosure-toggle .caps {
+  font-size: var(--con-fs);
+}
+
+:root[data-look='c'] .ui-disclosure-toggle:hover {
+  color: var(--c-lumen);
+  background: var(--con-hover);
+  box-shadow:
+    calc(var(--con-pad) * -1) 0 0 var(--con-hover),
+    var(--con-pad) 0 0 var(--con-hover);
+}
+
+/* the keyboard's ring drawn round the same bleed the hover plate has, clear of the + */
+:root[data-look='c'] .ui-disclosure-toggle:focus-visible {
+  outline: none;
+}
+
+:root[data-look='c'] .ui-disclosure-toggle:focus-visible::after {
+  content: '';
+  position: absolute;
+  inset: 0 calc(var(--con-pad) * -1);
+  border: 2px solid var(--c-lumen);
+  border-radius: 2px;
+  pointer-events: none;
+}
+
+:root[data-look='c'] .ui-disclosure-toggle:hover .mark {
+  color: var(--c-lumen);
+}
+
+:root[data-look='c'] .ui-disclosure-toggle[aria-expanded='true'] {
+  color: var(--c-lumen);
+}
+
+:root[data-look='c'] .ui-disclosure-toggle[aria-expanded='true'] .mark {
+  color: var(--c-lumen);
+}
+
+:root[data-look='c'] .ui-disclosure-aside {
+  color: var(--c-ash);
+}
+
+:root[data-look='c'] .ui-disclosure-sub {
+  padding: 0 0 10px 26px;
+  border-bottom-color: var(--c-etch2);
+}
+
+:root[data-look='c'] .ui-disclosure-body {
+  padding-top: var(--sp-4);
+}
+
+/* ------------------------------------------------------------------ switches */
+
+:root[data-look='c'] .ui-toggle {
+  width: fit-content;
+  max-width: 100%;
+  min-height: var(--con-h);
+  gap: 12px;
+  padding: 6px 16px 6px 12px;
+  text-align: left;
+  border: var(--con-line) solid var(--c-etch3);
+  border-radius: 3px;
+  color: var(--c-ash);
+  transition:
+    color 150ms linear,
+    border-color 150ms linear,
+    background-color 150ms linear;
+}
+
+:root[data-look='c'] .ui-toggle svg {
+  width: 24px;
+  height: 24px;
+  flex: none;
+}
+
+:root[data-look='c'] .ui-toggle .caps {
+  color: var(--c-ash);
+  font-size: var(--con-fs);
+  line-height: 1.4;
+  white-space: normal;
+}
+
+:root[data-look='c'] .ui-toggle:hover:not(:disabled) {
+  border-color: var(--c-bone);
+  background: var(--con-hover);
+  color: var(--c-bone);
+}
+
+:root[data-look='c'] .ui-toggle:hover:not(:disabled) .caps {
+  color: var(--c-bone);
+}
+
+/* on: the ring lit with its dot and the word in lumen, a lumen edge at its start; no plate and a dimmer outline, so a
+   switch that is on never looks like the page's primary act */
+:root[data-look='c'] .ui-toggle[aria-checked='true'] {
+  border-color: color-mix(in srgb, var(--c-lumen) 55%, var(--c-void));
+  background: none;
+  box-shadow: inset 3px 0 0 var(--c-lumen);
+  color: var(--c-lumen);
+}
+
+:root[data-look='c'] .ui-toggle[aria-checked='true']:hover:not(:disabled) {
+  border-color: var(--c-lumen);
+  color: var(--c-lumen);
+}
+
+/* not reported yet: the ring faint, so it does not read as OFF */
+:root[data-look='c'] .ui-toggle:not([aria-checked]) svg {
+  opacity: 0.5;
+}
+
+/* an instrument row's bare LED switch: a square-ish box with its ring in the middle */
+:root[data-look='c'] .dev-rung-quick .ui-toggle {
+  padding: 9px 14px;
+}
+
+/* it is disabled for the moment its command is out (the component gives no busy mark): keep its box solid there and
+   its ring only dimmed, so each tap does not flick to the dashed "cannot" look */
+:root[data-look='c'] .dev-rung-quick .ui-toggle:disabled {
+  border-style: solid;
+  border-color: var(--c-etch2);
+}
+
+:root[data-look='c'] .dev-rung-quick .ui-toggle:disabled svg {
+  opacity: 0.6;
+}
+
+:root[data-look='c'] .dev-rung-quick .ui-toggle[aria-checked='true']:disabled {
+  color: var(--c-lumen);
+}
+
+:root[data-look='c'] .ui-toggle[aria-checked='true'] .caps {
+  color: var(--c-lumen);
+}
+
+:root[data-look='c'] .ui-toggle:disabled {
+  border-style: dashed;
+  border-color: var(--c-etch2);
+  background: none;
+  color: var(--c-etch3);
+}
+
+:root[data-look='c'] .ui-toggle:disabled .caps {
+  color: color-mix(in srgb, var(--c-ash) 75%, var(--c-void));
+}
+
+/* ------------------------------------------------------------------ fields */
+
+/* a field's label sits close to its own control and well clear of the one above */
+:root[data-look='c'] .ui-field {
+  gap: 6px;
+}
+
+:root[data-look='c'] .cam-record,
+:root[data-look='c'] .cam-record-more,
+:root[data-look='c'] .cam-settings {
+  gap: var(--sp-4);
+}
+
+:root[data-look='c'] .cam-words {
+  gap: 6px;
+}
+
+/* FLIP, MIRROR and the other switches in a column: one width, so they stack as a set */
+:root[data-look='c'] .cam-settings .ui-toggle {
+  min-width: min(240px, 100%);
+}
+
+/* the notes under a field: one size and one colour wherever they sit */
+:root[data-look='c'] .cam-settings .ui-field-note,
+:root[data-look='c'] .cam-settings .cam-note,
+:root[data-look='c'] .cam-record .ui-field-note,
+:root[data-look='c'] .cam-record .cam-note {
+  font-size: var(--fs-earth);
+  color: var(--c-ash);
+}
+
+:root[data-look='c'] .ui-input,
+:root[data-look='c'] .ui-select,
+:root[data-look='c'] .dev-inline-select {
+  min-height: var(--con-h);
+  padding: 9px 10px 8px;
+  border-bottom: var(--con-line) solid var(--c-ash);
+  border-radius: 2px 2px 0 0;
+  background: color-mix(in srgb, var(--c-bone) 4%, transparent);
+  transition:
+    border-color 150ms linear,
+    background-color 150ms linear;
+}
+
+:root[data-look='c'] .ui-select {
+  padding-right: 34px;
+}
+
+:root[data-look='c'] .ui-select-mark {
+  right: 12px;
+  width: 12px;
+  height: 12px;
+  margin-top: -6px;
+  color: var(--c-bone);
+}
+
+:root[data-look='c'] .ui-input:hover:not(:disabled),
+:root[data-look='c'] .ui-select:hover:not(:disabled) {
+  border-bottom-color: var(--c-bone);
+  background: color-mix(in srgb, var(--c-bone) 7%, transparent);
+}
+
+:root[data-look='c'] .ui-input:focus-visible,
+:root[data-look='c'] .ui-select:focus-visible,
+:root[data-look='c'] .dev-json:focus-visible {
+  outline: none;
+  border-bottom: 2px solid var(--c-lumen);
+  background: color-mix(in srgb, var(--c-lumen) 7%, transparent);
+}
+
+:root[data-look='c'] .ui-field[data-invalid] .ui-input,
+:root[data-look='c'] .ui-field[data-invalid] .ui-select {
+  border-bottom-color: var(--c-fault);
+}
+
+:root[data-look='c'] .ui-input:disabled,
+:root[data-look='c'] .ui-select:disabled {
+  border-bottom-style: dashed;
+  border-bottom-color: var(--c-etch3);
+  background: none;
+  color: var(--c-ash);
+  cursor: not-allowed;
+}
+
+:root[data-look='c'] .dev-inline-select {
+  width: auto;
+}
+
+/* sliders: a 2 px line lit to the value and a bead in a ring for the thumb, 44 px to the finger */
+:root[data-look='c'] .ui-slider {
+  height: 32px;
+}
+
+/* the engraved ends (COARSE · FINE) tight under their own track */
+:root[data-look='c'] .cam-ends {
+  margin-top: -2px;
+}
+
+:root[data-look='c'] .ui-slider::-webkit-slider-runnable-track {
+  height: 2px;
+  background: linear-gradient(to right, var(--c-lumen) 0 var(--fill), var(--c-etch3) var(--fill) 100%);
+}
+
+:root[data-look='c'] .ui-slider::-moz-range-track {
+  height: 2px;
+}
+
+:root[data-look='c'] .ui-slider::-moz-range-progress {
+  height: 2px;
+}
+
+:root[data-look='c'] .ui-slider::-webkit-slider-thumb {
+  width: 20px;
+  height: 20px;
+  margin-top: -9px;
+  background: var(--c-lumen);
+  border: 4px solid var(--c-void);
+  box-shadow: 0 0 0 1.5px var(--c-lumen);
+  transition: box-shadow 150ms linear;
+}
+
+:root[data-look='c'] .ui-slider::-moz-range-thumb {
+  box-sizing: border-box;
+  width: 20px;
+  height: 20px;
+  background: var(--c-lumen);
+  border: 4px solid var(--c-void);
+  box-shadow: 0 0 0 1.5px var(--c-lumen);
+}
+
+:root[data-look='c'] .ui-slider:hover:not(:disabled)::-webkit-slider-thumb {
+  box-shadow: 0 0 0 3px var(--c-lumen);
+}
+
+:root[data-look='c'] .ui-slider:hover:not(:disabled)::-moz-range-thumb {
+  box-shadow: 0 0 0 3px var(--c-lumen);
+}
+
+:root[data-look='c'] .ui-slider:focus-visible {
+  outline-offset: 0;
+}
+
+:root[data-look='c'] .ui-slider:disabled {
+  cursor: not-allowed;
+}
+
+:root[data-look='c'] .ui-slider:disabled::-webkit-slider-thumb {
+  background: var(--c-etch3);
+  box-shadow: 0 0 0 1.5px var(--c-etch3);
+}
+
+/* filter chips: engraved words (no boxes: design ruling 13), each on its own short dotted hairline, so they read as a
+   set of choices and not as a third strip of tabs; pressed: bone over a 1.5 px lumen hairline (tabs: lumen over 3 px) */
+:root[data-look='c'] .ui-chips {
+  column-gap: var(--sp-3);
+  row-gap: var(--sp-2);
+}
+
+:root[data-look='c'] .ui-chip {
+  min-height: 40px;
+  padding: 0 6px;
+  border-bottom: var(--con-line) dotted var(--c-etch3);
+  color: var(--c-ash);
+  font-size: var(--fs-label);
+}
+
+:root[data-look='c'] .ui-chip:disabled,
+:root[data-look='c'] .cam-words .ui-chip:disabled {
+  border-bottom-style: dashed;
+  border-bottom-color: var(--c-etch3);
+  background: none;
+  color: color-mix(in srgb, var(--c-ash) 70%, var(--c-void));
+  cursor: not-allowed;
+}
+
+:root[data-look='c'] .ui-chip:hover:not(:disabled) {
+  color: var(--c-bone);
+  border-bottom-style: solid;
+  border-bottom-color: var(--c-ash);
+  background: var(--con-hover);
+}
+
+:root[data-look='c'] .ui-chip[aria-pressed='true'],
+:root[data-look='c'] .ui-chip[aria-checked='true'] {
+  color: var(--c-bone);
+  border-bottom: var(--con-line) solid var(--c-lumen);
+}
+
+:root[data-look='c'] .ui-chip[aria-pressed='true']:hover:not(:disabled),
+:root[data-look='c'] .ui-chip[aria-checked='true']:hover:not(:disabled) {
+  border-bottom-color: var(--c-lumen);
+}
+
+/* ------------------------------------------------------------------ rows that open something */
+
+:root[data-look='c'] a.ui-row,
+:root[data-look='c'] button.ui-row {
+  align-items: center;
+  transition:
+    border-color 150ms linear,
+    background-color 150ms linear,
+    box-shadow 150ms linear;
+}
+
+/* a › at the end of a row that is a link, as an instrument's row has: in a gutter of its own, so a long value that
+   wraps never pushes it onto a line by itself */
+:root[data-look='c'] a.ui-row {
+  position: relative;
+  padding-right: 28px;
+}
+
+:root[data-look='c'] a.ui-row::after {
+  content: '›';
+  position: absolute;
+  right: 4px;
+  top: 50%;
+  transform: translateY(-50%);
+  color: var(--c-ash);
+  font-family: var(--font-reading);
+  font-size: 24px;
+  line-height: 1;
+  transition: color 150ms linear;
+}
+
+/* the hover plate bleeds past the column on both sides, and its ash hairline bleeds with it (drawn in the shadow under
+   an opaque plate, the row's own hairline hidden), so the plate's corners are square */
+:root[data-look='c'] a.ui-row:hover,
+:root[data-look='c'] button.ui-row:hover,
+:root[data-look='c'] .devs-row:hover,
+:root[data-look='c'] .dev-rung:has(> .dev-rung-link):hover,
+:root[data-look='c'] button.dev-group-head:hover {
+  border-bottom-color: transparent;
+  background: var(--con-hover-solid);
+  box-shadow:
+    calc(var(--con-pad) * -1) 0 0 var(--con-hover-solid),
+    var(--con-pad) 0 0 var(--con-hover-solid),
+    0 1px 0 0 var(--c-ash),
+    calc(var(--con-pad) * -1) 1px 0 0 var(--c-ash),
+    var(--con-pad) 1px 0 0 var(--c-ash);
+}
+
+/* desktop: a long value wraps inside its own block beside its label instead of dropping under it */
+@media (min-width: 700px) {
+  :root[data-look='c'] .ui-row {
+    flex-wrap: nowrap;
+  }
+
+  :root[data-look='c'] .ui-row-lead {
+    flex: none;
+    max-width: 42%;
+  }
+
+  :root[data-look='c'] .ui-row-values {
+    flex: 1 1 auto;
+  }
+}
+
+/* the Devices table: the acts column a fixed width in header and rows alike, so the header sits over its columns */
+:root[data-look='c'] .devs-head,
+:root[data-look='c'] .devs-row {
+  padding-right: 28px;
+}
+
+@media (min-width: 700px) {
+  :root[data-look='c'] .devs-head,
+  :root[data-look='c'] .devs-row {
+    grid-template-columns: 14px minmax(0, 2.4fr) minmax(0, 1.3fr) minmax(0, 0.9fr) minmax(0, 1.6fr) 104px;
+  }
+}
+
+:root[data-look='c'] .devs-actions {
+  justify-self: end;
+}
+
+:root[data-look='c'] .devs-fw {
+  font-size: var(--fs-data);
+}
+
+/* a device's row opens the device, so it carries the same › as the hub's fleet rows */
+:root[data-look='c'] .devs-row::after {
+  content: '›';
+  position: absolute;
+  right: 4px;
+  top: 50%;
+  transform: translateY(-50%);
+  color: var(--c-ash);
+  font-family: var(--font-reading);
+  font-size: 24px;
+  line-height: 1;
+  pointer-events: none;
+  transition: color 150ms linear;
+}
+
+:root[data-look='c'] .devs-row:hover::after {
+  color: var(--c-lumen);
+}
+
+/* below 1200 px the larger type needs the room: firmware goes (it is on the device's page) */
+@media (min-width: 700px) and (max-width: 1199.98px) {
+  :root[data-look='c'] .devs-head,
+  :root[data-look='c'] .devs-row {
+    grid-template-columns: 14px minmax(0, 2.4fr) minmax(0, 1fr) minmax(0, 1.5fr) 104px;
+  }
+
+  :root[data-look='c'] .devs-head > :nth-child(4),
+  :root[data-look='c'] .devs-fw {
+    display: none;
+  }
+}
+
+:root[data-look='c'] a.ui-row:hover::after {
+  color: var(--c-lumen);
+}
+
+:root[data-look='c'] .dev-rung,
+:root[data-look='c'] .devs-row {
+  transition:
+    border-color 600ms linear,
+    background-color 150ms linear,
+    box-shadow 150ms linear;
+}
+
+:root[data-look='c'] .dev-rung-go {
+  font-family: var(--font-reading);
+  font-size: 24px;
+  line-height: 1;
+  color: var(--c-ash);
+  padding: 0 2px 0 6px;
+}
+
+:root[data-look='c'] .dev-rung:hover .dev-rung-go {
+  color: var(--c-lumen);
+}
+
+:root[data-look='c'] .dev-rung-port {
+  color: var(--c-ash);
+}
+
+/* the keyboard's ring around the whole row, not the link's words */
+:root[data-look='c'] .dev-rung:has(.dev-rung-link:focus-visible) {
+  outline: 2px solid var(--c-lumen);
+  outline-offset: 2px;
+  border-radius: 2px;
+}
+
+:root[data-look='c'] .dev-rung-link:focus-visible {
+  outline: none;
+}
+
+:root[data-look='c'] .devs-link:focus-visible {
+  outline: none;
+}
+
+:root[data-look='c'] .devs-link:focus-visible::after {
+  outline: 2px solid var(--c-lumen);
+  outline-offset: 2px;
+}
+
+:root[data-look='c'] .devs-link {
+  text-decoration: underline;
+  text-decoration-color: transparent;
+  text-underline-offset: 4px;
+}
+
+/* ------------------------------------------------------------------ text links */
+
+/* engraved words on an ash hairline, lumen under the hand; a 44 px target drawn around them, the line kept tight */
+:root[data-look='c'] .dev-back,
+:root[data-look='c'] .dev-more,
+:root[data-look='c'] .bench-back {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  padding: 0 2px 4px;
+  border-bottom: var(--hair) solid var(--c-etch3);
+  color: var(--c-ash);
+  font-size: var(--fs-label);
+  transition:
+    color 150ms linear,
+    border-color 150ms linear;
+}
+
+:root[data-look='c'] .dev-back::before,
+:root[data-look='c'] .dev-more::before,
+:root[data-look='c'] .bench-back::before {
+  content: '';
+  position: absolute;
+  inset: -14px -6px -10px;
+}
+
+:root[data-look='c'] .dev-back {
+  margin-top: calc(var(--sp-4) * -1 + 2px);
+}
+
+:root[data-look='c'] .dev-back:hover,
+:root[data-look='c'] .dev-more:hover,
+:root[data-look='c'] .bench-back:hover {
+  color: var(--c-lumen);
+  border-bottom-color: var(--c-lumen);
+}
+
+:root[data-look='c'] .dev-inline-link,
+:root[data-look='c'] .prov-note a {
+  text-decoration: underline;
+  text-decoration-color: var(--c-ash);
+  text-decoration-thickness: 1px;
+  text-underline-offset: 4px;
+}
+
+:root[data-look='c'] .dev-inline-link:hover,
+:root[data-look='c'] .prov-note a:hover {
+  color: var(--c-lumen);
+  text-decoration-color: var(--c-lumen);
+}
+
+:root[data-look='c'] .bench-ext {
+  border-bottom-color: var(--c-ash);
+}
+
+:root[data-look='c'] .dev-event-raw summary:hover {
+  color: var(--c-lumen);
+}
+
+/* a board to choose on Provision: a larger ring, a plate under the hand */
+:root[data-look='c'] .prov-choice-lead {
+  min-height: var(--con-h);
+  border-radius: 2px;
+  transition: background-color 150ms linear;
+}
+
+:root[data-look='c'] .prov-choice-lead:hover:not(:disabled) {
+  background: var(--con-hover);
+  box-shadow:
+    calc(var(--con-pad) * -1) 0 0 var(--con-hover),
+    var(--con-pad) 0 0 var(--con-hover);
+}
+
+:root[data-look='c'] .prov-choice-mark {
+  width: 18px;
+  height: 18px;
+}
+
+:root[data-look='c'] .prov-choice-mark .ring {
+  stroke: var(--c-ash);
+}
+
+/* the Bench's and Live's link rows: the same plate */
+:root[data-look='c'] .bench-rowlink:hover .ui-line,
+:root[data-look='c'] .bench-guide-row:hover,
+:root[data-look='c'] .live-line:hover {
+  border-bottom-color: var(--c-ash);
+  background: var(--con-hover);
+  box-shadow:
+    calc(var(--con-pad) * -1) 0 0 var(--con-hover),
+    var(--con-pad) 0 0 var(--con-hover);
+}
+
+:root[data-look='c'] .bench-guide-text {
+  line-height: 22px;
+}
+
+/* what each camera action does: its engraved name readable, not etched away */
+:root[data-look='c'] .cam-does-who {
+  color: var(--c-ash);
+}
+
+:root[data-look='c'] .cam-note {
+  color: color-mix(in srgb, var(--c-ash) 80%, var(--c-void));
+}
+
+/* notes that were etched away beside text that grew: a port's USB ids, a row's etched sub-words, a ring's stage words */
+:root[data-look='c'] .set-port-ids,
+:root[data-look='c'] .ui-row-extra .etch3,
+:root[data-look='c'] .ui-row-sub .etch3 {
+  color: var(--c-ash);
+}
+
+:root[data-look='c'] .ui-ring-word {
+  fill: var(--c-ash);
+}
+
+:root[data-look='c'] .ui-ring-word.done {
+  fill: var(--c-bone);
+}
+
+:root[data-look='c'] .ui-ring-word.current {
+  fill: var(--c-lumen);
+}
+
+:root[data-look='c'] .ui-ring-word.failed {
+  fill: var(--c-fault);
+}
+
+/* ------------------------------------------------------------------ the rail and the mode toggle */
+
+:root[data-look='c'] .sigils {
+  gap: clamp(2px, 1.6dvh, 14px);
+}
+
+:root[data-look='c'] .sigil {
+  width: 92px;
+  gap: 8px;
+  padding: 10px 0 8px;
+  border-radius: 3px;
+  color: var(--c-ash);
+  transition:
+    color 150ms linear,
+    background-color 150ms linear;
+}
+
+:root[data-look='c'] .sigil svg {
+  width: 28px;
+  height: 28px;
+}
+
+:root[data-look='c'] .sigil .caps {
+  line-height: 13px;
+  color: var(--c-ash);
+}
+
+/* under the hand: an outline only; the plate is the current page's alone */
+:root[data-look='c'] .sigil:hover:not([aria-current='page']) {
+  color: var(--c-bone);
+  background: none;
+  box-shadow: inset 0 0 0 1px var(--c-etch3);
+}
+
+:root[data-look='c'] .sigil:hover .caps {
+  color: var(--c-bone);
+}
+
+:root[data-look='c'] .sigil[aria-current='page'] {
+  color: var(--c-lumen);
+  background: color-mix(in srgb, var(--c-lumen) 15%, transparent);
+}
+
+:root[data-look='c'] .sigil[aria-current='page'] .caps {
+  color: var(--c-bone);
+}
+
+/* the current page's mark: a lumen bar on the rail's rule */
+:root[data-look='c'] .sigil[aria-current='page']::after {
+  content: '';
+  position: absolute;
+  top: 8px;
+  bottom: 8px;
+  right: -6px;
+  border-right: 3px solid var(--c-lumen);
+}
+
+:root[data-look='c'] .mode-toggle {
+  gap: 8px;
+  padding: 8px 10px;
+  border-radius: 3px;
+  color: var(--c-ash);
+  transition:
+    color 150ms linear,
+    background-color 150ms linear;
+}
+
+:root[data-look='c'] .mode-toggle svg {
+  width: 24px;
+  height: 24px;
+}
+
+:root[data-look='c'] .mode-toggle .caps {
+  line-height: 13px;
+  color: var(--c-ash);
+}
+
+:root[data-look='c'] .mode-toggle:hover {
+  color: var(--c-bone);
+  box-shadow: inset 0 0 0 1px var(--c-etch3);
+}
+
+:root[data-look='c'] .mode-toggle:hover .caps,
+:root[data-look='c'][data-mode='earth'] .mode-toggle .caps {
+  color: var(--c-bone);
+}
+
+@media (max-width: 699.98px) {
+  :root[data-look='c'] .sigils {
+    padding: 6px 4px 8px;
+  }
+
+  /* the tab bar's items share its width, so a long word (PROVISION, SETTINGS) stays inside its plate */
+  :root[data-look='c'] .sigils > * {
+    flex: 1 1 0;
+    min-width: 0;
+  }
+
+  :root[data-look='c'] .sigil {
+    width: 100%;
+    gap: 5px;
+    padding: 8px 2px 6px;
+  }
+
+  :root[data-look='c'] .sigil svg {
+    width: 26px;
+    height: 26px;
+  }
+
+  :root[data-look='c'] .sigil .caps {
+    letter-spacing: 0.08em;
+    margin-right: -0.08em;
+  }
+
+  :root[data-look='c'] .sigil[aria-current='page']::after {
+    top: -6px;
+    bottom: auto;
+    left: 25%;
+    right: 25%;
+    border-right: 0;
+    border-top: 3px solid var(--c-lumen);
+  }
+
+  :root[data-look='c'] .shell-mode {
+    top: 12px;
+    right: 6px;
+  }
+
+  :root[data-look='c'] .ui-page-head {
+    padding-right: 96px;
+  }
+
+  /* the header's engraved words wrap at phone width rather than run past the gutter */
+  :root[data-look='c'] .ui-page-sub,
+  :root[data-look='c'] .ui-page-sub .caps {
+    white-space: normal;
+    overflow-wrap: anywhere;
+  }
+
+  /* the page's tabs wrap onto a second line rather than hide past the edge: every tab carries its own baseline (so a
+     wrapped line has one too), the current one its 3 px lumen bar */
+  :root[data-look='c'] .ui-subnav {
+    flex-wrap: wrap;
+    overflow-x: visible;
+    mask-image: none;
+    border-bottom: 0;
+    row-gap: 4px;
+  }
+
+  :root[data-look='c'] .ui-subnav-item {
+    min-height: 44px;
+    margin-bottom: 0;
+    /* every word starts at its tab's left edge, so a wrapped line lines up under the first */
+    padding: 4px 14px 0 2px;
+    font-size: var(--fs-label);
+    border-bottom: 0;
+    box-shadow: inset 0 calc(var(--con-line) * -1) 0 var(--c-etch2);
+  }
+
+  :root[data-look='c'] .ui-subnav-item:first-child {
+    padding-left: 2px;
+  }
+
+  :root[data-look='c'] .ui-subnav-item:hover {
+    box-shadow: inset 0 calc(var(--con-line) * -1) 0 var(--c-ash);
+  }
+
+  :root[data-look='c'] .ui-subnav-item[aria-current='page'] {
+    box-shadow: inset 0 -3px 0 var(--c-lumen);
+  }
+
+  :root[data-look='c'] .dev-strip .ui-subnav-item {
+    min-height: 40px;
+    box-shadow: inset 0 calc(var(--con-line) * -1) 0 var(--c-etch1);
+  }
+
+  :root[data-look='c'] .dev-strip .ui-subnav-item[aria-current='page'] {
+    box-shadow: inset 0 -2px 0 var(--c-lumen);
+  }
+}
+
+/* a short window beside a wide one: the marks without words keep their plates */
+@media (max-height: 520px) and (min-width: 700px) {
+  :root[data-look='c'] .sigil {
+    padding: 6px 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :root[data-look='c'] .ui-button,
+  :root[data-look='c'] .ui-subnav-item,
+  :root[data-look='c'] .ui-disclosure-toggle,
+  :root[data-look='c'] .ui-toggle,
+  :root[data-look='c'] .sigil,
+  :root[data-look='c'] .mode-toggle {
+    transition: none;
+  }
+}

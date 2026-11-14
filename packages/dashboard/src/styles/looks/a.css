@@ -1,0 +1,794 @@
+/*
+ * Proposal a, "lifted": the same airy Astrolabe page, with clearer affordances. Every selector is scoped to
+ * :root[data-look='a'].
+ *
+ * - Type about +1 px across the scale; the caps labels (9 -> 10.5 px) and the micro words (7.5 -> 9 px) gain most.
+ * - Buttons: an ash hairline at rest (bone on hover) with a soft bone wash under the hand; 36 px tall, wider padding.
+ *   Primary is lumen: hairline, word and a faint lumen wash. Disabled: a dashed etch hairline, the word still readable.
+ * - Tabs: inactive words in ash, a hover underline, the current one on a 2 px lumen underline.
+ * - Folds, rows that open something, links: a mark at rest (a › at the end of every row that opens a page, a dotted
+ *   rule under a link, an etched rule under a filter), and a faint hover plate (or a solid underline) under the hand.
+ * - Focus: a 2 px lumen ring, everywhere a key can land.
+ * - The current page in the rail keeps a lumen wash a hover plate cannot outrank.
+ */
+
+/* ------------------------------------------------------------------ scale */
+
+:root[data-look='a'] {
+  --fs-reading: 46px;
+  --fs-title: 21px;
+  --fs-value: 16px;
+  --fs-data: 14px;
+  --fs-earth: 12.5px;
+  --fs-label: 10.5px;
+  --fs-micro: 9px;
+  --row-min: 38px;
+  /* this proposal's own: the hover plate and the hairline of a control at rest */
+  --a-plate: color-mix(in srgb, var(--c-bone) 6%, transparent);
+  --a-plate-strong: color-mix(in srgb, var(--c-bone) 10%, transparent);
+  --a-lumen-wash: color-mix(in srgb, var(--c-lumen) 8%, transparent);
+  --a-lumen-wash-strong: color-mix(in srgb, var(--c-lumen) 16%, transparent);
+  --a-control: var(--c-ash);
+  --a-word: color-mix(in srgb, var(--c-ash) 55%, var(--c-bone));
+  --a-disabled: color-mix(in srgb, var(--c-ash) 72%, transparent);
+}
+
+@media (max-width: 699.98px) {
+  :root[data-look='a'] {
+    --fs-reading: 36px;
+    --fs-title: 18px;
+    --row-min: 44px;
+  }
+}
+
+/* line heights written in px beside the sizes, raised with them */
+:root[data-look='a'] .ui-row,
+:root[data-look='a'] .devs-row,
+:root[data-look='a'] .live-line {
+  line-height: 19px;
+}
+
+:root[data-look='a'] .ui-line {
+  line-height: 19px;
+}
+
+:root[data-look='a'] .ui-row-label,
+:root[data-look='a'] .ui-line-label {
+  line-height: 12px;
+}
+
+:root[data-look='a'] .ui-row-extra,
+:root[data-look='a'] .ui-row-sub,
+:root[data-look='a'] .ui-row-earth {
+  line-height: 16px;
+}
+
+:root[data-look='a'] .ui-disclosure-sub,
+:root[data-look='a'] .dev-summary,
+:root[data-look='a'] .dev-doc,
+:root[data-look='a'] .dev-does {
+  line-height: 18px;
+}
+
+/* ------------------------------------------------------------------ focus */
+
+:where(:root[data-look='a']) :focus-visible {
+  outline: 2px solid var(--c-lumen);
+  outline-offset: 3px;
+  border-radius: 2px;
+}
+
+/* ----------------------------------------------------------------- button */
+
+:root[data-look='a'] .ui-button {
+  min-height: 36px;
+  padding: 0 18px;
+  border-color: var(--a-control);
+  background: transparent;
+  transition:
+    border-color 150ms linear,
+    color 150ms linear,
+    background-color 150ms linear;
+}
+
+:root[data-look='a'] .ui-button:hover:not(:disabled) {
+  border-color: var(--c-bone);
+  background: var(--a-plate);
+}
+
+:root[data-look='a'] .ui-button:active:not(:disabled) {
+  background: var(--a-plate-strong);
+}
+
+:root[data-look='a'] .ui-button[data-variant='primary'] {
+  border-color: var(--c-lumen);
+  color: var(--c-lumen);
+  background: var(--a-lumen-wash);
+}
+
+:root[data-look='a'] .ui-button[data-variant='primary']:hover:not(:disabled) {
+  border-color: var(--c-lumen);
+  color: var(--c-lumen);
+  background: var(--a-lumen-wash-strong);
+}
+
+:root[data-look='a'] .ui-button[data-variant='destructive'] {
+  border-color: var(--c-fault);
+  color: var(--c-fault);
+}
+
+:root[data-look='a'] .ui-button[data-variant='destructive']:hover:not(:disabled) {
+  border-color: var(--c-fault);
+  color: var(--c-bone);
+  background: color-mix(in srgb, var(--c-fault) 12%, transparent);
+}
+
+/* armed: the second press is the one that acts, so it carries the fault wash at rest */
+:root[data-look='a'] .ui-button[data-armed] {
+  border-color: var(--c-fault);
+  color: var(--c-bone);
+  background: color-mix(in srgb, var(--c-fault) 16%, transparent);
+}
+
+/* quiet: an underlined word, brighter, with a small plate under the hand */
+:root[data-look='a'] .ui-button[data-variant='quiet'] {
+  min-height: 32px;
+  padding: 0 6px;
+  border-color: transparent;
+  border-bottom-color: var(--a-control);
+  color: var(--a-word);
+  background: transparent;
+}
+
+:root[data-look='a'] .ui-button[data-variant='quiet']:hover:not(:disabled) {
+  border-color: transparent;
+  border-bottom-color: var(--c-bone);
+  color: var(--c-bone);
+  background: var(--a-plate);
+}
+
+:root[data-look='a'] .ui-button[data-variant='quiet'][data-tone='fault'] {
+  color: var(--c-fault);
+  border-bottom-color: var(--c-fault);
+}
+
+:root[data-look='a'] .ui-button[data-variant='quiet'][data-tone='fault']:hover:not(:disabled) {
+  color: var(--c-fault);
+  border-bottom-color: var(--c-fault);
+  background: color-mix(in srgb, var(--c-fault) 10%, transparent);
+}
+
+/* disabled: a dashed etch hairline (not a control now), the word still readable */
+:root[data-look='a'] .ui-button:disabled {
+  border-style: dashed;
+  border-color: var(--c-etch3);
+  color: var(--a-disabled);
+  background: transparent;
+}
+
+:root[data-look='a'] .ui-button[data-variant='quiet']:disabled,
+:root[data-look='a'] .ui-button[data-variant='quiet'][data-tone='fault']:disabled {
+  border-color: transparent;
+  border-bottom-style: dashed;
+  border-bottom-color: var(--c-etch3);
+  color: var(--a-disabled);
+  cursor: not-allowed;
+}
+
+:root[data-look='a'] .ui-button[data-busy] {
+  border-style: solid;
+  border-color: var(--c-etch3);
+}
+
+:root[data-look='a'] .ui-button-row,
+:root[data-look='a'] .ui-confirm {
+  gap: var(--sp-2) 10px;
+}
+
+/* the lit transport button keeps one width (camera.css), at the larger size */
+:root[data-look='a'] .cam-transport .ui-button[data-watch] {
+  min-width: 11em;
+}
+
+:root[data-look='a'] .cam-card-playing {
+  min-height: 36px;
+}
+
+/* ------------------------------------------------------------------- tabs */
+
+/* the rule is drawn under the words only, so the nav can keep a little room either side for the focus ring */
+:root[data-look='a'] .ui-subnav {
+  gap: var(--sp-4);
+  margin-inline: -9px;
+  padding: 2px 9px 0;
+  border-bottom-color: transparent;
+  background: linear-gradient(var(--c-etch2), var(--c-etch2)) left 9px bottom / calc(100% - 18px) 1px no-repeat;
+}
+
+:root[data-look='a'] .ui-subnav-item {
+  padding: 10px 0 8px;
+  margin-bottom: 0;
+  border-bottom: 2px solid transparent;
+  color: var(--c-ash);
+  transition:
+    color 150ms linear,
+    border-color 150ms linear;
+}
+
+:root[data-look='a'] .ui-subnav-item:hover {
+  color: var(--c-bone);
+  border-bottom-color: var(--c-etch3);
+}
+
+:root[data-look='a'] .ui-subnav-item[aria-current='page'] {
+  color: var(--c-lumen);
+  border-bottom-color: var(--c-lumen);
+}
+
+:root[data-look='a'] .ui-subnav-item:focus-visible {
+  outline: none;
+}
+
+:root[data-look='a'] .ui-subnav-item:focus-visible::after {
+  content: '';
+  position: absolute;
+  inset: 4px -8px 6px;
+  border: 2px solid var(--c-lumen);
+  border-radius: 2px;
+  pointer-events: none;
+}
+
+/* phone: four tabs in 358 px (INSTRUMENTS · ACTIVITY · FACTS · ENGINEERING), closer and a little less tracked */
+@media (max-width: 699.98px) {
+  :root[data-look='a'] .ui-subnav {
+    gap: var(--sp-3);
+  }
+
+  :root[data-look='a'] .ui-subnav-item {
+    letter-spacing: calc(var(--track-caps) * 0.8);
+  }
+}
+
+/* chips (filters, choices): engraved words over an etched rule at rest, so a filter reads as a switch, not a legend;
+   ash under the hand, lumen pressed */
+:root[data-look='a'] .ui-chip {
+  min-height: 32px;
+  padding-bottom: 2px;
+  color: var(--c-ash);
+  border-bottom: 2px solid var(--c-etch2);
+}
+
+:root[data-look='a'] .ui-chip:hover:not(:disabled) {
+  color: var(--c-bone);
+  border-bottom-color: var(--c-ash);
+}
+
+/* a chip that is one of a choice (role radio, the Record form's WHERE and PACE) is marked as a pressed one is */
+:root[data-look='a'] .ui-chip[aria-pressed='true'],
+:root[data-look='a'] .ui-chip[aria-checked='true'] {
+  color: var(--c-bone);
+  border-bottom-color: var(--c-lumen);
+}
+
+/* -------------------------------------------------------- hover plates */
+
+/* A faint plate under a row that opens something, a fold, an Activity line: drawn by a pseudo-element behind the
+   content, 6 px past the hairline at each end, so nothing in the row moves. */
+:root[data-look='a'] .ui-disclosure-toggle,
+:root[data-look='a'] a.ui-row,
+:root[data-look='a'] button.ui-row,
+:root[data-look='a'] .devs-row,
+:root[data-look='a'] .dev-rung,
+:root[data-look='a'] .dev-event,
+:root[data-look='a'] .live-line,
+:root[data-look='a'] .bench-rowlink,
+:root[data-look='a'] .bench-guide-row {
+  position: relative;
+  isolation: isolate;
+}
+
+:root[data-look='a'] .ui-disclosure-toggle::before,
+:root[data-look='a'] a.ui-row::before,
+:root[data-look='a'] button.ui-row::before,
+:root[data-look='a'] .devs-row::before,
+:root[data-look='a'] .dev-rung::before,
+:root[data-look='a'] .dev-event::before,
+:root[data-look='a'] .live-line::before,
+:root[data-look='a'] .bench-rowlink::before,
+:root[data-look='a'] .bench-guide-row::before {
+  content: '';
+  position: absolute;
+  inset: 0 -6px;
+  z-index: -1;
+  border-radius: 2px;
+  background: transparent;
+  pointer-events: none;
+  transition: background-color 150ms linear;
+}
+
+:root[data-look='a'] .ui-disclosure-toggle:hover::before,
+:root[data-look='a'] a.ui-row:hover::before,
+:root[data-look='a'] button.ui-row:hover::before,
+:root[data-look='a'] .devs-row:hover::before,
+:root[data-look='a'] .dev-rung:hover::before,
+:root[data-look='a'] .dev-event:has(summary:hover)::before,
+:root[data-look='a'] .live-line:hover::before,
+:root[data-look='a'] .bench-rowlink:hover::before,
+:root[data-look='a'] .bench-guide-row:hover::before {
+  background: var(--a-plate);
+}
+
+:root[data-look='a'] a.ui-row:hover,
+:root[data-look='a'] button.ui-row:hover,
+:root[data-look='a'] .devs-row:hover,
+:root[data-look='a'] .dev-rung:hover,
+:root[data-look='a'] .bench-guide-row:hover {
+  border-bottom-color: var(--c-ash);
+}
+
+/* every row that opens a page says so at rest with the instrument row's way in (›): ash, lumen under the hand.
+   A link row (the Hub's fleet) is flex, so the mark lands at its end; the Devices rows and Bench's guides are grids,
+   so the mark is drawn in a little room kept at the row's end, and the columns stay as they are. */
+:root[data-look='a'] a.ui-row::after,
+:root[data-look='a'] .devs-row::after,
+:root[data-look='a'] .bench-guide-row::after {
+  content: '›';
+  flex: none;
+  color: var(--c-ash);
+  font-family: var(--font-reading);
+  font-size: var(--fs-value);
+  line-height: 1;
+  transition: color 150ms linear;
+}
+
+:root[data-look='a'] a.ui-row::after {
+  align-self: center;
+  margin-left: var(--sp-3);
+}
+
+:root[data-look='a'] .devs-head,
+:root[data-look='a'] .devs-row,
+:root[data-look='a'] .bench-guide-row {
+  padding-right: 22px;
+}
+
+:root[data-look='a'] .devs-row::after,
+:root[data-look='a'] .bench-guide-row::after {
+  position: absolute;
+  right: 4px;
+  top: 50%;
+  transform: translateY(-50%);
+  pointer-events: none;
+}
+
+:root[data-look='a'] a.ui-row:hover::after,
+:root[data-look='a'] a.ui-row:focus-visible::after,
+:root[data-look='a'] .devs-row:hover::after,
+:root[data-look='a'] .devs-row:has(.devs-link:focus-visible)::after,
+:root[data-look='a'] .bench-guide-row:hover::after,
+:root[data-look='a'] .bench-guide-row:focus-visible::after {
+  color: var(--c-lumen);
+}
+
+/* the folds: the title brighter, the + mark in bone; open, the mark is lumen */
+:root[data-look='a'] .ui-disclosure-toggle {
+  color: var(--a-word);
+  transition: color 150ms linear;
+}
+
+:root[data-look='a'] .ui-disclosure-toggle:hover {
+  color: var(--c-bone);
+}
+
+:root[data-look='a'] .ui-disclosure-toggle .mark {
+  color: var(--c-bone);
+}
+
+:root[data-look='a'] .ui-disclosure-toggle[aria-expanded='true'] {
+  color: var(--c-bone);
+}
+
+:root[data-look='a'] .ui-disclosure-toggle[aria-expanded='true'] .mark {
+  color: var(--c-lumen);
+}
+
+
+/* an instrument's row: the way in (›) is ash at rest, lumen with the name under the hand */
+:root[data-look='a'] .dev-rung-go {
+  color: var(--c-ash);
+  font-size: var(--fs-value);
+}
+
+:root[data-look='a'] .dev-rung:hover .dev-rung-go,
+:root[data-look='a'] .dev-rung:has(.dev-rung-link:focus-visible) .dev-rung-go {
+  color: var(--c-lumen);
+}
+
+/* keyboard focus on a row or a fold: the ring is drawn on the plate, 6 px clear of the words at each end */
+:root[data-look='a'] .ui-disclosure-toggle:focus-visible,
+:root[data-look='a'] a.ui-row:focus-visible,
+:root[data-look='a'] button.ui-row:focus-visible,
+:root[data-look='a'] .live-line:focus-visible,
+:root[data-look='a'] .bench-rowlink:focus-visible,
+:root[data-look='a'] .bench-guide-row:focus-visible {
+  outline: none;
+}
+
+:root[data-look='a'] .ui-disclosure-toggle:focus-visible::before,
+:root[data-look='a'] a.ui-row:focus-visible::before,
+:root[data-look='a'] button.ui-row:focus-visible::before,
+:root[data-look='a'] .live-line:focus-visible::before,
+:root[data-look='a'] .bench-rowlink:focus-visible::before,
+:root[data-look='a'] .bench-guide-row:focus-visible::before,
+:root[data-look='a'] button.dev-rung-link:focus-visible::before,
+:root[data-look='a'] .dev-rung:has(.dev-rung-link:focus-visible)::before,
+:root[data-look='a'] .devs-row:has(.devs-link:focus-visible)::before {
+  outline: 2px solid var(--c-lumen);
+  outline-offset: 0;
+  background: var(--a-plate);
+}
+
+:root[data-look='a'] .dev-rung:has(.dev-rung-link:focus-visible) {
+  border-bottom-color: var(--c-etch1);
+}
+
+:root[data-look='a'] .devs-link:focus-visible::after {
+  outline: none;
+}
+
+
+/* Activity: the words of an event open its raw fields; say so at rest with an etched underline, lumen under the hand */
+:root[data-look='a'] .dev-event-raw summary {
+  width: fit-content;
+  max-width: 100%;
+  text-decoration: underline;
+  text-decoration-color: var(--c-etch3);
+  text-underline-offset: 4px;
+  transition:
+    color 150ms linear,
+    text-decoration-color 150ms linear;
+}
+
+:root[data-look='a'] .dev-event-raw summary:hover {
+  color: var(--c-lumen);
+  text-decoration: underline;
+  text-decoration-color: color-mix(in srgb, var(--c-lumen) 50%, transparent);
+  text-underline-offset: 4px;
+}
+
+/* ------------------------------------------------------------------ links */
+
+:root[data-look='a'] .dev-back {
+  color: var(--c-ash);
+  text-decoration: underline;
+  text-decoration-color: transparent;
+  text-underline-offset: 5px;
+  transition:
+    color 150ms linear,
+    text-decoration-color 150ms linear;
+}
+
+:root[data-look='a'] .dev-back:hover {
+  color: var(--c-lumen);
+  text-decoration-color: var(--c-lumen);
+}
+
+/* a link that goes somewhere: a dotted rule at rest (an action keeps its solid one), solid lumen under the hand */
+:root[data-look='a'] .dev-more {
+  color: var(--a-word);
+  text-decoration: underline dotted;
+  text-decoration-color: var(--c-ash);
+  text-underline-offset: 5px;
+  transition:
+    color 150ms linear,
+    text-decoration-color 150ms linear;
+}
+
+:root[data-look='a'] .dev-more:hover {
+  color: var(--c-lumen);
+  text-decoration-style: solid;
+  text-decoration-color: var(--c-lumen);
+}
+
+:root[data-look='a'] .dev-more:focus-visible,
+:root[data-look='a'] .dev-back:focus-visible,
+:root[data-look='a'] .bench-back:focus-visible {
+  outline-offset: 4px;
+  border-radius: 3px;
+}
+
+/* Bench: its way back as the device's, its shop links on an ash rule */
+:root[data-look='a'] .bench-back {
+  text-decoration: underline;
+  text-decoration-color: transparent;
+  text-underline-offset: 5px;
+  transition:
+    color 150ms linear,
+    text-decoration-color 150ms linear;
+}
+
+:root[data-look='a'] .bench-back:hover {
+  text-decoration-color: var(--c-lumen);
+}
+
+:root[data-look='a'] .bench-ext {
+  border-bottom-color: var(--c-ash);
+}
+
+:root[data-look='a'] .bench-ext:hover {
+  border-bottom-color: var(--c-lumen);
+}
+
+/* a command in a value moves to the next line whole when it can, rather than breaking at its own spaces */
+:root[data-look='a'] .ui-row-value .ui-code {
+  display: inline-block;
+  max-width: 100%;
+}
+
+:root[data-look='a'] .dev-inline-link {
+  text-decoration-color: var(--c-ash);
+}
+
+:root[data-look='a'] .dev-inline-link:hover {
+  text-decoration-color: var(--c-lumen);
+}
+
+:root[data-look='a'] .prov-note a {
+  text-decoration-color: var(--c-ash);
+}
+
+/* ----------------------------------------------------------------- fields */
+
+:root[data-look='a'] .ui-field {
+  gap: 8px;
+}
+
+:root[data-look='a'] .ui-input,
+:root[data-look='a'] .ui-select {
+  min-height: 38px;
+  border-bottom-color: var(--a-control);
+}
+
+:root[data-look='a'] .ui-input:hover,
+:root[data-look='a'] .ui-select:hover {
+  border-bottom-color: var(--c-bone);
+}
+
+:root[data-look='a'] .ui-input:focus-visible,
+:root[data-look='a'] .ui-select:focus-visible {
+  outline: none;
+  border-bottom-color: var(--c-lumen);
+  box-shadow: 0 1px 0 0 var(--c-lumen);
+}
+
+:root[data-look='a'] .ui-input:disabled,
+:root[data-look='a'] .ui-select:disabled {
+  color: var(--a-disabled);
+  border-bottom-style: dashed;
+  border-bottom-color: var(--c-etch3);
+  cursor: not-allowed;
+}
+
+:root[data-look='a'] .ui-select-mark {
+  color: var(--c-bone);
+}
+
+:root[data-look='a'] .dev-inline-select {
+  min-height: 32px;
+}
+
+/* the colour well: a bone ring under the hand, the lumen focus ring of everything else */
+:root[data-look='a'] .dev-colour-well:hover .dev-colour-disc {
+  box-shadow: 0 0 0 1px var(--c-bone);
+}
+
+:root[data-look='a'] .dev-colour-well:has(input:focus-visible) .dev-colour-disc {
+  box-shadow:
+    0 0 0 2px var(--c-void),
+    0 0 0 4px var(--c-lumen);
+}
+
+:root[data-look='a'] .dev-json:focus-visible {
+  box-shadow: 0 1px 0 0 var(--c-lumen);
+}
+
+/* switches: the ring a little larger and in ash at rest, bone under the hand */
+:root[data-look='a'] .ui-toggle {
+  min-height: 36px;
+  color: var(--c-ash);
+}
+
+:root[data-look='a'] .ui-toggle svg {
+  width: 20px;
+  height: 20px;
+}
+
+:root[data-look='a'] .ui-toggle:hover:not(:disabled) {
+  color: var(--c-bone);
+}
+
+:root[data-look='a'] .ui-toggle:hover:not(:disabled) .caps {
+  color: var(--c-bone);
+}
+
+:root[data-look='a'] .ui-toggle[aria-checked='true'] {
+  color: var(--c-lumen);
+}
+
+:root[data-look='a'] .ui-toggle[aria-checked='true'] .caps {
+  color: var(--c-bone);
+}
+
+:root[data-look='a'] .ui-toggle:disabled {
+  color: var(--c-etch3);
+}
+
+:root[data-look='a'] .ui-toggle:disabled .caps {
+  color: var(--a-disabled);
+}
+
+/* sliders: a 2 px track, a 13 px bead with a ring under the hand */
+:root[data-look='a'] .ui-slider {
+  height: 32px;
+}
+
+:root[data-look='a'] .ui-slider::-webkit-slider-runnable-track {
+  height: 2px;
+  background: linear-gradient(to right, var(--c-lumen) 0 var(--fill), var(--c-etch3) var(--fill) 100%);
+}
+
+:root[data-look='a'] .ui-slider::-moz-range-track {
+  height: 2px;
+}
+
+:root[data-look='a'] .ui-slider::-moz-range-progress {
+  height: 2px;
+}
+
+:root[data-look='a'] .ui-slider::-webkit-slider-thumb {
+  width: 13px;
+  height: 13px;
+  margin-top: -5.5px;
+  box-shadow: 0 0 0 0 transparent;
+  transition: box-shadow 150ms linear;
+}
+
+:root[data-look='a'] .ui-slider::-moz-range-thumb {
+  width: 13px;
+  height: 13px;
+}
+
+:root[data-look='a'] .ui-slider:hover:not(:disabled)::-webkit-slider-thumb {
+  box-shadow: 0 0 0 4px var(--a-lumen-wash-strong);
+}
+
+:root[data-look='a'] .ui-slider:focus-visible {
+  outline-offset: 2px;
+}
+
+:root[data-look='a'] .ui-slider:disabled {
+  cursor: not-allowed;
+}
+
+:root[data-look='a'] .ui-slider:disabled::-webkit-slider-runnable-track {
+  background: var(--c-etch2);
+}
+
+/* choice rings (Provision) */
+:root[data-look='a'] .prov-choice-mark .ring {
+  stroke: var(--c-ash);
+}
+
+:root[data-look='a'] .prov-choice-lead:hover .ring {
+  stroke: var(--c-bone);
+}
+
+:root[data-look='a'] .prov-choice[data-chosen] .prov-choice-mark .ring {
+  stroke: var(--c-lumen);
+}
+
+/* -------------------------------------------------------------------- rail */
+
+:root[data-look='a'] .sigil {
+  gap: 7px;
+  padding: 8px 0 7px;
+  border-radius: 3px;
+  color: var(--c-ash);
+  transition:
+    color 150ms linear,
+    background-color 150ms linear;
+}
+
+:root[data-look='a'] .sigil .caps,
+:root[data-look='a'] .mode-toggle .caps {
+  line-height: 11px;
+}
+
+:root[data-look='a'] .sigil:hover {
+  color: var(--c-bone);
+  background: var(--a-plate);
+}
+
+:root[data-look='a'] .sigil[aria-current='page'],
+:root[data-look='a'] .sigil[aria-current='page']:hover {
+  color: var(--c-lumen);
+  background: var(--a-lumen-wash);
+  box-shadow: inset 2px 0 0 var(--c-lumen);
+}
+
+:root[data-look='a'] .sigil[aria-current='page'] .caps {
+  color: var(--c-bone);
+}
+
+:root[data-look='a'] .mode-toggle {
+  color: var(--c-ash);
+  transition: color 150ms linear;
+}
+
+:root[data-look='a'] .mode-toggle:hover {
+  color: var(--c-bone);
+}
+
+:root[data-look='a'][data-mode='earth'] .mode-toggle,
+:root[data-look='a'] [data-mode='earth'] .mode-toggle {
+  color: var(--c-bone);
+}
+
+:root[data-look='a'][data-mode='earth'] .mode-toggle .caps,
+:root[data-look='a'] [data-mode='earth'] .mode-toggle .caps {
+  color: var(--c-bone);
+}
+
+@media (max-width: 699.98px) {
+  :root[data-look='a'] .sigil {
+    gap: 5px;
+    padding: 6px 0;
+  }
+
+  /* the bottom bar: the current page's bar on top; six words at 9 px fit 390 px with the tracking a little closer */
+  :root[data-look='a'] .sigil[aria-current='page'],
+  :root[data-look='a'] .sigil[aria-current='page']:hover {
+    box-shadow: inset 0 2px 0 var(--c-lumen);
+  }
+
+  :root[data-look='a'] .sigil .caps {
+    letter-spacing: calc(var(--track-caps) * 0.6);
+    margin-right: calc(var(--track-caps) * -0.6);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :root[data-look='a'] .ui-button,
+  :root[data-look='a'] .ui-subnav-item,
+  :root[data-look='a'] .sigil,
+  :root[data-look='a'] .ui-disclosure-toggle::before,
+  :root[data-look='a'] .devs-row::before,
+  :root[data-look='a'] .dev-rung::before,
+  :root[data-look='a'] a.ui-row::after,
+  :root[data-look='a'] .devs-row::after,
+  :root[data-look='a'] .bench-guide-row::before,
+  :root[data-look='a'] .bench-guide-row::after,
+  :root[data-look='a'] .dev-event-raw summary,
+  :root[data-look='a'] .dev-more,
+  :root[data-look='a'] .bench-back {
+    transition: none;
+  }
+}
+
+:root[data-look='a'] .ui-chip:disabled,
+:root[data-look='a'] .cam-words .ui-chip:disabled {
+  color: var(--a-disabled);
+  border-bottom-style: dashed;
+  border-bottom-color: var(--c-etch3);
+  cursor: not-allowed;
+}
+
+/* -------------------------------------------------------- words to read */
+
+/* the engraved names beside what an action does, and the quiet notes: readable at the larger size */
+:root[data-look='a'] .cam-does-who,
+:root[data-look='a'] .cam-note,
+:root[data-look='a'] .cam-held,
+:root[data-look='a'] .dev-optional {
+  color: color-mix(in srgb, var(--c-ash) 70%, var(--c-etch3));
+}

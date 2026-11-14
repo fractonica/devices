@@ -14,6 +14,7 @@ import { loadCore } from './time/core.ts';
 import '@xterm/xterm/css/xterm.css';
 import './styles/base.css';
 import './ui/ui.css';
+import './styles/looks.css';
 
 applyHubTheme(document.documentElement);
 setHubIcon();

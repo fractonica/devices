@@ -1,0 +1,52 @@
+/*
+ * looks.css - the design proposals compared on 2026-11-14 (shell/look.ts), and the switcher in the window's corner.
+ * Each proposal is one file, every rule scoped to :root[data-look='<x>']; `now` is the base styles untouched.
+ */
+
+@import './looks/a.css';
+@import './looks/b.css';
+@import './looks/c.css';
+
+.look-picker {
+  position: fixed;
+  right: var(--sp-3);
+  bottom: var(--sp-3);
+  z-index: 60;
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  padding: 4px 4px 4px 10px;
+  border: var(--hair) solid var(--c-etch3);
+  background: var(--c-void);
+}
+
+.look-picker-label {
+  margin-right: 6px;
+  color: var(--c-ash);
+}
+
+.look-picker-choice {
+  min-width: 36px;
+  min-height: 28px;
+  padding: 0 8px;
+  border: var(--hair) solid transparent;
+  color: var(--c-ash);
+}
+
+.look-picker-choice:hover {
+  color: var(--c-bone);
+  border-color: var(--c-etch2);
+}
+
+.look-picker-choice[aria-checked='true'] {
+  color: var(--c-lumen);
+  border-color: var(--c-lumen);
+}
+
+@media (max-width: 699.98px) {
+  /* above the bottom row of sigils, clear of the page title */
+  .look-picker {
+    right: var(--sp-2);
+    bottom: calc(84px + var(--safe-bottom));
+  }
+}

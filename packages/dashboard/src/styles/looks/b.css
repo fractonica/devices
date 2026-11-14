@@ -1,0 +1,1222 @@
+/*
+ * Proposal b, "plated": every control is a solid plate, so what can be pressed is told from what is only read by its
+ * fill, not by a hairline alone. Raised plates (etch-2 over etch-1) are buttons, toggles, tabs, folds and the rows
+ * that open something; recessed wells (etch-1, a darker top edge) take input. The primary action is a lumen plate
+ * with void letters, a destructive one a fault plate; disabled is the plate taken away (an etch-2 hairline, dim words).
+ * Type about +2 px. Every selector is scoped to :root[data-look='b'].
+ */
+
+/* ------------------------------------------------------------------ scale and the plate tones */
+
+:root[data-look='b'] {
+  --fs-reading: 46px;
+  --fs-title: 22px;
+  --fs-value: 17px;
+  --fs-data: 15px;
+  --fs-earth: 13px;
+  --fs-label: 11px;
+  --fs-micro: 9.5px;
+  --row-min: 40px;
+
+  /* the plate tones, from the tokens */
+  --b-plate: color-mix(in srgb, var(--c-etch2) 62%, var(--c-etch1));
+  --b-plate-hover: color-mix(in srgb, var(--c-etch3) 40%, var(--c-etch2));
+  --b-plate-press: var(--c-etch1);
+  --b-plate-edge: color-mix(in srgb, var(--c-etch3) 70%, var(--c-etch2));
+  --b-plate-lip: color-mix(in srgb, var(--c-etch3) 55%, var(--c-etch2));
+  --b-well: color-mix(in srgb, var(--c-etch1) 75%, var(--c-void));
+  --b-well-edge: var(--c-etch2);
+  --b-row: color-mix(in srgb, var(--c-etch2) 34%, transparent);
+  --b-row-hover: color-mix(in srgb, var(--c-etch2) 80%, transparent);
+  --b-lit: color-mix(in srgb, var(--c-lumen) 14%, transparent);
+  --b-lit-edge: color-mix(in srgb, var(--c-lumen) 55%, var(--c-etch2));
+  --b-fault-plate: color-mix(in srgb, var(--c-fault) 16%, var(--c-etch1));
+  --b-fault-hover: color-mix(in srgb, var(--c-fault) 28%, var(--c-etch1));
+  --b-dim-word: color-mix(in srgb, var(--c-ash) 55%, var(--c-etch3));
+  --b-radius: 3px;
+  --b-fade: 120ms linear;
+}
+
+@media (max-width: 699.98px) {
+  :root[data-look='b'] {
+    --fs-reading: 36px;
+    --fs-title: 18px;
+    --fs-micro: 8.5px;
+    --row-min: 46px;
+  }
+}
+
+/* keyboard focus: a 2 px lumen ring, clear of the plate */
+:root[data-look='b'] :focus-visible {
+  outline: 2px solid var(--c-lumen);
+  outline-offset: 3px;
+  border-radius: var(--b-radius);
+}
+
+/* a link whose row draws the ring (the device list, an instrument's row) draws none itself */
+:root[data-look='b'] .devs-link:focus-visible,
+:root[data-look='b'] .dev-rung-link:focus-visible {
+  outline: none;
+}
+
+/* ------------------------------------------------------------------ section heads: an aside with a button wraps rather than running off */
+
+:root[data-look='b'] .ui-section-head {
+  flex-wrap: wrap;
+  row-gap: var(--sp-2);
+}
+
+:root[data-look='b'] .ui-section-aside {
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  align-items: center;
+  row-gap: var(--sp-2);
+  margin-left: auto;
+  min-width: 0;
+}
+
+/* ------------------------------------------------------------------ line heights that follow the larger type */
+
+:root[data-look='b'] .ui-row {
+  line-height: 20px;
+}
+
+:root[data-look='b'] .ui-row-label,
+:root[data-look='b'] .ui-line-label {
+  line-height: 14px;
+}
+
+:root[data-look='b'] .ui-row-extra,
+:root[data-look='b'] .ui-row-sub,
+:root[data-look='b'] .ui-row-earth {
+  line-height: 17px;
+}
+
+:root[data-look='b'] .ui-line {
+  line-height: 21px;
+}
+
+:root[data-look='b'] .ui-disclosure-sub,
+:root[data-look='b'] .dev-summary,
+:root[data-look='b'] .dev-doc,
+:root[data-look='b'] .dev-does {
+  line-height: 19px;
+}
+
+:root[data-look='b'] .devs-row {
+  line-height: 20px;
+}
+
+/* ------------------------------------------------------------------ buttons */
+
+:root[data-look='b'] .ui-button {
+  min-height: 40px;
+  padding: 0 18px;
+  border: var(--hair) solid var(--b-plate-edge);
+  border-top-color: var(--b-plate-lip);
+  border-radius: var(--b-radius);
+  background: var(--b-plate);
+  color: var(--c-bone);
+  box-shadow: 0 1px 0 var(--c-void);
+  transition:
+    background-color var(--b-fade),
+    border-color var(--b-fade),
+    color var(--b-fade);
+}
+
+:root[data-look='b'] .ui-button:hover:not(:disabled) {
+  background: var(--b-plate-hover);
+  border-color: color-mix(in srgb, var(--c-ash) 60%, var(--c-bone));
+  color: var(--c-bone);
+}
+
+:root[data-look='b'] .ui-button:active:not(:disabled) {
+  background: var(--b-plate-press);
+  box-shadow: none;
+}
+
+/* primary: a lit plate, void letters */
+:root[data-look='b'] .ui-button[data-variant='primary'] {
+  background: var(--c-lumen);
+  border-color: var(--c-lumen);
+  color: var(--c-void);
+}
+
+:root[data-look='b'] .ui-button[data-variant='primary']:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--c-lumen) 78%, var(--c-bone));
+  border-color: color-mix(in srgb, var(--c-lumen) 78%, var(--c-bone));
+  color: var(--c-void);
+}
+
+:root[data-look='b'] .ui-button[data-variant='primary']:active:not(:disabled) {
+  background: var(--c-lumen-mid);
+  border-color: var(--c-lumen-mid);
+}
+
+/* the device header's Identify is primary off a lens: a lit plate, not the solid slab, so it does not outshine the
+   instruments and keeps the header's weight the same from tab to tab */
+:root[data-look='b'] .ui-button[data-action='identify'][data-variant='primary'] {
+  background: var(--b-lit);
+  border-color: var(--b-lit-edge);
+  color: var(--c-lumen);
+}
+
+:root[data-look='b'] .ui-button[data-action='identify'][data-variant='primary']:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--c-lumen) 22%, transparent);
+  border-color: var(--c-lumen);
+  color: var(--c-lumen);
+}
+
+/* destructive: a plate tinted with fault, its word in fault */
+:root[data-look='b'] .ui-button[data-variant='destructive'] {
+  background: var(--b-fault-plate);
+  border-color: var(--c-fault);
+  color: var(--c-fault);
+}
+
+:root[data-look='b'] .ui-button[data-variant='destructive']:hover:not(:disabled) {
+  background: var(--b-fault-hover);
+  border-color: var(--c-fault);
+  color: var(--c-bone);
+}
+
+/* armed (the question is asked in place): the confirming plate is solid fault */
+:root[data-look='b'] .ui-button[data-armed],
+:root[data-look='b'] .ui-button[data-armed]:hover:not(:disabled) {
+  background: var(--c-fault);
+  border-color: var(--c-fault);
+  color: var(--c-void);
+}
+
+/* quiet: the secondary level, a smaller and fainter plate (the row tone, an etch-2 edge) for a row's own actions
+   and for Cancel beside the action it cancels */
+:root[data-look='b'] .ui-button[data-variant='quiet'] {
+  min-height: 32px;
+  padding: 0 12px;
+  border: var(--hair) solid var(--c-etch2);
+  border-radius: var(--b-radius);
+  background: var(--b-row);
+  color: color-mix(in srgb, var(--c-bone) 85%, var(--c-ash));
+  box-shadow: none;
+}
+
+:root[data-look='b'] .ui-button[data-variant='quiet']:hover:not(:disabled) {
+  background: var(--b-plate-hover);
+  border-color: var(--c-etch3);
+  color: var(--c-lumen);
+}
+
+:root[data-look='b'] .ui-button[data-variant='quiet'][data-tone='fault'] {
+  color: var(--c-fault);
+  border-color: color-mix(in srgb, var(--c-fault) 45%, var(--c-etch2));
+}
+
+:root[data-look='b'] .ui-button[data-variant='quiet'][data-tone='fault']:hover:not(:disabled) {
+  background: var(--b-fault-plate);
+  border-color: var(--c-fault);
+  color: var(--c-fault);
+}
+
+/* disabled: the plate is taken away; an etch-2 hairline and a dim, still legible word */
+:root[data-look='b'] .ui-button:disabled,
+:root[data-look='b'] .ui-button[data-variant='primary']:disabled,
+:root[data-look='b'] .ui-button[data-variant='destructive']:disabled,
+:root[data-look='b'] .ui-button[data-variant='quiet']:disabled,
+:root[data-look='b'] .ui-button[data-variant='quiet'][data-tone='fault']:disabled {
+  background: transparent;
+  border: var(--hair) dashed var(--c-etch2);
+  color: var(--b-dim-word);
+  box-shadow: none;
+}
+
+/* busy: the plate sinks and a lumen-mid line runs under it, its word trailed by an ellipsis; nothing spins */
+:root[data-look='b'] .ui-button[data-busy],
+:root[data-look='b'] .ui-button[data-busy]:disabled,
+:root[data-look='b'] .ui-button[data-variant][data-busy]:disabled {
+  background: var(--b-plate-press);
+  border: var(--hair) solid var(--c-etch2);
+  color: var(--c-ash);
+  box-shadow: inset 0 -2px 0 var(--c-lumen-mid);
+  cursor: progress;
+}
+
+:root[data-look='b'] .ui-button[data-busy]::after {
+  content: '…';
+  margin-left: -5px;
+}
+
+:root[data-look='b'] .ui-button-row,
+:root[data-look='b'] .ui-confirm,
+:root[data-look='b'] .ui-page-actions {
+  gap: var(--sp-2) 10px;
+}
+
+:root[data-look='b'] .cam-card-playing {
+  min-height: 40px;
+}
+
+/* ------------------------------------------------------------------ tabs: a segmented strip */
+
+:root[data-look='b'] .ui-subnav {
+  gap: 2px;
+  width: fit-content;
+  max-width: 100%;
+  padding: 3px;
+  border: var(--hair) solid var(--c-etch2);
+  border-radius: calc(var(--b-radius) + 2px);
+  background: var(--b-well);
+}
+
+
+:root[data-look='b'] .ui-subnav-item {
+  display: inline-flex;
+  align-items: center;
+  flex: none;
+  min-height: 34px;
+  margin: 0;
+  padding: 0 16px;
+  border: 0;
+  border-radius: var(--b-radius);
+  color: var(--c-ash);
+  transition:
+    background-color var(--b-fade),
+    color var(--b-fade);
+}
+
+:root[data-look='b'] .ui-subnav-item:hover {
+  background: var(--b-plate);
+  color: var(--c-bone);
+}
+
+:root[data-look='b'] .ui-subnav-item[aria-current='page'] {
+  background: var(--b-plate-hover);
+  color: var(--c-lumen);
+  box-shadow: inset 0 -2px 0 var(--c-lumen);
+}
+
+:root[data-look='b'] .ui-subnav-item:focus-visible {
+  outline-offset: -2px;
+}
+
+/* the page tabs sit closer under the back link */
+:root[data-look='b'] .dev-page > .ui-subnav {
+  margin-top: calc(var(--sp-3) * -1.5);
+}
+
+/* the camera's view leaves room for b's taller header (plates, a boxed tab strip), so WATCH, PHOTO and RECORD stay in
+   sight on a laptop as they do now */
+:root[data-look='b'] .cam-frame {
+  --cam-maxh: max(180px, min(60vh, calc(100dvh - 480px)));
+}
+
+/* the instrument strip is the second level: no box, shorter row-tone plates, the current one lit */
+:root[data-look='b'] .dev-strip {
+  margin-top: calc(var(--sp-4) * -1);
+}
+
+:root[data-look='b'] .dev-strip .ui-subnav {
+  gap: 4px;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: none;
+}
+
+:root[data-look='b'] .dev-strip .ui-subnav-item {
+  min-height: 30px;
+  padding: 0 12px;
+  background: var(--b-row);
+}
+
+:root[data-look='b'] .dev-strip .ui-subnav-item:hover {
+  background: var(--b-plate);
+}
+
+:root[data-look='b'] .dev-strip .ui-subnav-item[aria-current='page'] {
+  background: var(--b-lit);
+  color: var(--c-lumen);
+  box-shadow: inset 0 -2px 0 var(--c-lumen);
+}
+
+/* ------------------------------------------------------------------ chips (filters, the Record form's words) */
+
+:root[data-look='b'] .ui-chips {
+  column-gap: var(--sp-2);
+  row-gap: var(--sp-2);
+}
+
+:root[data-look='b'] .ui-chip {
+  min-height: 32px;
+  padding: 0 12px;
+  border: var(--hair) solid var(--c-etch2);
+  border-radius: var(--b-radius);
+  background: var(--b-row);
+  color: var(--c-ash);
+}
+
+:root[data-look='b'] .ui-chip:hover {
+  background: var(--b-plate);
+  border-color: var(--c-etch3);
+  color: var(--c-bone);
+}
+
+:root[data-look='b'] .ui-chip[aria-pressed='true'],
+:root[data-look='b'] .ui-chip[aria-checked='true'] {
+  background: var(--b-lit);
+  border-color: var(--b-lit-edge);
+  color: var(--c-bone);
+  box-shadow: inset 0 -2px 0 var(--c-lumen);
+}
+
+:root[data-look='b'] .ui-chip:disabled,
+:root[data-look='b'] .cam-words .ui-chip:disabled {
+  background: transparent;
+  border-style: dashed;
+  border-color: var(--c-etch2);
+  color: var(--b-dim-word);
+}
+
+/* ------------------------------------------------------------------ folds */
+
+:root[data-look='b'] .ui-disclosure-toggle {
+  min-height: 44px;
+  padding: 8px 14px;
+  border: var(--hair) solid var(--c-etch2);
+  border-radius: var(--b-radius);
+  background: var(--b-row);
+  color: var(--c-bone);
+  transition:
+    background-color var(--b-fade),
+    border-color var(--b-fade);
+}
+
+:root[data-look='b'] .ui-disclosure-toggle .mark {
+  width: 11px;
+  height: 11px;
+  color: var(--c-lumen-mid);
+}
+
+/* a fold's aside (KEPT UNTIL IT RESTARTS) goes under its title on purpose, at every width, rather than wrapping
+   there only when the column is narrow: such a fold is always a two-line plate */
+:root[data-look='b'] .ui-disclosure-toggle .ui-disclosure-aside {
+  flex-basis: 100%;
+  margin-left: 0;
+  padding-left: 21px;
+  text-align: left;
+  color: var(--c-ash);
+}
+
+:root[data-look='b'] .ui-disclosure-toggle:hover {
+  background: var(--b-plate);
+  border-color: var(--c-etch3);
+  color: var(--c-bone);
+}
+
+:root[data-look='b'] .ui-disclosure-toggle:hover .mark {
+  color: var(--c-lumen);
+}
+
+:root[data-look='b'] .ui-disclosure-toggle[aria-expanded='true'] {
+  background: var(--b-plate);
+  border-color: var(--c-etch3);
+}
+
+:root[data-look='b'] .ui-disclosure-toggle[aria-expanded='true'] .mark {
+  color: var(--c-lumen);
+}
+
+:root[data-look='b'] .ui-disclosure:has(> .ui-disclosure-sub) > .ui-disclosure-toggle {
+  min-height: 44px;
+  padding-bottom: 8px;
+  border-bottom: var(--hair) solid var(--c-etch2);
+}
+
+:root[data-look='b'] .ui-disclosure-sub {
+  padding: 6px 0 10px 15px;
+  border-bottom: 0;
+}
+
+/* ------------------------------------------------------------------ toggles: a plate around the ring */
+
+:root[data-look='b'] .ui-toggle {
+  align-self: flex-start;
+  min-height: 40px;
+  padding: 0 14px 0 11px;
+  border: var(--hair) solid var(--b-plate-edge);
+  border-top-color: var(--b-plate-lip);
+  border-radius: var(--b-radius);
+  background: var(--b-plate);
+  color: var(--c-ash);
+  transition:
+    background-color var(--b-fade),
+    border-color var(--b-fade),
+    color var(--b-fade);
+}
+
+:root[data-look='b'] .ui-toggle .caps {
+  color: var(--c-bone);
+}
+
+:root[data-look='b'] .ui-toggle:hover:not(:disabled) {
+  background: var(--b-plate-hover);
+  border-color: var(--c-ash);
+}
+
+:root[data-look='b'] .ui-toggle[aria-checked='true'] {
+  background: var(--b-lit);
+  border-color: var(--b-lit-edge);
+  color: var(--c-lumen);
+}
+
+:root[data-look='b'] .ui-toggle:disabled {
+  background: transparent;
+  border: var(--hair) dashed var(--c-etch2);
+  color: var(--c-etch3);
+}
+
+:root[data-look='b'] .ui-toggle:disabled .caps {
+  color: var(--b-dim-word);
+}
+
+/* ------------------------------------------------------------------ fields: recessed wells */
+
+:root[data-look='b'] .ui-field {
+  gap: 8px;
+}
+
+/* one field from the next: more room than inside a field (8 px), so a slider's scale and note stay with their slider
+   and the next caps label starts a new group */
+:root[data-look='b'] .ui-field + .ui-field,
+:root[data-look='b'] .ui-field + .ui-toggle,
+:root[data-look='b'] .ui-toggle + .ui-field {
+  margin-top: 10px;
+}
+
+:root[data-look='b'] .cam-settings,
+:root[data-look='b'] .cam-record,
+:root[data-look='b'] .cam-record-more {
+  gap: var(--sp-4);
+}
+
+:root[data-look='b'] .cam-settings > .ui-field + .ui-field,
+:root[data-look='b'] .cam-record .ui-field + .ui-field,
+:root[data-look='b'] .cam-settings .ui-toggle + .ui-field,
+:root[data-look='b'] .cam-record .ui-toggle + .ui-field {
+  margin-top: 0;
+}
+
+/* the first slider's 'as it starts' is its sibling, not inside it: drawn up to its slider */
+:root[data-look='b'] .cam-settings > .cam-note {
+  margin-top: calc(var(--sp-3) * -1);
+}
+
+/* the two toggles of a pair (FLIP, MIRROR) stay a pair */
+:root[data-look='b'] .cam-settings > .ui-toggle + .ui-toggle {
+  margin-top: calc(var(--sp-2) * -1);
+}
+
+:root[data-look='b'] .cam-words {
+  gap: 8px;
+}
+
+:root[data-look='b'] .ui-input,
+:root[data-look='b'] .ui-select {
+  min-height: 40px;
+  padding: 8px 12px;
+  border: var(--hair) solid var(--b-well-edge);
+  border-bottom-color: var(--c-etch3);
+  border-radius: var(--b-radius);
+  background: var(--b-well);
+  box-shadow: inset 0 1px 0 var(--c-void);
+  transition:
+    border-color var(--b-fade),
+    background-color var(--b-fade);
+}
+
+:root[data-look='b'] .ui-select {
+  padding-right: 34px;
+}
+
+:root[data-look='b'] .ui-select-mark {
+  right: 13px;
+  color: var(--c-bone);
+}
+
+:root[data-look='b'] .ui-input:hover,
+:root[data-look='b'] .ui-select:hover {
+  border-color: var(--c-etch3);
+  border-bottom-color: var(--c-ash);
+}
+
+:root[data-look='b'] .ui-input:focus-visible,
+:root[data-look='b'] .ui-select:focus-visible {
+  outline: 2px solid var(--c-lumen);
+  outline-offset: 2px;
+  border-color: var(--c-lumen);
+}
+
+:root[data-look='b'] .ui-field[data-invalid] .ui-input,
+:root[data-look='b'] .ui-field[data-invalid] .ui-select {
+  border-color: var(--c-fault);
+}
+
+:root[data-look='b'] .ui-input:disabled,
+:root[data-look='b'] .ui-select:disabled {
+  background: transparent;
+  border: var(--hair) dashed var(--c-etch2);
+  color: var(--b-dim-word);
+  box-shadow: none;
+  cursor: not-allowed;
+}
+
+:root[data-look='b'] .dev-inline-select {
+  min-height: 34px;
+  padding-top: 5px;
+  padding-bottom: 5px;
+}
+
+:root[data-look='b'] .dev-json {
+  border: var(--hair) solid var(--b-well-edge);
+  border-bottom-color: var(--c-etch3);
+  border-radius: var(--b-radius);
+  background: var(--b-well);
+}
+
+:root[data-look='b'] .dev-json:focus-visible {
+  outline: 2px solid var(--c-lumen);
+  outline-offset: 2px;
+}
+
+/* sliders: a recessed groove lit to the value, a bead you can take hold of */
+:root[data-look='b'] .ui-slider {
+  height: 32px;
+}
+
+:root[data-look='b'] .ui-slider::-webkit-slider-runnable-track {
+  height: 4px;
+  border-radius: 2px;
+  background: linear-gradient(to right, var(--c-lumen-mid) 0 var(--fill), var(--c-etch2) var(--fill) 100%);
+}
+
+:root[data-look='b'] .ui-slider::-moz-range-track {
+  height: 4px;
+  border-radius: 2px;
+  background: var(--c-etch2);
+}
+
+:root[data-look='b'] .ui-slider::-moz-range-progress {
+  height: 4px;
+  border-radius: 2px;
+  background: var(--c-lumen-mid);
+}
+
+:root[data-look='b'] .ui-slider::-webkit-slider-thumb {
+  width: 18px;
+  height: 18px;
+  margin-top: -7px;
+  border: 2px solid var(--c-void);
+  background: var(--c-lumen);
+  box-shadow: 0 0 0 1px var(--c-lumen);
+}
+
+:root[data-look='b'] .ui-slider::-moz-range-thumb {
+  width: 14px;
+  height: 14px;
+  border: 2px solid var(--c-void);
+  background: var(--c-lumen);
+  box-shadow: 0 0 0 1px var(--c-lumen);
+}
+
+:root[data-look='b'] .ui-slider:hover::-webkit-slider-thumb {
+  background: var(--c-bone);
+  box-shadow: 0 0 0 1px var(--c-bone);
+}
+
+:root[data-look='b'] .ui-slider:focus-visible {
+  outline-offset: 2px;
+}
+
+:root[data-look='b'] .ui-slider:disabled {
+  cursor: not-allowed;
+}
+
+:root[data-look='b'] .ui-slider:disabled::-webkit-slider-thumb {
+  background: var(--c-etch3);
+  box-shadow: 0 0 0 1px var(--c-etch3);
+}
+
+:root[data-look='b'] .ui-slider:disabled::-webkit-slider-runnable-track {
+  background: var(--c-etch2);
+}
+
+/* the colour well */
+:root[data-look='b'] .dev-colour-well {
+  min-height: 40px;
+  padding: 0 12px 0 8px;
+  border: var(--hair) solid var(--b-plate-edge);
+  border-radius: var(--b-radius);
+  background: var(--b-plate);
+}
+
+:root[data-look='b'] .dev-colour-well:hover {
+  background: var(--b-plate-hover);
+  border-color: var(--c-ash);
+}
+
+:root[data-look='b'] .dev-colour-well:has(input:focus-visible) {
+  outline: 2px solid var(--c-lumen);
+  outline-offset: 3px;
+}
+
+/* ------------------------------------------------------------------ rows that open something: plates with a › */
+
+:root[data-look='b'] a.ui-row,
+:root[data-look='b'] button.ui-row {
+  align-items: center;
+  margin-bottom: 3px;
+  padding-inline: 12px;
+  border: 0;
+  border-bottom: var(--hair) solid transparent;
+  border-radius: var(--b-radius);
+  background: var(--b-row);
+  transition:
+    background-color var(--b-fade),
+    border-color 600ms linear;
+}
+
+:root[data-look='b'] a.ui-row::after,
+:root[data-look='b'] button.ui-row::after {
+  content: '›';
+  order: 99;
+  flex: none;
+  margin-left: var(--sp-1);
+  font-size: 18px;
+  line-height: 1;
+  color: var(--c-ash);
+  transition: color var(--b-fade);
+}
+
+:root[data-look='b'] a.ui-row:hover,
+:root[data-look='b'] button.ui-row:hover {
+  background: var(--b-row-hover);
+  border-bottom-color: transparent;
+}
+
+:root[data-look='b'] a.ui-row:hover::after,
+:root[data-look='b'] button.ui-row:hover::after {
+  color: var(--c-lumen);
+}
+
+:root[data-look='b'] a.ui-row[data-flash],
+:root[data-look='b'] button.ui-row[data-flash] {
+  border-bottom-color: var(--c-lumen);
+}
+
+/* the device list */
+:root[data-look='b'] .devs-row {
+  margin-bottom: 3px;
+  padding: 12px 40px 11px 12px;
+  border-bottom: var(--hair) solid transparent;
+  border-radius: var(--b-radius);
+  background: var(--b-row);
+  transition:
+    background-color var(--b-fade),
+    border-color 600ms linear;
+}
+
+:root[data-look='b'] .devs-row::before {
+  content: '›';
+  position: absolute;
+  right: 14px;
+  top: 50%;
+  margin-top: -11px;
+  font-size: 18px;
+  line-height: 20px;
+  color: var(--c-ash);
+  pointer-events: none;
+  transition: color var(--b-fade);
+}
+
+:root[data-look='b'] .devs-row:hover {
+  background: var(--b-row-hover);
+  border-bottom-color: transparent;
+}
+
+:root[data-look='b'] .devs-row:hover::before {
+  color: var(--c-lumen);
+}
+
+:root[data-look='b'] .devs-row[data-flash] {
+  border-bottom-color: var(--c-lumen);
+}
+
+:root[data-look='b'] .devs-head {
+  padding-inline: 12px 40px;
+  border-bottom: 0;
+}
+
+/* the header and the rows share one fixed actions column, so the fr columns divide the same width and the header
+   words stand over their values (the head's sixth cell is empty; a row's is the Identify plate) */
+:root[data-look='b'] .devs-head,
+:root[data-look='b'] .devs-row {
+  grid-template-columns: 14px minmax(0, 2.4fr) minmax(0, 1.3fr) minmax(0, 0.9fr) minmax(0, 1.6fr) 96px;
+}
+
+:root[data-look='b'] .devs-actions {
+  justify-self: end;
+}
+
+@media (max-width: 999.98px) {
+  :root[data-look='b'] .devs-head,
+  :root[data-look='b'] .devs-row {
+    grid-template-columns: 14px minmax(0, 2fr) minmax(0, 1.2fr) minmax(0, 1.5fr) 96px;
+  }
+}
+
+@media (max-width: 699.98px) {
+  :root[data-look='b'] .devs-row {
+    grid-template-columns: 14px minmax(0, 1fr) auto;
+  }
+}
+
+:root[data-look='b'] .devs-list {
+  padding-top: 3px;
+}
+
+:root[data-look='b'] .devs-link:focus-visible::after {
+  outline: 2px solid var(--c-lumen);
+  outline-offset: -2px;
+  border-radius: var(--b-radius);
+}
+
+/* an instrument's row on a device's overview */
+:root[data-look='b'] .dev-rung {
+  margin-bottom: 3px;
+  padding: 8px 14px 8px 8px;
+  border-bottom: var(--hair) solid transparent;
+  border-radius: var(--b-radius);
+  background: var(--b-row);
+  transition:
+    background-color var(--b-fade),
+    border-color 600ms linear;
+}
+
+:root[data-look='b'] .dev-rung:hover {
+  background: var(--b-row-hover);
+}
+
+:root[data-look='b'] .dev-rung[data-flash] {
+  border-bottom-color: var(--c-lumen);
+}
+
+:root[data-look='b'] .dev-rung-port {
+  color: var(--c-ash);
+}
+
+:root[data-look='b'] .dev-rung-go {
+  font-family: var(--font-reading);
+  font-size: 18px;
+  letter-spacing: 0;
+  color: var(--c-ash);
+}
+
+:root[data-look='b'] .dev-rung:has(.dev-rung-link:focus-visible) {
+  outline: 2px solid var(--c-lumen);
+  outline-offset: -2px;
+}
+
+/* the Bench's rows that open a guide or a part */
+:root[data-look='b'] .bench-guide-row,
+:root[data-look='b'] .bench-rowlink {
+  position: relative;
+  margin-bottom: 3px;
+  border-radius: var(--b-radius);
+  background: var(--b-row);
+  transition: background-color var(--b-fade);
+}
+
+:root[data-look='b'] .bench-guide-row {
+  padding: 14px 40px 14px 12px;
+  border-bottom-color: transparent;
+}
+
+:root[data-look='b'] .bench-rowlink {
+  padding: 0 40px 0 12px;
+}
+
+:root[data-look='b'] .bench-rowlink .ui-line,
+:root[data-look='b'] .bench-rowlink:hover .ui-line {
+  border-bottom-color: transparent;
+}
+
+:root[data-look='b'] .bench-guide-row::before,
+:root[data-look='b'] .bench-rowlink::before {
+  content: '›';
+  position: absolute;
+  right: 14px;
+  top: 50%;
+  margin-top: -11px;
+  font-size: 18px;
+  line-height: 20px;
+  color: var(--c-ash);
+  pointer-events: none;
+  transition: color var(--b-fade);
+}
+
+:root[data-look='b'] .bench-guide-row:hover,
+:root[data-look='b'] .bench-rowlink:hover {
+  background: var(--b-row-hover);
+  border-bottom-color: transparent;
+}
+
+:root[data-look='b'] .bench-guide-row:hover::before,
+:root[data-look='b'] .bench-rowlink:hover::before {
+  color: var(--c-lumen);
+}
+
+/* Live: an event's line opens its fields; a row-tone plate with a + at its end, lit under the hand and while open.
+   The gap between plates is the event's own padding (not a margin), so the virtual list's measure includes it. */
+:root[data-look='b'] .live-event {
+  padding-bottom: 3px;
+  border-bottom: 0;
+}
+
+:root[data-look='b'] .live-line {
+  position: relative;
+  padding-left: 10px;
+  padding-right: 34px;
+  border-radius: var(--b-radius);
+  background: var(--b-row);
+  transition:
+    background-color var(--b-fade),
+    color var(--b-fade);
+}
+
+:root[data-look='b'] .live-line::after {
+  content: '+';
+  position: absolute;
+  right: 13px;
+  top: 50%;
+  transform: translateY(-50%);
+  font-family: var(--font-reading);
+  font-size: 16px;
+  line-height: 1;
+  color: var(--c-lumen-mid);
+  transition: color var(--b-fade);
+}
+
+:root[data-look='b'] .live-line:hover,
+:root[data-look='b'] .live-event[data-open] .live-line {
+  background: var(--b-row-hover);
+}
+
+:root[data-look='b'] .live-line:hover::after {
+  color: var(--c-lumen);
+}
+
+:root[data-look='b'] .live-event[data-open] .live-line::after {
+  content: '−';
+  color: var(--c-lumen);
+}
+
+:root[data-look='b'] .live-threshold {
+  border-bottom: 0;
+  margin-bottom: 3px;
+}
+
+/* a device's Activity: an event's raw fields open under its words */
+:root[data-look='b'] .dev-event-raw summary {
+  display: inline-flex;
+  align-items: baseline;
+  gap: var(--sp-2);
+  max-width: 100%;
+  padding: 6px 10px;
+  border-radius: var(--b-radius);
+  background: var(--b-row);
+  transition: background-color var(--b-fade);
+}
+
+:root[data-look='b'] .dev-event-raw summary:hover,
+:root[data-look='b'] .dev-event-raw[open] summary {
+  background: var(--b-row-hover);
+}
+
+:root[data-look='b'] .dev-event-raw summary::after {
+  content: '+';
+  color: var(--c-lumen-mid);
+}
+
+:root[data-look='b'] .dev-event-raw[open] summary::after {
+  content: '−';
+}
+
+/* ------------------------------------------------------------------ text links: a small plate */
+
+:root[data-look='b'] .dev-back,
+:root[data-look='b'] .bench-back {
+  display: inline-flex;
+  align-items: center;
+  min-height: 32px;
+  padding: 0 12px;
+  border: var(--hair) solid var(--c-etch2);
+  border-radius: var(--b-radius);
+  background: var(--b-row);
+  color: var(--c-bone);
+  transition:
+    background-color var(--b-fade),
+    color var(--b-fade);
+}
+
+:root[data-look='b'] .dev-back {
+  min-height: 28px;
+  margin-top: calc(var(--sp-3) * -1.5);
+}
+
+:root[data-look='b'] .dev-back:hover,
+:root[data-look='b'] .bench-back:hover {
+  background: var(--b-plate-hover);
+  border-color: var(--c-etch3);
+  color: var(--c-lumen);
+}
+
+:root[data-look='b'] .dev-more {
+  display: inline-flex;
+  align-items: center;
+  min-height: 26px;
+  padding: 0 10px;
+  border: var(--hair) solid var(--c-etch2);
+  border-radius: var(--b-radius);
+  background: var(--b-row);
+  color: var(--c-bone);
+  transition:
+    background-color var(--b-fade),
+    color var(--b-fade);
+}
+
+:root[data-look='b'] .dev-more:hover {
+  background: var(--b-plate-hover);
+  border-color: var(--c-etch3);
+  color: var(--c-lumen);
+}
+
+:root[data-look='b'] .ui-section-head:has(.dev-more) {
+  align-items: center;
+  padding-bottom: 6px;
+}
+
+:root[data-look='b'] .dev-inline-link,
+:root[data-look='b'] .prov-note a,
+:root[data-look='b'] .bench-ext {
+  color: var(--c-bone);
+  text-decoration: underline;
+  text-decoration-color: var(--c-lumen-mid);
+  text-decoration-thickness: 1px;
+  text-underline-offset: 4px;
+}
+
+:root[data-look='b'] .dev-inline-link:hover,
+:root[data-look='b'] .prov-note a:hover,
+:root[data-look='b'] .bench-ext:hover {
+  color: var(--c-lumen);
+  text-decoration-color: var(--c-lumen);
+}
+
+/* a choice (Provision): the board's name is a row-tone plate with its ring visible at rest; the chosen one is lit */
+:root[data-look='b'] .prov-choice-lead {
+  padding: 8px 12px;
+  border-radius: var(--b-radius);
+  background: var(--b-row);
+  transition: background-color var(--b-fade);
+}
+
+:root[data-look='b'] .prov-choice-lead:hover:not(:disabled) {
+  background: var(--b-row-hover);
+}
+
+:root[data-look='b'] .prov-choice-lead[aria-checked='true'] {
+  background: var(--b-lit);
+  box-shadow: inset 2px 0 0 var(--c-lumen);
+}
+
+:root[data-look='b'] .prov-choice-lead:disabled {
+  background: transparent;
+}
+
+:root[data-look='b'] .prov-choice-mark .ring {
+  stroke: var(--c-ash);
+}
+
+:root[data-look='b'] .prov-choice-lead:hover .ring {
+  stroke: var(--c-lumen);
+}
+
+/* ------------------------------------------------------------------ small words once in etch-3 (about 2.6:1), lifted to about 5:1 */
+
+:root[data-look='b'] .cam-does-who,
+:root[data-look='b'] .cam-note,
+:root[data-look='b'] .dev-optional,
+:root[data-look='b'] .bench-pure-note .caps,
+:root[data-look='b'] .bench-earth-hint,
+:root[data-look='b'] .bench-held,
+:root[data-look='b'] .dev-inst-aside .mono,
+:root[data-look='b'] .ui-empty-mark {
+  color: color-mix(in srgb, var(--c-ash) 75%, var(--c-etch3));
+}
+
+/* ------------------------------------------------------------------ the rail */
+
+:root[data-look='b'] .sigil {
+  gap: 7px;
+  width: 76px;
+  padding: 9px 0 8px;
+  border-radius: calc(var(--b-radius) + 1px);
+  color: color-mix(in srgb, var(--c-etch3) 45%, var(--c-ash));
+  transition:
+    background-color var(--b-fade),
+    color var(--b-fade);
+}
+
+:root[data-look='b'] .sigil .caps {
+  line-height: 12px;
+  color: color-mix(in srgb, var(--c-etch3) 30%, var(--c-ash));
+}
+
+:root[data-look='b'] .sigil:hover {
+  background: var(--b-plate);
+  color: var(--c-bone);
+}
+
+:root[data-look='b'] .sigil:hover .caps {
+  color: var(--c-bone);
+}
+
+:root[data-look='b'] .sigil[aria-current='page'] {
+  background: var(--b-lit);
+  color: var(--c-lumen);
+  box-shadow: inset 2px 0 0 var(--c-lumen);
+}
+
+:root[data-look='b'] .sigil[aria-current='page'] .caps {
+  color: var(--c-bone);
+}
+
+:root[data-look='b'] .mode-toggle {
+  gap: 7px;
+  padding: 9px 10px 8px;
+  border: var(--hair) solid var(--b-plate-edge);
+  border-top-color: var(--b-plate-lip);
+  border-radius: calc(var(--b-radius) + 1px);
+  background: var(--b-plate);
+  color: var(--c-ash);
+  transition:
+    background-color var(--b-fade),
+    border-color var(--b-fade);
+}
+
+:root[data-look='b'] .mode-toggle .caps {
+  line-height: 12px;
+  color: var(--c-bone);
+}
+
+:root[data-look='b'] .mode-toggle:hover {
+  background: var(--b-plate-hover);
+  border-color: var(--c-ash);
+}
+
+:root[data-look='b'][data-mode='earth'] .mode-toggle,
+:root[data-look='b'] [data-mode='earth'] .mode-toggle {
+  color: var(--c-bone);
+  border-color: var(--c-ash);
+}
+
+/* phone: the bottom row; the current page's plate is lit, its bar on top */
+@media (max-width: 699.98px) {
+  :root[data-look='b'] .sigil {
+    width: auto;
+    gap: 5px;
+    padding: 8px 0 7px;
+  }
+
+  :root[data-look='b'] .sigil[aria-current='page'] {
+    box-shadow: inset 0 2px 0 var(--c-lumen);
+  }
+
+  /* six words in 390 px: 9 px and tracked closer than the desktop rail's, so PROVISION clears its plate's edges */
+  :root[data-look='b'] .sigil .caps {
+    font-size: 9px;
+    letter-spacing: 0.08em;
+    margin-right: -0.08em;
+  }
+
+  :root[data-look='b'] .sigils {
+    gap: 0;
+    padding: 6px 4px 8px;
+  }
+
+  :root[data-look='b'] .shell-mode {
+    top: 14px;
+  }
+
+  :root[data-look='b'] .shell-mode .mode-toggle {
+    padding: 6px 10px;
+  }
+
+  /* the strip spans the column and wraps inside its box rather than scrolling (a fade would cut the box's own edge):
+     four tabs on one row, five or six as rows of three; its words a little smaller and closer */
+  :root[data-look='b'] .ui-subnav,
+  :root[data-look='b'] .ui-subnav[data-more] {
+    flex-wrap: wrap;
+    width: 100%;
+    overflow-x: visible;
+    -webkit-mask-image: none;
+    mask-image: none;
+  }
+
+  :root[data-look='b'] .ui-subnav:has(> .ui-subnav-item:nth-child(5)) > .ui-subnav-item {
+    flex: 1 1 30%;
+  }
+
+  /* the Live filters wrap too, so no chip is sliced at the screen's edge */
+  :root[data-look='b'] .ui-chips,
+  :root[data-look='b'] .ui-chips[data-more],
+  :root[data-look='b'] .live-filters .ui-chips {
+    flex-wrap: wrap;
+    overflow-x: visible;
+    margin-right: 0;
+    padding-right: 0;
+    -webkit-mask-image: none;
+    mask-image: none;
+  }
+
+  :root[data-look='b'] .ui-chip {
+    padding: 0 10px;
+  }
+
+  :root[data-look='b'] .ui-subnav-item {
+    flex: 1 0 auto;
+    justify-content: center;
+    min-height: 38px;
+    padding: 0 8px;
+    font-size: 10px;
+    letter-spacing: 0.16em;
+  }
+
+  :root[data-look='b'] .devs-row {
+    padding-right: 36px;
+  }
+
+  :root[data-look='b'] .devs-row::before {
+    right: 12px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :root[data-look='b'] .ui-button,
+  :root[data-look='b'] .ui-subnav-item,
+  :root[data-look='b'] .ui-disclosure-toggle,
+  :root[data-look='b'] .ui-toggle,
+  :root[data-look='b'] .sigil,
+  :root[data-look='b'] .mode-toggle {
+    transition: none;
+  }
+}
