@@ -1,27 +1,63 @@
 // The fr.camera panel (DEVICE-SPEC §3): live view over /app/stream, photo, recording, sensor settings, card
-// recordings. Builder CAMERA owns panels/camera/*. SEAM STUB: registered in ../../panels.ts; CAMERA replaces the
-// bodies, keeps the export name CAMERA_PANEL and the CapPanel shape.
+// recordings. Builder CAMERA owns panels/camera/*. Registered in ../../panels.ts as CAMERA_PANEL (the export name and
+// the CapPanel shape are the seam).
+// - Lens: the instrument page (lens.tsx).
+// - Headline: the Overview row's reading: "idle · card in", "live · <per Blink>", "recording to the card",
+//   "recording · 2ι left".
+// - Quick: a quiet WATCH link to the camera's page with ?watch=1, which starts the view once.
 
-import { Section } from '../../../../ui/index.ts';
+import './camera.css';
+
+import { Link } from '@tanstack/react-router';
+
+import { useOp } from '../../../../hooks.ts';
+import { rateText, spanText } from '../../../../state/device-units.ts';
 import type { CapPanel, CapPanelProps } from '../../panels.ts';
+import { CameraLens } from './lens.tsx';
+import { engrave, useFractonica } from './ui.ts';
 
-function CameraLens({ inst }: CapPanelProps) {
-  return (
-    <Section title={inst.name}>
-      <p className="ash" data-lens="fr.camera">
-        Not watching.
-      </p>
-    </Section>
-  );
+function CameraHeadline({ detail, inst, mirror }: CapPanelProps) {
+  const core = useFractonica();
+  const status = useOp('camera_status', { device: `id:${detail.device_id}`, instance: inst.name });
+  const s = status.data?.stream ?? null;
+  const sd = status.data?.sd ?? (typeof mirror.sd === 'string' ? mirror.sd : null);
+  const fps = typeof mirror.fps_x10 === 'number' ? mirror.fps_x10 / 10 : (status.data?.fps_x10 ?? 0) / 10;
+  if (detail.presence === 'offline') {
+    return <span className="ash">offline</span>;
+  }
+  if (s && s.to === 'sd') {
+    return <span>recording to the card</span>;
+  }
+  if (s && s.seconds > 0) {
+    const started = s.started_at ? Date.parse(s.started_at) : NaN;
+    const left = Number.isFinite(started) ? s.seconds * 1e6 - (Date.now() - started) * 1000 : NaN;
+    return <span>{core && Number.isFinite(left) ? `recording · ${spanText(core, Math.max(0, left))} left` : 'recording'}</span>;
+  }
+  if (s || mirror.streaming === true) {
+    return <span>{fps > 0 && core ? `live · ${rateText(core, fps)}` : 'live'}</span>;
+  }
+  return <span>{sd === 'mounted' ? 'idle · card in' : 'idle'}</span>;
 }
 
-function CameraHeadline({ mirror }: CapPanelProps) {
-  return <span>{mirror.streaming === true ? 'live' : 'idle'}</span>;
+function CameraQuick({ detail, inst }: CapPanelProps) {
+  if (detail.presence === 'offline') {
+    return (
+      <span className="ui-button" data-variant="quiet" aria-disabled="true" data-quick="watch">
+        <span className="ui-button-text">{engrave('watch')}</span>
+      </span>
+    );
+  }
+  return (
+    <Link to="/devices/$id/$instance" params={{ id: detail.alias, instance: inst.name }} search={{ watch: 1 } as never} className="ui-button" data-variant="quiet" data-quick="watch">
+      <span className="ui-button-text">{engrave('watch')}</span>
+    </Link>
+  );
 }
 
 export const CAMERA_PANEL: CapPanel = {
   Lens: CameraLens,
   Headline: CameraHeadline,
-  // the device commands this panel runs itself, through the hub's camera ops (§3.2)
+  Quick: CameraQuick,
+  // the device commands this panel runs itself, through the hub's camera ops (§3)
   covers: ['stream_start', 'stream_stop', 'set', 'sd_list', 'sd_fetch', 'sd_delete'],
 };

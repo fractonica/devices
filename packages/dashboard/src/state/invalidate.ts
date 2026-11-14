@@ -50,7 +50,15 @@ export function invalidationsFor(e: HubEvent): readonly OpName[] {
     return ['hub_status'];
   }
   if (t === 'node.boot') {
-    return ['device_get'];
+    return ['device_get', 'camera_status'];
+  }
+  // a camera's stream began or ended (camera/ops.ts publish): its status and the card's recordings changed
+  if (t === 'stream.started' || t === 'stream.ended') {
+    return ['camera_status', 'camera_sd_list'];
+  }
+  // a camera's own word that a stream ran or ended (a recording to the card has no hub stream.started: no frame comes)
+  if (/\.(?:streaming|stream_ended)$/.test(t)) {
+    return ['camera_status'];
   }
   return [];
 }

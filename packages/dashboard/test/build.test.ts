@@ -52,6 +52,11 @@ describe('dashboard build', () => {
     expect(all).toContain(`/assets/${wasm[0]}`);
     // Frames are checked by shape: no Zod in any chunk (it came in through @fractonica/protocol/browser before).
     expect(all).not.toMatch(/ZodError|\$ZodType|zod\/v4/);
+    // The camera panel's stream client takes only @fractonica/sdk/wire and /camera (DEVICE-SPEC §3.3): the mjpg1 parser
+    // is in, the SDK's /app connection and its streams client are not.
+    expect(all).toContain('-byte head');
+    expect(all).not.toContain('no frame from the hub for 6 s');
+    expect(all).not.toMatch(/HubClient|wireStart/);
     // No Tailwind: the stylesheet is the tokens' (no utility layer, no colour literal in it; test/design-rules).
     const css = assets.filter((f) => f.endsWith('.css')).map((f) => readFileSync(join(out, 'assets', f), 'utf8')).join('\n');
     expect(css).not.toMatch(/tailwindcss|--tw-/);

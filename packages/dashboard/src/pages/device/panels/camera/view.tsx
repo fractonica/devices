@@ -1,0 +1,233 @@
+// The camera's live view (DEVICE-SPEC §3.3, §3.4): the /app/stream socket as a hook, and the canvas it draws on.
+// - One socket at a time; WATCH opens it with `start` (a live view the hub ends when its last starter leaves), a
+//   recording or PLAY opens it without (it joins the running stream).
+// - Leaving the page closes it (unmount). A hidden tab closes it and remembers how it was opened; it reopens when the
+//   tab shows again, and the view says it was paused meanwhile.
+// - The canvas keeps the last frame after a session, dimmed, with when it came.
+
+import { type RefObject, useCallback, useEffect, useReducer, useRef, useState } from 'react';
+
+import type { JpegBlock } from '@fractonica/sdk/camera';
+
+import { appToken } from '../../../../api/app-token.ts';
+import { StreamClient, type StreamSocketLike, type StreamStart, streamUrl } from '../../../../api/stream.ts';
+import { FRAME_PIXELS, type FrameSize, LIVE_OFF, type LiveAction, liveReducer, type LiveView } from '../../../../state/camera.ts';
+import { FTime } from '../../../../ui/index.ts';
+
+/** How the socket was opened: with `start` (WATCH), or joining (`start` undefined). */
+interface Opened {
+  start: StreamStart | undefined;
+}
+
+export interface LiveViewHandle {
+  view: LiveView;
+  canvas: RefObject<HTMLCanvasElement | null>;
+  /** The last frame drawn (for KEEP THIS FRAME), and when it came (Date.now()). */
+  last: { block: JpegBlock; at: number } | null;
+  /** Opens the socket (closing one that is open); `resumed` after a hidden tab. */
+  open(start?: StreamStart, resumed?: boolean): void;
+  /** Closes it (this page's own stop). */
+  close(): void;
+  /** Whether a socket is open or opening. */
+  active: boolean;
+  hasToken: boolean;
+  /** Frames drawn since the socket opened (a ref read: no render per frame). */
+  framesDrawn(): number;
+}
+
+/** createImageBitmap from the JPEG's bytes (the browser decodes off the main thread). */
+function decode(jpeg: Uint8Array): Promise<ImageBitmap> {
+  return createImageBitmap(new Blob([jpeg as Uint8Array<ArrayBuffer>], { type: 'image/jpeg' }));
+}
+
+export function useLiveView(device: string, instance: string, onEvent?: (a: LiveAction) => void): LiveViewHandle {
+  const [view, dispatch] = useReducer(liveReducer, LIVE_OFF);
+  const canvas = useRef<HTMLCanvasElement | null>(null);
+  const client = useRef<StreamClient<ImageBitmap> | null>(null);
+  const opened = useRef<Opened | null>(null);
+  const drawn = useRef(0);
+  const [last, setLast] = useState<{ block: JpegBlock; at: number } | null>(null);
+  const lastRef = useRef<{ block: JpegBlock; at: number } | null>(null);
+  const onEventRef = useRef(onEvent);
+  onEventRef.current = onEvent;
+  const token = appToken();
+
+  const act = useCallback((a: LiveAction) => {
+    dispatch(a);
+    onEventRef.current?.(a);
+  }, []);
+
+  const shut = useCallback(() => {
+    const c = client.current;
+    client.current = null;
+    if (c) {
+      c.stop();
+    }
+    if (lastRef.current) {
+      setLast(lastRef.current);
+    }
+  }, []);
+
+  const open = useCallback(
+    (start?: StreamStart, resumed = false) => {
+      shut();
+      if (!token || typeof WebSocket === 'undefined') {
+        return;
+      }
+      opened.current = { start };
+      drawn.current = 0;
+      act({ t: 'open', own: start !== undefined, at: Date.now(), resumed });
+      const c: StreamClient<ImageBitmap> = new StreamClient<ImageBitmap>({
+        url: streamUrl(location),
+        token,
+        device,
+        instance,
+        ...(start ? { start } : {}),
+        connect: (url) => new WebSocket(url) as unknown as StreamSocketLike,
+        decode,
+        onFrame: ({ image, block }) => {
+          if (client.current !== c) {
+            image.close();
+            return;
+          }
+          const el = canvas.current;
+          if (el) {
+            if (el.width !== image.width || el.height !== image.height) {
+              el.width = image.width;
+              el.height = image.height;
+            }
+            el.getContext('2d')?.drawImage(image, 0, 0);
+          }
+          image.close();
+          const first = drawn.current === 0;
+          drawn.current++;
+          lastRef.current = { block, at: Date.now() };
+          if (first) {
+            setLast(lastRef.current);
+            act({ t: 'frame' });
+          }
+        },
+        onEvent: (e) => {
+          if (client.current !== c) {
+            return;
+          }
+          switch (e.type) {
+            case 'welcome':
+              act({ t: 'welcome', stream: e.stream });
+              break;
+            case 'started':
+              drawn.current = 0;
+              act({ t: 'started', stream: e.stream });
+              break;
+            case 'ended':
+              setLast(lastRef.current);
+              act({ t: 'ended', frame: e.frame });
+              break;
+            case 'skipped':
+              act({ t: 'skipped', frames: e.frames });
+              break;
+            case 'error':
+              act({ t: 'error', code: e.code, message: e.message });
+              break;
+            case 'closed':
+              if (!e.final || e.code !== 1000) {
+                act({ t: 'closed', code: e.code, final: e.final });
+              }
+              if (e.final) {
+                client.current = null;
+              }
+              break;
+            default:
+              break;
+          }
+        },
+      });
+      client.current = c;
+      c.start();
+    },
+    [act, device, instance, shut, token],
+  );
+
+  const close = useCallback(() => {
+    opened.current = null;
+    shut();
+    act({ t: 'stop' });
+  }, [act, shut]);
+
+  // A hidden tab closes the socket and reopens it, as it was opened, when the tab shows again.
+  useEffect(() => {
+    const vis = () => {
+      if (document.visibilityState === 'hidden') {
+        if (client.current && opened.current) {
+          shut();
+          act({ t: 'pause' });
+        }
+      } else if (opened.current && !client.current) {
+        open(opened.current.start, true);
+      }
+    };
+    document.addEventListener('visibilitychange', vis);
+    return () => document.removeEventListener('visibilitychange', vis);
+  }, [act, open, shut]);
+
+  // Leaving the page closes it.
+  useEffect(() => () => shut(), [shut]);
+
+  return {
+    view,
+    canvas,
+    last,
+    open,
+    close,
+    active: view.phase === 'connecting' || view.phase === 'open' || view.phase === 'reconnecting',
+    hasToken: token !== null,
+    framesDrawn: () => drawn.current,
+  };
+}
+
+export interface ViewProps {
+  handle: LiveViewHandle;
+  instance: string;
+  /** Frames show now (watching, joined, recording). */
+  live: boolean;
+  /** The frame size the outline is drawn at before any frame. */
+  frameSize: FrameSize;
+  /** The line the state says over the view (null: the frames say it). */
+  line: string | null;
+  /** The view's caption (from the card, recording 7). */
+  caption?: string | null;
+}
+
+/** The canvas at the frame's aspect: an outline before any frame, the last frame dimmed after a session. */
+export function LiveCanvas({ handle, instance, live, frameSize, line, caption }: ViewProps) {
+  const px = FRAME_PIXELS[frameSize] ?? FRAME_PIXELS.svga;
+  const had = handle.last !== null;
+  return (
+    <figure className="cam-view" data-live={live ? '' : undefined} data-had={had ? '' : undefined}>
+      <div className="cam-frame" style={{ aspectRatio: `${px[0]} / ${px[1]}` }}>
+        <canvas ref={handle.canvas} className="cam-canvas" aria-label={`live view of ${instance}`} role="img" width={px[0]} height={px[1]} />
+        {line ? <p className="cam-line">{line}</p> : null}
+      </div>
+      <figcaption className="cam-caption">
+        {caption ? <span>{caption}</span> : null}
+        {!live && had ? (
+          <span>
+            the last frame · <FTime at={new Date(handle.last!.at)} form="relative" />
+          </span>
+        ) : null}
+      </figcaption>
+    </figure>
+  );
+}
+
+/** KEEP THIS FRAME: the JPEG on screen as a browser download. */
+export function downloadFrame(block: JpegBlock, name: string): void {
+  const url = URL.createObjectURL(new Blob([block.jpeg as Uint8Array<ArrayBuffer>], { type: 'image/jpeg' }));
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = name;
+  document.body.append(a);
+  a.click();
+  a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+}

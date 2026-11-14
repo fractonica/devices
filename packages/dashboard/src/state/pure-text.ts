@@ -245,3 +245,16 @@ export function earthText(text: string, spanOf?: (us: bigint) => string): string
     });
   });
 }
+
+/** A capture's time stamp in a path the hub chose (camera/ops.ts stamp(): `yyyymmdd-hhmmss.mmm`, local time). */
+const PATH_STAMP = /\d{8}-\d{6}(?:\.\d{1,3})?/g;
+
+/**
+ * A path the hub wrote a capture to, for pure mode (DEVICE-SPEC §3.9): each `yyyymmdd-hhmmss…` stamp (a civil date
+ * and clock time) is replaced by the held mark ⊕, so the path keeps its shape and says a value is there in Earth
+ * mode: ".../captures/cam-esp32/20261114-020304.567.jpg" → ".../captures/cam-esp32/⊕.jpg". The rest of the path
+ * (the alias, a frame's index, a -2 suffix) is kept. Earth mode shows the path whole; a copy copies it whole.
+ */
+export function heldPath(path: string): string {
+  return path.replace(PATH_STAMP, HELD);
+}
