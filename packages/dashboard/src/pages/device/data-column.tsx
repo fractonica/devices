@@ -122,7 +122,10 @@ export function DataColumn({ detail, fetchedAt }: { detail: DeviceDetail; fetche
       {hb ? (
         <Section title="Running">
           {hb.uptime_s !== undefined ? <Row label="Up for" value={<Span us={hb.uptime_s * 1_000_000} />} /> : null}
-          {hb.free_heap_kb !== undefined ? <Row label="Free memory" value={`${countText(null, hb.free_heap_kb)} KB`} /> : null}
+          {hb.free_heap_kb !== undefined ? (
+            // a count of bytes in pure mode (no kilo), ⊕ KB in Earth mode; 0 is a heartbeat that does not say
+            <Row label="Free memory" value={hb.free_heap_kb > 0 ? `${countText(null, hb.free_heap_kb * 1024)} B` : '—'} earth={hb.free_heap_kb > 0 ? `${countText(null, hb.free_heap_kb)} KB` : undefined} />
+          ) : null}
           {hb.vbat_mv ? <Row label="Battery" value={<span>{countText(null, hb.vbat_mv)}<Earth className="dev-earth-inline">{`${hb.vbat_mv} mV`}</Earth></span>} /> : null}
           <Row label="Send failures" value={countText(null, hb.tx_fail ?? 0)} extra={`${countText(null, hb.rx_drop ?? 0)} received frames dropped`} />
         </Section>

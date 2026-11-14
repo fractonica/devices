@@ -32,7 +32,7 @@ function LedQuick({ detail, inst, mirror }: CapPanelProps) {
     <PropSwitch
       bare
       label={`${inst.name} on or off`}
-      checked={mirror.on === true}
+      checked={typeof mirror.on === 'boolean' ? mirror.on : undefined}
       disabled={isAway(detail.presence) || act.isPending}
       onChange={(on) => act.mutate({ selector: `id:${detail.device_id}`, command: `${inst.name}.set`, args: { on } })}
     />

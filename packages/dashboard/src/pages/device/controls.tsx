@@ -75,14 +75,15 @@ export function InlineSlider({
 }
 
 /** A property's on/off switch for a row (the row's label names it): the toggle's ring and the state word. */
-export function PropSwitch({ checked, onChange, label, disabled, bare = false }: { checked: boolean; onChange: (v: boolean) => void; label: string; disabled?: boolean; bare?: boolean }) {
+/** A property's on/off ring; `checked` undefined: the device has not said (the word is "not reported yet", in ash). */
+export function PropSwitch({ checked, onChange, label, disabled, bare = false }: { checked: boolean | undefined; onChange: (v: boolean) => void; label: string; disabled?: boolean; bare?: boolean }) {
   return (
-    <button type="button" role="switch" aria-checked={checked} aria-label={label} className="ui-toggle" disabled={disabled} onClick={() => onChange(!checked)}>
+    <button type="button" role="switch" aria-checked={checked === true} aria-label={checked === undefined ? `${label}, not reported yet` : label} className="ui-toggle" data-unknown={checked === undefined ? '' : undefined} disabled={disabled} onClick={() => onChange(!checked)}>
       <svg width="18" height="18" viewBox="-9 -9 18 18" aria-hidden="true">
         <circle className="ring" r="7.5" strokeWidth="1" />
         <circle className="dot" r="3.6" />
       </svg>
-      {bare ? null : <span className="caps">{engrave(checked ? 'on' : 'off')}</span>}
+      {bare ? null : checked === undefined ? <span className="ash">not reported yet</span> : <span className="caps">{engrave(checked ? 'on' : 'off')}</span>}
     </button>
   );
 }
@@ -190,7 +191,7 @@ export function FieldControl({ spec, value, onChange, error, hint, disabled }: {
     case 'toggle':
       return (
         <div className="dev-field dev-field-inline">
-          <Toggle label={spec.label} checked={value === true} onChange={onChange} states={['off', 'on']} disabled={disabled} />
+          <Toggle label={spec.label} checked={value === true} onChange={onChange} states={[value === undefined ? 'not reported yet' : 'off', 'on']} disabled={disabled} />
         </div>
       );
     case 'slider': {
@@ -258,7 +259,7 @@ export function FieldControl({ spec, value, onChange, error, hint, disabled }: {
     case 'list':
       return (
         <div className="dev-field">
-          <TextField label={spec.label} value={String(value ?? '')} onChange={onChange} mono placeholder="numbers, separated by commas" error={error} note={note} disabled={disabled} />
+          <TextField label={spec.label} value={String(value ?? '')} onChange={onChange} mono placeholder={spec.maxItems ? `up to ${spec.maxItems} numbers, separated by commas` : 'numbers, separated by commas'} error={error} note={note} disabled={disabled} />
         </div>
       );
     case 'message':

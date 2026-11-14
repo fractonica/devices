@@ -191,7 +191,7 @@ describe('the words for states', () => {
   it('says a device’s last event in words where the hub has them', () => {
     expect(eventWords({ type: 'device.link' })).toBe('link changed');
     expect(eventWords({ type: 'node.boot' })).toBe('started');
-    expect(eventWords({ type: 'status.color' })).toBe('color changed');
+    expect(eventWords({ type: 'status.color' })).toBe('colour changed');
     expect(eventWords({ type: 'button.pressed' })).toBe('button pressed');
     expect(eventWords({ type: 'boot.pressed' })).toBe('boot pressed');
     expect(eventWords({ type: 'scale.weight_mg' })).toBe('scale weight');

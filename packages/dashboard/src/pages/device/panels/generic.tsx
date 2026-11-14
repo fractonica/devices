@@ -109,7 +109,7 @@ function PropertyControl({ deviceId, inst, cap, prop, link, value, mirror, disab
   const current = initialValue(spec, value);
   switch (spec.kind) {
     case 'toggle':
-      return <PropSwitch label={label} checked={current === true} onChange={send} disabled={disabled || act.isPending} />;
+      return <PropSwitch label={label} checked={typeof value === 'boolean' ? value : undefined} onChange={send} disabled={disabled || act.isPending} />;
     case 'slider':
       return <InlineSlider label={label} value={current === '' ? (spec.min ?? 0) : Number(current)} min={spec.min ?? 0} max={spec.max ?? 255} unit={memberWords(cap.name, prop).unit ?? spec.unit} onCommit={send} disabled={disabled} />;
     case 'colour':

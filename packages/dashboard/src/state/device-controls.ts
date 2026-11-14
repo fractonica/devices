@@ -41,6 +41,8 @@ export interface ControlSpec {
   default?: unknown;
   /** bytes and string: the longest. */
   maxLength?: number;
+  /** list: the most numbers it takes (each between min and max, its element type's range). */
+  maxItems?: number;
   doc?: string;
 }
 
@@ -116,7 +118,8 @@ export function controlFor(field: CatalogField | (CatalogProperty & { optional?:
     return { ...base, kind: 'bytes', ...(field.max ? { maxLength: field.max } : {}) };
   }
   if (field.type.startsWith('array<')) {
-    return { ...base, kind: 'list' };
+    const range = INT_RANGES[field.type.slice('array<'.length, -1)];
+    return { ...base, kind: 'list', ...(range ? { min: range[0], max: range[1] } : {}), ...(field.max ? { maxItems: field.max } : {}) };
   }
   if (cap.messages?.[field.type]) {
     return { ...base, kind: 'message' };
@@ -145,7 +148,8 @@ export function hexColour(s: string): number | null {
 /**
  * The value a control starts with (DEVICE-SPEC G4): the property mirror's, else the field's default, else empty. An
  * example is never a value. A select's value is always a member name (a number from a mirror becomes its name). A
- * switch starts off and a colour well white: they have no empty state.
+ * colour well starts white (it has no empty state); a switch whose state is not known is undefined, shown as "not
+ * reported yet" and sent as off unless it is switched.
  */
 export function initialValue(spec: ControlSpec, mirror?: unknown): unknown {
   const pick = mirror !== undefined && mirror !== null ? mirror : spec.default;
@@ -157,7 +161,7 @@ export function initialValue(spec: ControlSpec, mirror?: unknown): unknown {
   }
   switch (spec.kind) {
     case 'toggle':
-      return false;
+      return undefined;
     case 'colour':
       return 0xffffff;
     default:
@@ -236,7 +240,14 @@ export function argValue(spec: ControlSpec, raw: unknown): ArgCheck {
       if (parts.some((p) => !/^\d+$/.test(p))) {
         return { ok: false, error: 'whole numbers, separated by commas' };
       }
-      return { ok: true, value: parts.map(Number) };
+      if (spec.maxItems !== undefined && parts.length > spec.maxItems) {
+        return { ok: false, error: `at most ${spec.maxItems} numbers` };
+      }
+      const nums = parts.map(Number);
+      if (spec.max !== undefined && nums.some((n) => n > spec.max! || (spec.min !== undefined && n < spec.min))) {
+        return { ok: false, error: `each between ${spec.min ?? 0} and ${spec.max}` };
+      }
+      return { ok: true, value: nums };
     }
     case 'message': {
       if (typeof raw === 'object' && raw !== null) {

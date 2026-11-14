@@ -15,6 +15,7 @@ import {
   controlFor,
   coveredCommands,
   hexColour,
+  INT_RANGES,
   initialValue,
   isBlank,
   linkArgs,
@@ -296,6 +297,30 @@ describe('enums by name and forms without examples (DEVICE-SPEC G2, G4)', () => 
     const specs = command.fields.map((f) => controlFor(f, c));
     return { specs, values: seedValues(specs, c.properties, mirror) };
   };
+
+  it('a list of numbers takes what the hub takes: each in its element type’s range, at most the field’s count (every array<int> field)', () => {
+    let seen = 0;
+    for (const c of CATALOG.capabilities) {
+      for (const m of c.commands) {
+        for (const f of m.fields) {
+          const inner = /^array<(\w+)>$/.exec(f.type)?.[1];
+          if (!inner || !INT_RANGES[inner]) {
+            continue;
+          }
+          seen++;
+          const spec = controlFor(f, c);
+          const [, top] = INT_RANGES[inner]!;
+          expect(spec, `${c.name}.${m.name}.${f.name}`).toMatchObject({ kind: 'list', max: top, ...(f.max ? { maxItems: f.max } : {}) });
+          expect(argValue(spec, String(top + 1))).toEqual({ ok: false, error: `each between 0 and ${top}` });
+          if (f.max) {
+            expect(argValue(spec, Array.from({ length: f.max }, () => String(top)).join(','))).toEqual({ ok: true, value: Array.from({ length: f.max }, () => top) });
+            expect(argValue(spec, Array.from({ length: f.max + 1 }, () => '1').join(','))).toEqual({ ok: false, error: `at most ${f.max} numbers` });
+          }
+        }
+      }
+    }
+    expect(seen).toBeGreaterThanOrEqual(2); // fr.haptic play steps, fr.node set_groups
+  });
 
   it('never says "a whole number": every command of the catalog, seeded, builds or waits only for an empty field', () => {
     const problems: string[] = [];

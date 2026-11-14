@@ -395,6 +395,28 @@
   text-align: right;
 }
 
+/* the raw type and fields, folded under the words */
+.dev-event-raw {
+  min-width: 0;
+}
+
+.dev-event-raw summary {
+  list-style: none;
+  cursor: pointer;
+  font-size: var(--fs-earth);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.dev-event-raw summary::-webkit-details-marker {
+  display: none;
+}
+
+.dev-event-raw[open] .dev-event-fields {
+  margin-top: 2px;
+}
+
 .dev-more {
   color: var(--c-ash);
   transition: color 200ms linear;
@@ -531,12 +553,8 @@
     grid-area: time;
   }
 
-  .dev-event-fields {
+  .dev-event-raw {
     grid-area: fields;
-  }
-
-  .dev-event-fields:empty {
-    display: none;
   }
 
   .dev-analog .ui-slider {

@@ -6,7 +6,7 @@
 // Lately (the device's last three events) with ALL ACTIVITY ›. At phone width the glance comes first.
 //
 // A device with one instrument draws that instrument's page here, under the glance; with none, it says why.
-// `?from=<instance>` (an instrument page's back link) scrolls to that row and lights its hairline.
+// `?from=<instance>` (an instrument page's back link) scrolls to that row, focuses its link and lights its hairline.
 
 import { Link, useSearch } from '@tanstack/react-router';
 import { useEffect, useMemo, useState } from 'react';
@@ -218,14 +218,17 @@ function Overview({ detail, fetchedAt }: { detail: DeviceDetail; fetchedAt: numb
   const from = ((useSearch({ strict: false }) as Record<string, unknown>).from as string | undefined) ?? null;
   const [lit, setLit] = useState(from);
   useEffect(() => {
-    if (!from) {
+    if (!from || pending) {
       return;
     }
-    document.querySelector(`[data-instrument="${CSS.escape(from)}"]`)?.scrollIntoView({ block: 'nearest' });
+    const row = document.querySelector(`[data-instrument="${CSS.escape(from)}"]`);
+    row?.scrollIntoView({ block: 'nearest' });
+    // the focus goes back to the row the person came from, not to the page's start
+    (row?.querySelector('[data-rung-link]') as HTMLElement | null)?.focus({ preventScroll: true });
     setLit(from);
     const t = setTimeout(() => setLit(null), 600);
     return () => clearTimeout(t);
-  }, [from]);
+  }, [from, pending]);
   const items = groupInstruments(instruments);
   const single = instruments.length === 1 ? instruments[0]! : null;
   return (

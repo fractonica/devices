@@ -112,7 +112,7 @@ export function DeviceFrame({ section, lens = false, children }: DeviceFrameProp
   return (
     <Page
       title={d.alias}
-      documentTitle={onInstrument ? `${d.alias} · ${instance}` : undefined}
+      documentTitle={onInstrument ? `${d.alias} · ${instance}` : section !== 'instruments' ? `${d.alias} · ${section}` : undefined}
       sub={
         <span className="dev-sub" data-flash={flashing ? '' : undefined}>
           <Bead state={presenceBead(presence)} label={presenceWord(presence)} showLabel />

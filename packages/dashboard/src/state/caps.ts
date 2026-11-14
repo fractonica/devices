@@ -1,7 +1,8 @@
 // What the device page renders of a capability instance (spec 08 §8.9 "capabilities rendered from
 // catalog.json"; design c6 D13): its commands, properties and events from the catalog, the members a
 // trait gates only when the instance has that trait (traits null — firmware the hub did not build —
-// shows them all), and the test commands (inject) only on a node whose HELLO says inject_enabled.
+// shows them all; an optional command field naming a hidden property goes with it), and the test commands (inject)
+// only on a node whose HELLO says inject_enabled.
 
 import type { CatalogCapability, CatalogCommand, CatalogEvent, CatalogProperty, CatalogRequires } from '@fractonica/protocol/gen';
 
@@ -35,8 +36,13 @@ export interface MembersView {
 
 export function visibleMembers(cap: CatalogCapability, traits: Record<string, unknown> | null, helloCaps: number | null): MembersView {
   const inject = ((helloCaps ?? 0) & INJECT_ENABLED) !== 0;
+  // an optional command field that sets a property the traits hide is not offered either (fr.led set's colour on a
+  // mono light)
+  const hidden = new Set(cap.properties.filter((p) => !traitAllows(p.requires, traits)).map((p) => p.name));
   return {
-    commands: cap.commands.filter((c) => c.visibility !== 'test' || inject),
+    commands: cap.commands
+      .filter((c) => c.visibility !== 'test' || inject)
+      .map((c) => (c.fields.some((f) => f.optional && hidden.has(f.name)) ? { ...c, fields: c.fields.filter((f) => !(f.optional && hidden.has(f.name))) } : c)),
     properties: cap.properties.filter((p) => traitAllows(p.requires, traits)),
     events: cap.events.filter((e) => traitAllows(e.requires, traits)),
   };

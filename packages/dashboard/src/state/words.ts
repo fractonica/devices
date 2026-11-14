@@ -20,9 +20,35 @@ export function presenceWord(presence: string | null | undefined): string {
   return PRESENCE_WORDS[presence ?? 'unknown'] ?? presence ?? 'not heard yet';
 }
 
-/** The words an event's type is shown as on a device's line: the hub's own words for presence and links, else the type. */
-export function eventWords(e: Pick<HubEvent, 'type'>): string {
+const CLIENT_WORDS: Record<string, string> = { dashboard: 'the dashboard', cli: 'the CLI', mcp: 'an agent', app: 'an app' };
+
+/** "stopped, 949 frames": how a stream ended, from its stream.ended fields. */
+function streamEnd(f: Readonly<Record<string, unknown>>): string {
+  const reason = typeof f.reason === 'string' ? f.reason.replace(/_/g, ' ') : null;
+  const n = typeof f.records === 'number' ? `${f.records} frame${f.records === 1 ? '' : 's'}` : null;
+  return [reason, n].filter(Boolean).join(', ');
+}
+
+/**
+ * The words an event is shown as on a device's line: the hub's own words for presence and links, a command sent
+ * ("the dashboard sent blink to flash"), a stream ("cam ended a stream: stopped, 949 frames"), else its type in words.
+ */
+export function eventWords(e: Pick<HubEvent, 'type'> & { fields?: Readonly<Record<string, unknown>> | undefined }): string {
+  const f = e.fields ?? {};
   switch (e.type) {
+    case 'op.called': {
+      const who = typeof f.client === 'string' ? (CLIENT_WORDS[f.client] ?? f.client) : 'a client';
+      if (f.op === 'command_send' && typeof f.command === 'string') {
+        return `${who} sent ${f.command.replace(/_/g, ' ')}${typeof f.instance === 'string' ? ` to ${f.instance}` : ''}`;
+      }
+      return typeof f.op === 'string' ? `${who} ran ${f.op.replace(/_/g, ' ')}` : `${who} ran an op`;
+    }
+    case 'stream.started':
+      return `${typeof f.instance === 'string' ? f.instance : 'it'} started a stream`;
+    case 'stream.ended': {
+      const how = streamEnd(f);
+      return `${typeof f.instance === 'string' ? f.instance : 'it'} ended a stream${how ? `: ${how}` : ''}`;
+    }
     case 'device.online':
       return 'came online';
     case 'device.suspect':
@@ -39,6 +65,10 @@ export function eventWords(e: Pick<HubEvent, 'type'>): string {
     case 'registry.drift':
       return 'renamed';
     default: {
+      // a camera's own word that its stream ended (beside the hub's stream.ended, which counts the frames)
+      if (e.type.endsWith('.stream_ended')) {
+        return `${e.type.slice(0, -'.stream_ended'.length)} said its stream ended`;
+      }
       // a capability's event in words: "button.down" → "button down", "status.color" → "color changed"
       const dot = e.type.lastIndexOf('.');
       const cap = dot > 0 ? e.type.slice(0, dot).split('.').pop()! : '';

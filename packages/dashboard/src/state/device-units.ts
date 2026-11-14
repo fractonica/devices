@@ -78,7 +78,7 @@ export function impliedUnit(name: string, type?: string): string | undefined {
 /** Name suffixes that are an Earth unit (stripped from the words), longest first. */
 const UNIT_SUFFIXES = ['_x100', '_x10', '_mv', '_mg', '_mb', '_ms', '_us', '_hz', '_c10', '_s'];
 /** Whole names that are an Earth word. */
-const NAME_WORDS: Record<string, string> = { on: 'state', ms: 'duration', seconds: 'duration', percent: 'charge', freq_hz: 'pitch', unix: 'time', mv: 'voltage', meter_mv: 'meter voltage', supply_mv: 'supply voltage' };
+const NAME_WORDS: Record<string, string> = { color: 'colour', on: 'state', ms: 'duration', seconds: 'duration', percent: 'charge', freq_hz: 'pitch', unix: 'time', mv: 'voltage', meter_mv: 'meter voltage', supply_mv: 'supply voltage' };
 
 /** A field or property name as words, with an Earth unit dropped: on_ms → "on", double_click → "double click". */
 export function fieldWords(name: string): string {

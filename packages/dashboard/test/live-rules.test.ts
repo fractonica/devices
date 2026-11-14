@@ -84,6 +84,16 @@ describe('capabilities on the device page', () => {
     expect(traitAllows({ trait: 'dimmable' }, { dimmable: false })).toBe(false);
   });
 
+  it('a mono light’s SET and BLINK offer no colour (the field goes with the hidden property); an rgb one’s do', () => {
+    const led = cap('fr.led');
+    const fields = (traits: Record<string, unknown> | null, cmd: string) => visibleMembers(led, traits, 0).commands.find((c) => c.name === cmd)!.fields.map((f) => f.name);
+    expect(fields({ color: 'mono' }, 'set')).not.toContain('color');
+    expect(fields({ color: 'mono' }, 'blink')).not.toContain('color');
+    expect(fields({ color: 'rgb' }, 'set')).toContain('color');
+    expect(fields(null, 'set')).toContain('color');
+    expect(fields({ color: 'mono' }, 'set')).toContain('on');
+  });
+
   it('shows test commands (inject) only when HELLO says inject_enabled', () => {
     const button = cap('fr.button');
     expect(visibleMembers(button, null, 0).commands.map((c) => c.name)).not.toContain('inject');
