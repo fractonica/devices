@@ -76,7 +76,7 @@ export function impliedUnit(name: string, type?: string): string | undefined {
 }
 
 /** Name suffixes that are an Earth unit (stripped from the words), longest first. */
-const UNIT_SUFFIXES = ['_mv', '_mg', '_mb', '_ms', '_us', '_hz', '_c10', '_s'];
+const UNIT_SUFFIXES = ['_x100', '_x10', '_mv', '_mg', '_mb', '_ms', '_us', '_hz', '_c10', '_s'];
 /** Whole names that are an Earth word. */
 const NAME_WORDS: Record<string, string> = { on: 'state', ms: 'duration', seconds: 'duration', percent: 'charge', freq_hz: 'pitch', unix: 'time', mv: 'voltage', meter_mv: 'meter voltage', supply_mv: 'supply voltage' };
 
@@ -148,25 +148,35 @@ export interface ValueText {
   earth: string | null;
 }
 
+/** How a member's raw number becomes its unit (state/cap-words.ts): `fps_x10` is Hz at scale 0.1. */
+export interface ValueOpts {
+  /** The raw value times this is the value in `unit` (overrides the unit's own scale). */
+  scale?: number;
+  /** The Earth words after the number instead of the unit's symbol ("frames a second"). */
+  symbol?: string;
+}
+
 /** A numeric value of a field or property in `unit`, for both modes. */
-export function valueText(core: Core | null, value: number, unit: string | undefined | null): ValueText {
+export function valueText(core: Core | null, value: number, unit: string | undefined | null, opts: ValueOpts = {}): ValueText {
   const u = unitInfo(unit);
-  const earthNum = (v: number) => `${countTextEarth(v * (u.scale ?? 1))} ${u.symbol ?? ''}`.trim();
+  const scale = opts.scale ?? u.scale ?? 1;
+  const symbol = opts.symbol ?? u.symbol ?? '';
+  const earthNum = (v: number) => `${countTextEarth(v * scale)} ${symbol}`.trim();
   switch (u.cls) {
     case 'time':
-      return { text: core ? spanText(core, value * u.us!) : '—', earth: earthNum(value) };
+      return { text: core ? spanText(core, value * scale * u.us!) : '—', earth: earthNum(value) };
     case 'rate':
-      return { text: core ? rateText(core, value) : '—', earth: earthNum(value) };
+      return { text: core ? rateText(core, value * scale) : '—', earth: earthNum(value) };
     case 'share':
       return { text: '', earth: earthNum(value) };
     case 'earth': {
-      const scaled = Math.round(value * (u.scale ?? 1) * 1000) / 1000;
+      const scaled = Math.round(value * scale * 1000) / 1000;
       return { text: countText(core, scaled), earth: earthNum(value) };
     }
     case 'count':
       return { text: `${countText(core, value)} ${u.symbol}`, earth: null };
     default:
-      return { text: countText(core, value), earth: null };
+      return { text: countText(core, scale === 1 ? value : Math.round(value * scale * 1000) / 1000), earth: null };
   }
 }
 
@@ -195,3 +205,55 @@ export function fractionOf(value: number, min: number, max: number): number {
   return Math.min(1, Math.max(0, (value - min) / (max - min)));
 }
 
+
+/**
+ * The rungs a span is typed in (ui SpanField): Blinks ν, Flavons λ (25ν), Preons ι (65λ), as the core names them. A
+ * person types a count of one of them; the core turns it into microseconds at the current interval.
+ */
+export const SPAN_RUNGS: readonly number[] = [Unit.BLINK, Unit.FLAVON, Unit.PREON];
+
+/** Microseconds in one unit of a field's time unit (ms 1000); null for a unit that is not a time. */
+export function usPerUnit(unit: string | undefined | null): number | null {
+  const u = unitInfo(unit);
+  return u.cls === 'time' ? u.us! : null;
+}
+
+/** `count` of the core's unit `rung` (Unit.BLINK …) as microseconds, at `t`; NaN for a count that is not a number. */
+export function spanToUs(core: Core, count: number, rung: number, t: bigint = core.frc.now()): number {
+  const level = core.frc.unitLevel(rung);
+  if (level === null || !Number.isFinite(count)) {
+    return NaN;
+  }
+  return count * core.frc.periodSeconds(level, core.cat.intervalAt(t)) * 1e6;
+}
+
+/** A span in microseconds as a count of the largest rung it holds at least once (Blinks below one Blink), 2 decimals. */
+export function usToRung(core: Core, us: number, t: bigint = core.frc.now()): { count: number; rung: number } {
+  let pick = SPAN_RUNGS[0]!;
+  for (const r of SPAN_RUNGS) {
+    if (Math.abs(us) >= spanToUs(core, 1, r, t)) {
+      pick = r;
+    }
+  }
+  const one = spanToUs(core, 1, pick, t);
+  return { count: Math.round((us / one) * 100) / 100, rung: pick };
+}
+
+/**
+ * A typed span made a field's value: microseconds rounded to the field's unit, clamped to [min, max]. `clamped` says
+ * which end it was held to (the page states it as a span: "at most 7ι").
+ */
+export function spanToField(us: number, unit: string | undefined, min?: number, max?: number): { value: number; clamped: 'min' | 'max' | null } | null {
+  const per = usPerUnit(unit);
+  if (per === null || !Number.isFinite(us)) {
+    return null;
+  }
+  const v = Math.round(us / per);
+  if (max !== undefined && v > max) {
+    return { value: max, clamped: 'max' };
+  }
+  if (min !== undefined && v < min) {
+    return { value: min, clamped: 'min' };
+  }
+  return { value: v, clamped: null };
+}

@@ -157,3 +157,75 @@ export function Slider({ label, note, error, value, min, max, step = 1, onChange
     </Frame>
   );
 }
+
+/** One rung a SpanField offers (ν, λ, ι with their words), or a word that takes no count ("until stopped"). */
+export interface SpanRung {
+  value: string;
+  label: string;
+}
+
+export interface SpanFieldProps extends FieldFrame {
+  /** The count as typed ("3", "0.5"). */
+  count: string;
+  /** The chosen rung's value, or a word's. */
+  rung: string;
+  /** The rungs a count is typed in, largest last (the caller has them from the core). */
+  rungs: readonly SpanRung[];
+  /** Words that stand for a span without a count; choosing one hides the count. */
+  words?: readonly SpanRung[];
+  onChange: (count: string, rung: string) => void;
+  /** Under the field: what the span is in Earth mode (an <Earth>), or nothing. */
+  earth?: ReactNode;
+  disabled?: boolean;
+  id?: string;
+}
+
+/**
+ * A span typed as a count and a rung of the core (DEVICE-SPEC G7): "3 ν", "1.5 λ", or a word ("until stopped"). The
+ * caller turns it into its unit through the core (state/device-units.ts spanToUs) and states a clamp in the note.
+ */
+export function SpanField({ label, note, error, count, rung, rungs, words = [], onChange, earth, disabled, id }: SpanFieldProps) {
+  const auto = useId();
+  const fid = id ?? auto;
+  const word = words.some((w) => w.value === rung);
+  return (
+    <Frame id={fid} label={label} note={note} error={error}>
+      <span className="ui-span-field" data-word={word ? '' : undefined}>
+        {word ? null : (
+          <input
+            id={fid}
+            className="ui-input ui-span-count"
+            inputMode="decimal"
+            value={count}
+            disabled={disabled}
+            onChange={(e) => onChange(e.target.value, rung)}
+            aria-invalid={error ? true : undefined}
+            aria-describedby={error || note ? `${fid}-msg` : undefined}
+            spellCheck={false}
+            autoComplete="off"
+          />
+        )}
+        <span className="ui-select-wrap ui-span-rung">
+          <select
+            id={word ? fid : undefined}
+            className="ui-select"
+            value={rung}
+            disabled={disabled}
+            aria-label={`${label}: unit`}
+            onChange={(e) => onChange(count, e.target.value)}
+          >
+            {[...rungs, ...words].map((o) => (
+              <option key={o.value} value={o.value}>
+                {o.label}
+              </option>
+            ))}
+          </select>
+          <svg className="ui-select-mark" width="9" height="6" viewBox="0 0 9 6" aria-hidden="true">
+            <path d="M0.5 0.5 4.5 4.5 8.5 0.5" fill="none" stroke="currentColor" strokeWidth="1" strokeLinecap="round" strokeLinejoin="round" />
+          </svg>
+        </span>
+      </span>
+      {earth ?? null}
+    </Frame>
+  );
+}

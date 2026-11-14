@@ -3,7 +3,7 @@
 //
 //   /                      pages/hub.tsx        HubPage
 //   /devices               pages/devices.tsx    DevicesPage
-//   /devices/$id           pages/device.tsx     DevicePage        (an alias or a device id: its instruments)
+//   /devices/$id           pages/device.tsx     DevicePage        (an alias or a device id: its instruments; ?log=1 → activity)
 //   /devices/$id/activity  pages/device/page-activity.tsx DeviceActivityPage (events; ?log=1 opens the log)
 //   /devices/$id/facts     pages/device/page-facts.tsx    DeviceFactsPage    (link, time, build, registry)
 //   /devices/$id/engineering  page-engineering.tsx        DeviceEngineeringPage (diagnostics, commands, raw)
@@ -52,7 +52,17 @@ const moved = (path: string, to: string, params?: (p: Record<string, string>) =>
 const routeTree = root.addChildren([
   createRoute({ getParentRoute: parent, path: '/', component: HubPage }),
   createRoute({ getParentRoute: parent, path: '/devices', component: DevicesPage }),
-  createRoute({ getParentRoute: parent, path: '/devices/$id', component: DevicePage }),
+  createRoute({
+    getParentRoute: parent,
+    path: '/devices/$id',
+    component: DevicePage,
+    // Provision's old "Open its log" link (/devices/$id?log=1): the log is on the device's Activity page now
+    beforeLoad: ({ params, search }) => {
+      if ((search as Record<string, unknown>).log !== undefined) {
+        throw redirect({ to: '/devices/$id/activity', params: params as never, search: { log: 1 } as never, replace: true });
+      }
+    },
+  }),
   // the device's sub-pages (DEVICE-SPEC §1.1); the static words rank above $instance, and no instance may take one
   // (pages/device/frame.tsx RESERVED_SEGMENTS)
   createRoute({ getParentRoute: parent, path: '/devices/$id/activity', component: DeviceActivityPage }),

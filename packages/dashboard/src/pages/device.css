@@ -1,7 +1,7 @@
 /*
- * device.css - the Device page (pages/device.tsx, pages/device/*). Tokens only. Classes `dev-`.
- * LENS layout: the instruments (capabilities, events, log) on the left, the data column on the right; one column with
- * the data first at phone width.
+ * device.css - the device's pages (pages/device.tsx, pages/device/*). Tokens only. Classes `dev-`.
+ * One frame (header, back link, the sub-nav) over four sub-pages: Instruments (the rows beside a glance), an
+ * instrument's page (its strip, caption and panel), Activity, Facts and Engineering.
  */
 
 .dev-page {
@@ -33,13 +33,6 @@
   font-size: var(--fs-earth);
   letter-spacing: 0.02em;
   color: var(--c-ash);
-}
-
-.dev-grid {
-  display: grid;
-  grid-template-columns: minmax(0, 1.45fr) minmax(280px, 1fr);
-  column-gap: var(--sp-6);
-  align-items: start;
 }
 
 .dev-main,
@@ -464,8 +457,7 @@
 .dev-engineering-body {
   display: flex;
   flex-direction: column;
-  gap: var(--sp-5);
-  padding-top: var(--sp-4);
+  gap: var(--sp-4);
 }
 
 .dev-binding {
@@ -490,35 +482,6 @@
   gap: var(--sp-3) var(--sp-4);
   align-items: end;
   padding-top: var(--sp-3);
-}
-
-/* ---------------------------------------------------------------- phone */
-
-/* one column: the instruments first, then the facts, then events and the log */
-@media (max-width: 999.98px) {
-  .dev-grid {
-    display: flex;
-    flex-direction: column;
-    align-items: stretch;
-    gap: var(--sp-5);
-  }
-
-  .dev-main {
-    display: contents;
-  }
-
-  .dev-main > * {
-    order: 3;
-  }
-
-  .dev-main > .dev-caps,
-  .dev-main > .dev-face {
-    order: 1;
-  }
-
-  .dev-side {
-    order: 2;
-  }
 }
 
 @media (max-width: 699.98px) {
@@ -586,7 +549,7 @@
 }
 
 @media (max-width: 699.98px) {
-  .dev-engineering .ui-disclosure-aside {
+  .dev-engineering-body > .ui-disclosure .ui-disclosure-aside {
     display: none;
   }
 }
@@ -600,4 +563,312 @@
 .dev-field-earth,
 .dev-field .dev-slider-value {
   align-self: flex-end;
+}
+
+/* ------------------------------------------------------- the sub-pages */
+
+.dev-page > .ui-subnav {
+  margin-top: calc(var(--sp-2) * -1);
+}
+
+/* the Overview: the rows on the left, the glance and Lately on the right; glance, rows, Lately at phone width */
+.dev-ov {
+  display: grid;
+  grid-template-columns: minmax(0, 1.45fr) minmax(280px, 1fr);
+  grid-template-areas:
+    'rows glance'
+    'rows lately';
+  grid-template-rows: auto 1fr;
+  gap: var(--sp-5) var(--sp-6);
+  align-items: start;
+}
+
+.dev-ov-rows {
+  grid-area: rows;
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-5);
+  min-width: 0;
+}
+
+.dev-ov-glance {
+  grid-area: glance;
+  min-width: 0;
+}
+
+.dev-ov-lately {
+  grid-area: lately;
+  min-width: 0;
+}
+
+@media (max-width: 999.98px) {
+  .dev-ov {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-areas:
+      'glance'
+      'rows'
+      'lately';
+    grid-template-rows: auto;
+  }
+}
+
+/* an instrument's row: port, name over its word, headline, quick control, the way in; the link covers the row */
+.dev-rung {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: var(--sp-4);
+  min-height: 56px;
+  padding: 8px 0;
+  border-bottom: var(--hair) solid var(--c-etch1);
+  font-size: var(--fs-data);
+  transition: border-color 600ms linear;
+}
+
+.dev-rung[data-flash] {
+  border-bottom-color: var(--c-lumen);
+  transition: none;
+}
+
+.dev-rung-link {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-4);
+  min-width: 0;
+  flex: 1 1 auto;
+  color: inherit;
+}
+
+.dev-rung > .dev-rung-link::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+}
+
+.dev-rung-port {
+  flex: none;
+  width: 2.5ch;
+  text-align: right;
+  color: var(--c-etch3);
+  font-variant-numeric: tabular-nums;
+}
+
+.dev-rung-text {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 0;
+}
+
+.dev-rung-name {
+  font-size: var(--fs-value);
+  color: var(--c-bone);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.dev-rung-word {
+  color: var(--c-ash);
+}
+
+.dev-rung-value {
+  flex: 0 1 auto;
+  min-width: 0;
+  margin-left: auto;
+  text-align: right;
+}
+
+.dev-rung-quick {
+  position: relative;
+  z-index: 1;
+  flex: none;
+}
+
+.dev-rung-go {
+  flex: none;
+  color: var(--c-etch3);
+  transition: color 200ms linear;
+}
+
+.dev-rung:hover .dev-rung-go,
+.dev-rung:hover .dev-rung-name {
+  color: var(--c-lumen);
+}
+
+.dev-rung-link:focus-visible {
+  outline: none;
+}
+
+.dev-rung:has(.dev-rung-link:focus-visible) {
+  border-bottom-color: var(--c-lumen);
+}
+
+button.dev-group-head {
+  width: 100%;
+  padding: 8px 0;
+  border: 0;
+  border-bottom: var(--hair) solid var(--c-etch1);
+  background: none;
+  text-align: left;
+  font: inherit;
+  cursor: pointer;
+}
+
+.dev-group-members {
+  padding-left: var(--sp-5);
+}
+
+.dev-headline {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--sp-2);
+}
+
+.dev-lately-type {
+  font-size: var(--fs-data);
+}
+
+/* an instrument's page: its strip, its caption, the panel */
+.dev-strip .ui-subnav {
+  gap: var(--sp-4);
+}
+
+.dev-strip {
+  margin-top: calc(var(--sp-4) * -1);
+}
+
+.dev-caption {
+  margin: calc(var(--sp-2) * -1) 0 0;
+  color: var(--c-ash);
+}
+
+.dev-presence-line {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-2);
+  margin: 0;
+  font-size: var(--fs-earth);
+  color: var(--c-ash);
+}
+
+.dev-lens {
+  display: grid;
+  grid-template-columns: minmax(0, 1.45fr) minmax(260px, 1fr);
+  gap: var(--sp-5) var(--sp-6);
+  align-items: start;
+}
+
+.dev-lens-main,
+.dev-lens-side {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-5);
+  min-width: 0;
+}
+
+@media (max-width: 999.98px) {
+  .dev-lens {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+.dev-lens-side .dev-summary {
+  padding-top: 0;
+}
+
+.dev-foot {
+  margin: 0;
+}
+
+/* an action: its button (or its fold) and what it does */
+.dev-action-line {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: var(--sp-2) var(--sp-4);
+  min-height: var(--row-min);
+  padding: 8px 0;
+  border-bottom: var(--hair) solid var(--c-etch1);
+}
+
+.dev-action-plain .dev-outcome {
+  padding: var(--sp-2) 0;
+}
+
+.dev-does {
+  flex: 1 1 24ch;
+  font-size: var(--fs-earth);
+  line-height: 16px;
+  color: var(--c-ash);
+}
+
+.dev-missing {
+  margin: 0;
+  color: var(--c-ash);
+}
+
+.dev-outcome-words {
+  color: var(--c-bone);
+}
+
+.dev-inline-slider[data-empty] .ui-slider {
+  opacity: 0.6;
+}
+
+.dev-inline-link {
+  color: var(--c-bone);
+  text-decoration: underline;
+  text-decoration-color: var(--c-etch3);
+  text-underline-offset: 3px;
+}
+
+.dev-inline-link:hover {
+  color: var(--c-lumen);
+}
+
+/* Activity */
+.dev-activity,
+.dev-facts {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-5);
+}
+
+.dev-facts .dev-data {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+  gap: var(--sp-5) var(--sp-6);
+  align-items: start;
+}
+
+.dev-filter {
+  padding: var(--sp-2) 0;
+}
+
+/* Engineering › Commands */
+.dev-console-note {
+  padding: var(--sp-2) 0;
+}
+
+.dev-console-body {
+  display: flex;
+  flex-direction: column;
+  padding-left: var(--sp-4);
+}
+
+@media (max-width: 639.98px) {
+  .dev-rung {
+    flex-wrap: wrap;
+    gap: var(--sp-2) var(--sp-3);
+  }
+
+  .dev-rung-value {
+    max-width: 50%;
+  }
+
+  .dev-console-body,
+  .dev-group-members {
+    padding-left: var(--sp-3);
+  }
 }

@@ -3,7 +3,7 @@
 
 import { useState } from 'react';
 
-import { Bead, Button, ButtonRow, Caps, Disclosure, EmptyState, ErrorLine, FTime, Page, Pending, PROVISION_STAGES, Reading, Row, Section, Select, Slider, Sparkline, StageRing, Term, TextField, Toggle } from '../ui/index.ts';
+import { Bead, Button, ButtonRow, Caps, Disclosure, EmptyState, ErrorLine, FTime, Page, Pending, PROVISION_STAGES, Reading, Row, Section, Select, Slider, SpanField, Sparkline, StageRing, Term, TextField, Toggle } from '../ui/index.ts';
 import { OpError } from '../api/rest.ts';
 
 const WAVE = Array.from({ length: 60 }, (_, i) => -60 + 8 * Math.sin(i / 5) + (i % 7));
@@ -13,6 +13,7 @@ export function SpecimenPage() {
   const [net, setNet] = useState('home');
   const [led, setLed] = useState(true);
   const [level, setLevel] = useState(96);
+  const [span, setSpan] = useState({ count: '3', rung: 'nu' });
   const now = Date.now() * 1000;
   return (
     <Page title="Specimen" sub="The primitives of src/ui" earth="an Earth line, led by the Earth sign" actions={<Button variant="primary">Primary</Button>}>
@@ -61,6 +62,19 @@ export function SpecimenPage() {
         <Select label="Network" value={net} onChange={setNet} options={[{ value: 'home', label: 'home' }, { value: 'lab', label: 'lab' }]} />
         <Toggle label="LED" checked={led} onChange={setLed} states={['off', 'on']} />
         <Slider label="Brightness" value={level} min={0} max={255} onChange={setLevel} />
+        <SpanField
+          label="Lit for"
+          count={span.count}
+          rung={span.rung}
+          rungs={[
+            { value: 'nu', label: 'ν blinks' },
+            { value: 'lambda', label: 'λ flavons' },
+            { value: 'iota', label: 'ι preons' },
+          ]}
+          words={[{ value: 'never', label: 'until stopped' }]}
+          onChange={(count, rung) => setSpan({ count, rung })}
+          note="up to 32ν"
+        />
       </Section>
       <Section title="Stage rings" body="loose">
         <ButtonRow>
@@ -79,6 +93,9 @@ export function SpecimenPage() {
         <ErrorLine error={new OpError({ code: 'NOT_FOUND', message: 'unknown op hub_doctor', retryable: false })} what="Doctor" />
       </Section>
       <Section title="Folds and empties">
+        <Disclosure title="Blink" sub="Blinks status the number of times chosen, then returns it to its state.">
+          <Row label="Times" value="3" />
+        </Disclosure>
         <Disclosure title="Engineering" aside={<Caps>3</Caps>} defaultOpen>
           <Row label="Bindings" value="3" />
           <Row label="Reading" value={<Reading text="ε#5 34η 29ι 21λ 3ν" />} />

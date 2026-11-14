@@ -24,7 +24,15 @@ export function SubNav({ items, label }: { items: readonly SubNavItem[]; label?:
     <nav className="ui-subnav" aria-label={label} ref={ref}>
       {items.map((i) => (
         // the router's Link with a typed route string: the params are the caller's
-        <Link key={`${i.to}:${JSON.stringify(i.params ?? {})}`} to={i.to as never} params={i.params as never} className="ui-subnav-item caps" aria-current={i.current ? 'page' : undefined}>
+        // exact: the caller says which item is current (a parent path is not current on its child's page)
+        <Link
+          key={`${i.to}:${JSON.stringify(i.params ?? {})}`}
+          to={i.to as never}
+          params={i.params as never}
+          activeOptions={{ exact: true, includeSearch: false }}
+          className="ui-subnav-item caps"
+          aria-current={i.current ? 'page' : undefined}
+        >
           {engrave(i.label)}
         </Link>
       ))}

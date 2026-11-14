@@ -39,6 +39,7 @@ The frame of a page: the engraved title (also the document title), a caps sub li
 | `sub` | `ReactNode` | caps line under the title (a string is engraved) |
 | `earth` | `ReactNode` | Earth mode only, led by ⊕ |
 | `actions` | `ReactNode` | buttons, right; one `primary` at most |
+| `documentTitle` | `string` | the document title when it says more than the title (`cam-esp32 · cam`) |
 
 ```tsx
 <Page title="Devices" sub="5 of 6 online" actions={<Button variant="primary" onClick={add}>Provision</Button>}>
@@ -147,6 +148,25 @@ A caps label over a hairline (no box), a note (ash) or an error (fault) under it
 <Slider label="Brightness" value={b} min={0} max={255} onChange={setB} />
 ```
 
+## SpanField
+
+A span typed as a count and a rung of the core (ν blinks, λ flavons, ι preons), or a word that takes no count
+("until stopped"). The caller turns it into its own unit with the core (`state/device-units.ts` `spanToUs`,
+`spanToField`) and states a clamp as a span in the note ("at most 7ι"); never a second or a minute in pure mode.
+
+| Prop | Type | |
+|---|---|---|
+| `label`, `note?`, `error?` | | as TextField |
+| `count`, `rung` | `string` | the count as typed; the chosen rung's or word's value |
+| `rungs` | `SpanRung[]` | `{value, label}` of each rung, from the core |
+| `words?` | `SpanRung[]` | choices without a count; choosing one hides the count |
+| `onChange` | `(count, rung) => void` | |
+| `earth?` | `ReactNode` | under the field (an `<Earth>`: ⊕ 31 s) |
+
+```tsx
+<SpanField label="Lit for" count="0.64" rung="8" rungs={[{ value: '8', label: 'ν blinks' }, { value: '7', label: 'λ flavons' }]} onChange={set} note="up to 32ν" />
+```
+
 ## StageRing
 
 Progress as light, the one ring of every progress in the hub: N arcs from 12 o'clock; done lumen with the glow, the
@@ -178,11 +198,12 @@ reset · hello · join); builds and OTA pass their own (state/provision.ts), a w
 
 ## Disclosure
 
-A fold on a hairline: `+` when closed, `−` open. Props: `title`, `aside?`, `defaultOpen?`, or controlled `open` and
-`onOpenChange`.
+A fold on a hairline: `+` when closed, `−` open. Props: `title`, `aside?`, `sub?` (an ash line under the title, shown
+open or closed: what the fold's action does), `defaultOpen?`, or controlled `open` and `onOpenChange`.
 
 ```tsx
 <Disclosure title="Engineering"><Row label="Bindings" value="3" /></Disclosure>
+<Disclosure title="blink" sub="Blinks status the number of times chosen, then returns it to its state.">…form…</Disclosure>
 ```
 
 ## EmptyState

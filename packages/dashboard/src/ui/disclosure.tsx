@@ -8,6 +8,8 @@ export interface DisclosureProps {
   title: string;
   /** Right of the title (a count, a bead). */
   aside?: ReactNode;
+  /** A line under the title in ash, shown open or closed (what the fold's action does). */
+  sub?: ReactNode;
   defaultOpen?: boolean;
   /** Controlled: open state and its setter. */
   open?: boolean;
@@ -17,7 +19,7 @@ export interface DisclosureProps {
   children: ReactNode;
 }
 
-export function Disclosure({ title, aside, defaultOpen = false, open, onOpenChange, opens, children }: DisclosureProps) {
+export function Disclosure({ title, aside, sub, defaultOpen = false, open, onOpenChange, opens, children }: DisclosureProps) {
   const [own, setOwn] = useState(defaultOpen);
   const isOpen = open ?? own;
   const id = useId();
@@ -35,6 +37,7 @@ export function Disclosure({ title, aside, defaultOpen = false, open, onOpenChan
         <span className="caps">{engrave(title)}</span>
         {aside ? <span className="ui-disclosure-aside">{aside}</span> : null}
       </button>
+      {sub ? <p className="ui-disclosure-sub">{sub}</p> : null}
       {isOpen ? (
         <div className="ui-disclosure-body" id={id}>
           {children}

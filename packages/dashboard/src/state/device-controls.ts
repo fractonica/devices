@@ -13,13 +13,17 @@
 
 import type { CatalogCapability, CatalogCommand, CatalogField, CatalogProperty } from '@fractonica/protocol/gen';
 
-import { fieldWords, unitInfo } from './device-units.ts';
+import { enumWords, memberWords } from './cap-words.ts';
+import { unitInfo } from './device-units.ts';
 
 export type ControlKind = 'toggle' | 'slider' | 'number' | 'colour' | 'select' | 'text' | 'bytes' | 'list' | 'message';
 
+/** An enum's member: its name is the value sent (the wire takes names, DEVICE-SPEC G2), its words the label. */
 export interface ControlOption {
-  value: number;
+  value: string;
   label: string;
+  /** The member's number (a property mirror may report it as one). */
+  num: number;
 }
 
 export interface ControlSpec {
@@ -58,25 +62,41 @@ export function isNumericType(type: string): boolean {
   return type in INT_RANGES || type === 'f32' || type === 'f64';
 }
 
-/** The enum options of a capability type, by value. */
-export function enumOptions(cap: Pick<CatalogCapability, 'types'>, type: string): ControlOption[] | null {
+/** The enum options of a capability type, in member order: the name is the value, the words the label. */
+export function enumOptions(cap: Pick<CatalogCapability, 'types'> & { name?: string }, type: string): ControlOption[] | null {
   const t = cap.types[type];
   if (!t) {
     return null;
   }
   return Object.entries(t)
-    .map(([label, value]) => ({ value, label: label.replace(/_/g, ' ') }))
-    .sort((a, b) => a.value - b.value);
+    .map(([name, num]) => ({ value: name, label: enumWords(cap.name ?? '', type, name), num }))
+    .sort((a, b) => a.num - b.num);
 }
 
-export function controlFor(field: CatalogField | (CatalogProperty & { optional?: boolean; default?: unknown }), cap: Pick<CatalogCapability, 'types' | 'messages'>): ControlSpec {
+/** An enum value as its member name: a name stays, a number becomes its name; null when it names no member. */
+export function enumName(options: readonly ControlOption[], v: unknown): string | null {
+  if (typeof v === 'number') {
+    return options.find((o) => o.num === v)?.value ?? null;
+  }
+  if (typeof v === 'string') {
+    const t = v.trim();
+    if (/^\d+$/.test(t)) {
+      return options.find((o) => o.num === Number(t))?.value ?? null;
+    }
+    return options.find((o) => o.value === t)?.value ?? null;
+  }
+  return null;
+}
+
+export function controlFor(field: CatalogField | (CatalogProperty & { optional?: boolean; default?: unknown }), cap: Pick<CatalogCapability, 'types' | 'messages'> & { name?: string }): ControlSpec {
+  const w = memberWords(cap.name ?? '', field);
   const base = {
     name: field.name,
-    label: fieldWords(field.name),
+    label: w.words,
     type: field.type,
     optional: 'optional' in field ? field.optional === true : false,
     ...('default' in field && field.default !== undefined ? { default: field.default } : {}),
-    ...(field.unit ? { unit: field.unit } : {}),
+    ...(w.unit ? { unit: w.unit } : {}),
     ...(field.doc ? { doc: field.doc.trim() } : {}),
   };
   const options = enumOptions(cap, field.type);
@@ -122,27 +142,50 @@ export function hexColour(s: string): number | null {
   return m ? parseInt(m[1]!, 16) : null;
 }
 
-/** The value a control starts with: the property mirror's, else the field's default, else the kind's rest value. */
+/**
+ * The value a control starts with (DEVICE-SPEC G4): the property mirror's, else the field's default, else empty. An
+ * example is never a value. A select's value is always a member name (a number from a mirror becomes its name). A
+ * switch starts off and a colour well white: they have no empty state.
+ */
 export function initialValue(spec: ControlSpec, mirror?: unknown): unknown {
-  if (mirror !== undefined && mirror !== null) {
-    return mirror;
+  const pick = mirror !== undefined && mirror !== null ? mirror : spec.default;
+  if (spec.kind === 'select') {
+    return pick === undefined ? '' : (enumName(spec.options ?? [], pick) ?? '');
   }
-  if (spec.default !== undefined) {
-    return spec.default;
+  if (pick !== undefined) {
+    return pick;
   }
   switch (spec.kind) {
     case 'toggle':
       return false;
-    case 'slider':
-    case 'number':
-      return Math.min(spec.max ?? 0, Math.max(spec.min ?? 0, 0));
     case 'colour':
       return 0xffffff;
-    case 'select':
-      return spec.options?.[0]?.value ?? 0;
     default:
       return '';
   }
+}
+
+/** True when a control holds nothing yet (a switch and a colour well are never empty). */
+export function isBlank(spec: ControlSpec, v: unknown): boolean {
+  if (spec.kind === 'toggle' || spec.kind === 'colour' || spec.kind === 'bytes' || spec.kind === 'list') {
+    return false;
+  }
+  return v === undefined || v === null || (typeof v === 'string' && v.trim() === '');
+}
+
+/** The words of the required fields still empty: the form's button waits for them ("Fill in recording first"). */
+export function missingFields(specs: readonly ControlSpec[], values: Readonly<Record<string, unknown>>): string[] {
+  return specs.filter((s) => !s.optional && isBlank(s, values[s.name])).map((s) => s.label);
+}
+
+/** "recording", "x and y", "x, y and text". */
+export function wordList(words: readonly string[]): string {
+  return words.length <= 1 ? (words[0] ?? '') : `${words.slice(0, -1).join(', ')} and ${words[words.length - 1]}`;
+}
+
+/** The form's values to start with (G4): a field that shadows a property takes the mirror, then its default, then empty. */
+export function seedValues(specs: readonly ControlSpec[], properties: readonly Pick<CatalogProperty, 'name' | 'type'>[], mirror: Readonly<Record<string, unknown>>): Record<string, unknown> {
+  return Object.fromEntries(specs.map((s) => [s.name, initialValue(s, properties.some((p) => p.name === s.name && p.type === s.type) ? mirror[s.name] : undefined)]));
 }
 
 export type ArgCheck = { ok: true; value: unknown } | { ok: false; error: string };
@@ -156,16 +199,23 @@ export function argValue(spec: ControlSpec, raw: unknown): ArgCheck {
       const n = typeof raw === 'string' ? hexColour(raw) : typeof raw === 'number' ? raw : null;
       return n === null || n < 0 || n > 0xffffff ? { ok: false, error: 'a colour' } : { ok: true, value: n };
     }
-    case 'select':
+    case 'select': {
+      // by name (G2): the member's name is sent; a number is taken as its member
+      const name = enumName(spec.options ?? [], raw);
+      return name !== null ? { ok: true, value: name } : { ok: false, error: `choose one of ${(spec.options ?? []).map((o) => o.label).join(', ')}` };
+    }
     case 'slider':
     case 'number': {
-      const text = typeof raw === 'string' ? raw.trim() : String(raw);
-      if (text === '' || !/^-?\d+$/.test(text)) {
-        return { ok: false, error: 'a whole number' };
+      const text = typeof raw === 'string' ? raw.trim() : raw === undefined || raw === null ? '' : String(raw);
+      if (text === '') {
+        return { ok: false, error: `fill in ${spec.label}` };
+      }
+      if (!/^-?\d+$/.test(text)) {
+        return { ok: false, error: 'whole numbers only, no fractions' };
       }
       const n = Number(text);
       if ((spec.min !== undefined && n < spec.min) || (spec.max !== undefined && n > spec.max)) {
-        return { ok: false, error: `from ${spec.min} to ${spec.max}` };
+        return { ok: false, error: `between ${spec.min} and ${spec.max}` };
       }
       return { ok: true, value: spec.type === 'u64' ? text : n };
     }
@@ -216,7 +266,11 @@ export function buildArgs(specs: readonly ControlSpec[], values: Readonly<Record
     if (s.optional && !touched.has(s.name)) {
       continue;
     }
-    const r = argValue(s, values[s.name] ?? initialValue(s));
+    if (isBlank(s, values[s.name])) {
+      errors[s.name] = `fill in ${s.label}`;
+      continue;
+    }
+    const r = argValue(s, values[s.name]);
     if (r.ok) {
       args[s.name] = r.value;
     } else {

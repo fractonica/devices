@@ -631,7 +631,7 @@ function Done({ s, identify, identifying, onNetwork }: { s: ReturnType<typeof us
             fix={{ label: 'Change the network and provision again', onClick: onNetwork }}
           />
           <ButtonRow>
-            <Link to="/devices/$id" params={{ id: r.alias }} search={{ log: 1 } as never} className="ui-button" data-variant="quiet" data-action="open-log">
+            <Link to="/devices/$id/activity" params={{ id: r.alias }} search={{ log: 1 } as never} className="ui-button" data-variant="quiet" data-action="open-log">
               <span className="ui-button-text">{engrave('Open its log')}</span>
             </Link>
           </ButtonRow>

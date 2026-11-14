@@ -1,7 +1,7 @@
-// The device page's "Engineering" fold (HARDWARE-REVIEW §4 "Screens" 3): what an engineer reads and a first-time user
+// The parts of a device's Engineering page (pages/device/page-engineering.tsx; HARDWARE-REVIEW §4 "Screens" 3): what an engineer reads and a first-time user
 // never needs: the node's own diagnostics (fr_diag info and stats, over USB or its hub link), its bindings (the
 // node-to-node rules the hub pushes), its OTA history (bytes as light, never a percentage), and the raw JSON the hub
-// answered for it. Each part asks the hub only once the fold is open.
+// answered for it. Each part asks the hub only once its fold is open.
 
 import { useState } from 'react';
 
@@ -10,7 +10,7 @@ import { useAct, useOp } from '../../hooks.ts';
 import { parseArgs } from '../../state/caps.ts';
 import { flattenJson, pureJson, shortId } from '../../state/device-link.ts';
 import { fractionOf, impliedUnit } from '../../state/device-units.ts';
-import { Bead, type BeadState, Button, ButtonRow, Caps, Disclosure, ErrorLine, FTime, fTimeText, instantOf, Row, Section, TextField, Toggle, useFractonica, useMode } from '../../ui/index.ts';
+import { Bead, type BeadState, Button, ButtonRow, Caps, ErrorLine, FTime, fTimeText, instantOf, Row, Section, TextField, Toggle, useFractonica, useMode } from '../../ui/index.ts';
 import { Meter, UnitValue } from './bits.tsx';
 
 /**
@@ -45,12 +45,11 @@ function JsonRows({ value }: { value: unknown }) {
   );
 }
 
-function Diagnostics({ deviceId, reachable }: { deviceId: string; reachable: boolean }) {
+export function Diagnostics({ deviceId, reachable }: { deviceId: string; reachable: boolean }) {
   const [line, setLine] = useState<string | null>(null);
   const act = useAct('diag_exec');
   return (
     <Section
-      title="Diagnostics"
       aside={
         <ButtonRow>
           {DIAG_LINES.map((l) => (
@@ -102,7 +101,7 @@ function BindingLine({ b, deviceId }: { b: BindingRow; deviceId: string }) {
   );
 }
 
-function Bindings({ deviceId, alias }: { deviceId: string; alias: string }) {
+export function Bindings({ deviceId, alias }: { deviceId: string; alias: string }) {
   const [nodeTable, setNodeTable] = useState(false);
   const q = useOp('binding_list', { selector: `id:${deviceId}`, live: nodeTable });
   const [form, setForm] = useState({ from: `${alias}.`, to: '', args: '' });
@@ -110,7 +109,7 @@ function Bindings({ deviceId, alias }: { deviceId: string; alias: string }) {
   const rows = q.data?.bindings ?? [];
   const args = form.args.trim() ? parseArgs(form.args) : null;
   return (
-    <Section title="Bindings" aside={<Toggle label="The node’s own table" checked={nodeTable} onChange={setNodeTable} />}>
+    <Section aside={<Toggle label="The node’s own table" checked={nodeTable} onChange={setNodeTable} />}>
       {q.error ? <ErrorLine error={q.error} what="Bindings" /> : null}
       {nodeTable && q.data?.devices ? (
         <RawJson value={q.data.devices} />
@@ -164,32 +163,14 @@ function OtaLine({ r }: { r: OtaRow }) {
   );
 }
 
-function OtaHistory({ deviceId }: { deviceId: string }) {
+export function OtaHistory({ deviceId }: { deviceId: string }) {
   const q = useOp('ota_status', { selector: `id:${deviceId}` });
   // a device that never had an update is one row with job and state null
   const rows = (q.data?.devices ?? []).filter((r) => r.job && typeof r.state === 'string');
   return (
-    <Section title="Updates over the air">
+    <Section>
       {q.error ? <ErrorLine error={q.error} what="Update history" /> : null}
       {rows.length ? rows.map((r) => <OtaLine key={r.job} r={r} />) : q.data ? <p className="dev-quiet ash">No update has been sent to it.</p> : null}
     </Section>
-  );
-}
-
-export function Engineering({ detail }: { detail: DeviceDetail }) {
-  const reachable = !!detail.port || detail.presence === 'online' || detail.presence === 'suspect';
-  return (
-    <section className="dev-engineering" aria-label="Engineering">
-      <Disclosure title="Engineering" aside={<Caps>diagnostics · bindings · updates · raw</Caps>}>
-        <div className="dev-engineering-body">
-          <Diagnostics deviceId={detail.device_id} reachable={reachable} />
-          <Bindings deviceId={detail.device_id} alias={detail.alias} />
-          <OtaHistory deviceId={detail.device_id} />
-          <Section title="Raw">
-            <RawJson value={detail} id="device_get" />
-          </Section>
-        </div>
-      </Disclosure>
-    </section>
   );
 }

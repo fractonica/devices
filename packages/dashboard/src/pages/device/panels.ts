@@ -13,7 +13,9 @@ import type { CatalogCapability } from '@fractonica/protocol/gen';
 import type { DeviceDetail } from '../../api/types.ts';
 import type { InstanceView, MembersView } from '../../state/caps.ts';
 import { CAMERA_PANEL } from './panels/camera/index.tsx';
+import { DISPLAY_PANEL } from './panels/display.tsx';
 import { GENERIC_PANEL } from './panels/generic.tsx';
+import { LED_PANEL } from './panels/led.tsx';
 
 /** What every panel component (Lens, Headline, Quick) is given. Built once by the page (page-lens.tsx panelProps). */
 export interface CapPanelProps {
@@ -45,7 +47,15 @@ export interface CapPanel {
 /** The purpose-built panels, by capability name. */
 export const PANELS: Readonly<Record<string, CapPanel>> = {
   'fr.camera': CAMERA_PANEL,
+  'fr.led': LED_PANEL,
+  'fr.display': DISPLAY_PANEL,
 };
+
+/**
+ * The panels whose instrument page has its own lumen action (the camera's WATCH): there Identify steps down to
+ * `default`. Every other instrument page keeps Identify as its one primary.
+ */
+export const LUMEN_PANELS: ReadonlySet<string> = new Set(['fr.camera']);
 
 /** The capability's panel, else the generic one. */
 export function panelFor(cap: string): CapPanel {

@@ -474,6 +474,28 @@ button.ui-row:hover .ui-row-name {
   position: relative;
 }
 
+/* SpanField: a count and a rung on one hairline */
+.ui-span-field {
+  display: flex;
+  align-items: flex-end;
+  gap: var(--sp-3);
+}
+
+.ui-span-count {
+  flex: 1 1 6ch;
+  min-width: 5ch;
+  font-variant-numeric: tabular-nums;
+}
+
+.ui-span-rung {
+  flex: 0 1 auto;
+  min-width: 112px;
+}
+
+.ui-span-field[data-word] .ui-span-rung {
+  flex: 1 1 auto;
+}
+
 .ui-select {
   appearance: none;
   padding-right: 22px;
@@ -836,6 +858,22 @@ button.ui-row:hover .ui-row-name {
 
 .ui-disclosure-body {
   padding-top: var(--sp-3);
+}
+
+/* Disclosure `sub`: what the fold's action does, always visible under its title, above the hairline */
+.ui-disclosure:has(> .ui-disclosure-sub) > .ui-disclosure-toggle {
+  min-height: 0;
+  padding-bottom: 2px;
+  border-bottom: 0;
+}
+
+.ui-disclosure-sub {
+  margin: 0;
+  padding: 0 0 8px 19px;
+  border-bottom: var(--hair) solid var(--c-etch1);
+  font-size: var(--fs-earth);
+  line-height: 16px;
+  color: var(--c-ash);
 }
 
 /* ------------------------------------------------------------ EmptyState */

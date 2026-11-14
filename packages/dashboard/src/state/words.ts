@@ -124,3 +124,25 @@ export function actFailure(op: string, err: { code: string; message: string }, s
         : steps;
   return { title, body: [err.message, ...advice].join(' — ') };
 }
+
+/** A device's answer to a command in words (DEVICE-SPEC G8): what Outcome writes beside its bead. */
+const OUTCOME_WORDS: Record<string, string> = {
+  ok: 'done',
+  sent: 'sent; this command is not answered',
+  busy: 'busy: it runs another stream',
+  unsupported: 'this build does not have that',
+  offline: 'offline: nothing was sent',
+  timeout: 'no answer in time',
+  not_found: 'not found',
+  injection_disabled: 'this build does not take test commands',
+  failed: 'it tried and failed',
+  refused: 'refused',
+};
+
+/** The words of a command's status; invalid_args carries the device's reason ("the device refused the values: …"). */
+export function outcomeWords(status: string, error?: string | null): string {
+  if (status === 'invalid_args') {
+    return `the device refused the values${error ? `: ${error}` : ''}`;
+  }
+  return OUTCOME_WORDS[status] ?? status.replace(/_/g, ' ');
+}

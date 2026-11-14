@@ -16,7 +16,11 @@ import {
   coveredCommands,
   hexColour,
   initialValue,
+  isBlank,
   linkArgs,
+  missingFields,
+  seedValues,
+  wordList,
   numericOf,
   type PropertyLink,
   propertyLink,
@@ -37,8 +41,11 @@ import {
   recentEvents,
   shortId,
 } from '../src/state/device-link.ts';
-import { blinkMicros, countText, earthDuration, fieldWords, fractionOf, impliedUnit, rateText, signalOf, spanText, unitInfo, unitOf, valueText } from '../src/state/device-units.ts';
+import { blinkMicros, countText, spanToField, spanToUs, usToRung, earthDuration, fieldWords, fractionOf, impliedUnit, rateText, signalOf, spanText, unitInfo, unitOf, valueText } from '../src/state/device-units.ts';
+import { Unit } from '@fractonica/time/browser';
+
 import { pureSafe } from '../src/state/pure-text.ts';
+import { HUB_ISSUED, isHubIssued } from '../src/state/hub-issued.ts';
 
 const cap = (name: string): CatalogCapability => CATALOG.capabilities.find((c) => c.name === name)!;
 const cmd = (c: CatalogCapability, name: string) => c.commands.find((m) => m.name === name)!;
@@ -56,7 +63,7 @@ describe('controls from catalog fields', () => {
     const set = cmd(led, 'set');
     expect(set.fields.map((f) => controlFor(f, led).kind)).toEqual(['toggle', 'slider', 'colour']);
     const blink = cmd(led, 'blink').fields.map((f) => controlFor(f, led));
-    expect(blink[0]).toMatchObject({ name: 'on_ms', label: 'on', kind: 'slider', min: 10, max: 10_000, unit: 'ms', default: 200, optional: false });
+    expect(blink[0]).toMatchObject({ name: 'on_ms', label: 'lit for', kind: 'slider', min: 10, max: 10_000, unit: 'ms', default: 200, optional: false });
     expect(blink[3]).toMatchObject({ name: 'color', kind: 'colour', optional: true });
     const button = cap('fr.button');
     const gesture = controlFor(cmd(button, 'inject').fields[0]!, button);
@@ -78,7 +85,7 @@ describe('controls from catalog fields', () => {
     const led = cap('fr.led');
     const bright = controlFor(cmd(led, 'set').fields[1]!, led);
     expect(initialValue(bright, 64)).toBe(64);
-    expect(initialValue(bright)).toBe(0);
+    expect(initialValue(bright)).toBe('');
     expect(initialValue(controlFor(cmd(led, 'blink').fields[0]!, led))).toBe(200);
     expect(initialValue(controlFor(cmd(led, 'set').fields[2]!, led))).toBe(0xffffff);
   });
@@ -87,7 +94,7 @@ describe('controls from catalog fields', () => {
     const led = cap('fr.led');
     const onMs = controlFor(cmd(led, 'blink').fields[0]!, led);
     expect(argValue(onMs, '250')).toEqual({ ok: true, value: 250 });
-    expect(argValue(onMs, '5')).toEqual({ ok: false, error: 'from 10 to 10000' });
+    expect(argValue(onMs, '5')).toEqual({ ok: false, error: 'between 10 and 10000' });
     expect(argValue(onMs, '2.5').ok).toBe(false);
     const bytes = controlFor(cmd(cap('fr.storage'), 'write').fields.find((f) => f.name === 'data')!, cap('fr.storage'));
     expect(argValue(bytes, 'DE AD:be ef')).toEqual({ ok: true, value: 'deadbeef' });
@@ -105,7 +112,7 @@ describe('controls from catalog fields', () => {
     expect(buildArgs(specs, { on: true, brightness: 10 }, new Set(['brightness']))).toEqual({ ok: true, args: { on: true, brightness: 10 } });
     const bad = buildArgs(cmd(led, 'blink').fields.map((f) => controlFor(f, led)), { on_ms: 1 }, new Set());
     expect(bad.ok).toBe(false);
-    expect(!bad.ok && bad.errors.on_ms).toBe('from 10 to 10000');
+    expect(!bad.ok && bad.errors.on_ms).toBe('between 10 and 10000');
   });
 
   it('makes a property its own control when a command sets it, and hides the command it covers', () => {
@@ -280,5 +287,105 @@ describe('catalog texts in pure mode', () => {
     for (const t of shown) {
       expect(t).not.toMatch(EARTH);
     }
+  });
+});
+
+describe('enums by name and forms without examples (DEVICE-SPEC G2, G4)', () => {
+  const seeded = (c: CatalogCapability, name: string, mirror: Record<string, unknown> = {}) => {
+    const command = cmd(c, name);
+    const specs = command.fields.map((f) => controlFor(f, c));
+    return { specs, values: seedValues(specs, c.properties, mirror) };
+  };
+
+  it('never says "a whole number": every command of the catalog, seeded, builds or waits only for an empty field', () => {
+    const problems: string[] = [];
+    for (const c of CATALOG.capabilities) {
+      for (const m of c.commands) {
+        const { specs, values } = seeded(c, m.name);
+        const r = buildArgs(specs, values, new Set());
+        if (r.ok) {
+          continue;
+        }
+        for (const [field, error] of Object.entries(r.errors)) {
+          const spec = specs.find((s) => s.name === field)!;
+          const blank = isBlank(spec, values[field]);
+          const hub = isHubIssued(c.name, m) && (HUB_ISSUED[c.name]?.[m.name] ?? []).includes(field);
+          if (error.includes('a whole number') || !(blank || hub)) {
+            problems.push(`${c.name}.${m.name}.${field}: ${error}`);
+          }
+        }
+      }
+    }
+    expect(problems).toEqual([]);
+  });
+
+  it('offers an enum by its member names, with words for labels, and sends the name', () => {
+    const cam = cap('fr.camera');
+    const { specs, values } = seeded(cam, 'stream_start');
+    const to = specs.find((s) => s.name === 'to')!;
+    expect(to.options).toEqual([
+      { value: 'hub', label: 'hub', num: 0 },
+      { value: 'sd', label: 'card', num: 1 },
+      { value: 'both', label: 'hub and card', num: 2 },
+    ]);
+    // the default of `to` is the name hub, not a number to type
+    expect(values.to).toBe('hub');
+    expect(argValue(to, 'hub')).toEqual({ ok: true, value: 'hub' });
+    expect(argValue(to, 1)).toEqual({ ok: true, value: 'sd' });
+    expect(argValue(to, 'disk')).toEqual({ ok: false, error: 'choose one of hub, card, hub and card' });
+    // set {frame_size: xga} is xga on the wire
+    const set = cmd(cam, 'set').fields.map((f) => controlFor(f, cam));
+    expect(buildArgs(set, { frame_size: 'xga' }, new Set(['frame_size']))).toEqual({ ok: true, args: { frame_size: 'xga' } });
+    expect(set.find((s) => s.name === 'frame_size')!.options![3]!.label).toBe('xga · 1024 × 768');
+  });
+
+  it('shows a number the mirror reports for an enum as its name', () => {
+    const cam = cap('fr.camera');
+    const sd = controlFor({ ...cam.properties.find((p) => p.name === 'sd')!, optional: false }, cam);
+    expect(initialValue(sd, 1)).toBe('mounted');
+    expect(initialValue(sd, 'error')).toBe('error');
+    expect(initialValue(sd, 9)).toBe('');
+    const button = cap('fr.button');
+    expect(seeded(button, 'inject').values.gesture).toBe('click');
+  });
+
+  it('starts a field empty instead of from an example, and says what is missing', () => {
+    const cam = cap('fr.camera');
+    const { specs, values } = seeded(cam, 'sd_delete');
+    // the example is { recording: 3 }: never a value
+    expect(values).toEqual({ recording: '' });
+    expect(missingFields(specs, values)).toEqual(['recording']);
+    expect(`Fill in ${wordList(missingFields(specs, values))} first`).toBe('Fill in recording first');
+    expect(buildArgs(specs, values, new Set()).ok).toBe(false);
+    expect(buildArgs(specs, { recording: '7' }, new Set())).toEqual({ ok: true, args: { recording: 7 } });
+    // a field that shadows a property starts from the mirror
+    const led = cap('fr.led');
+    expect(seeded(led, 'set', { on: true, brightness: 40 }).values).toMatchObject({ on: true, brightness: 40 });
+    expect(wordList(['x', 'y', 'text'])).toBe('x, y and text');
+  });
+});
+
+describe('spans typed by a person (DEVICE-SPEC G7) and scaled rates', () => {
+  it('turns a count of a rung into the field’s unit, rounded and clamped, never back to 0 by rounding', () => {
+    const blink = spanToUs(core, 1, Unit.BLINK);
+    expect(blink).toBeCloseTo(blinkMicros(core), 0);
+    expect(spanToUs(core, 1, Unit.FLAVON)).toBeCloseTo(blink * 25, -1);
+    const ms = spanToField(spanToUs(core, 2, Unit.BLINK), 'ms', 10, 10_000)!;
+    expect(ms.clamped).toBeNull();
+    expect(ms.value).toBe(Math.round((2 * blink) / 1000));
+    expect(spanToField(spanToUs(core, 9, Unit.PREON), 's', 0, 3600)).toEqual({ value: 3600, clamped: 'max' });
+    expect(spanToField(1000, 'ms', 10, 100)).toEqual({ value: 10, clamped: 'min' });
+    expect(spanToField(1000, 'Hz')).toBeNull();
+    const r = usToRung(core, 30 * blink);
+    expect(r.rung).toBe(Unit.FLAVON);
+    expect(r.count).toBeCloseTo(1.2, 1);
+    expect(usToRung(core, blink / 2).rung).toBe(Unit.BLINK);
+  });
+
+  it('applies a scale in the rate branch (fps_x10 is tenths of a hertz)', () => {
+    const scaled = valueText(core, 97, 'Hz', { scale: 0.1 });
+    expect(scaled.text).toBe(valueText(core, 9.7, 'Hz').text);
+    expect(scaled.earth).toBe('9.7 Hz');
+    expect(valueText(core, 97, 'Hz', { scale: 0.1, symbol: 'frames a second' }).earth).toBe('9.7 frames a second');
   });
 });

@@ -14,13 +14,15 @@ export interface PageProps {
   earth?: ReactNode;
   /** Buttons on the right (one primary at most). */
   actions?: ReactNode;
+  /** The document title after "Fractonica hub · " when it says more than the title ("cam-esp32 · cam"). */
+  documentTitle?: string;
   children?: ReactNode;
 }
 
-export function Page({ title, sub, earth, actions, children }: PageProps) {
+export function Page({ title, sub, earth, actions, documentTitle, children }: PageProps) {
   useEffect(() => {
-    document.title = `Fractonica hub · ${title}`;
-  }, [title]);
+    document.title = `Fractonica hub · ${documentTitle ?? title}`;
+  }, [title, documentTitle]);
   return (
     <div className="ui-page" data-page={title.toLowerCase()}>
       <header className="ui-page-head">
