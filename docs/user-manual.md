@@ -259,7 +259,8 @@ Without `--via wifi` the hub picks the USB route for a board on a USB bridge, an
 | `sd none` in the status | The card is checked at boot only. Insert it, then `fr devices reset cam-esp32`. |
 | "Wrong boot mode detected (0xb)" when flashing over USB | The SD card holds a boot pin high once used. Unplug the board, take the card out, plug it back in, flash, then put the card back. Over Wi-Fi this never happens. |
 | Low frame rate | Use a smaller frame size or more light; check the board's Wi-Fi signal in `fr devices get cam-esp32` (`rssi_ap`). |
-| "BUSY" | One stream at a time: stop the live view (**STOP** on the camera's page), **STOP THAT STREAM** or **STOP RECORDING** there (a recording started elsewhere shows there too), or `fr jobs cancel <job id>`. |
+| "BUSY" | One stream at a time: stop the live view (**STOP** on the camera's page), **STOP THAT STREAM** or **STOP RECORDING** there (a recording started elsewhere shows there too), or `fr jobs cancel <job id>`. A view open in another tab is not busy: the page says *watched in another place* and **WATCH** joins it. |
+| "The camera is busy with a stream this hub does not know of" | The board kept a stream going after its link dropped. **STOP IT ON THE BOARD** on the camera's page ends it; if the page cannot name the stream, restart the board (`fr devices reset cam-esp32`). |
 | The free space looks too small | The figure is the card's own (FAT) count; check the card on the Mac. |
 
 ---
@@ -937,7 +938,9 @@ written.
 - **WATCH** shows the camera live in the page, through the hub. **STOP** ends it; leaving the page or hiding the tab
   stops it too (it comes back when the tab does, "Paused while this tab was hidden"). If the view is stopped from
   elsewhere (another tab, the CLI) the page goes back to idle and says so. **KEEP THIS FRAME** saves the frame you see
-  to this computer.
+  to this computer. A view that ends because you left the page leaves no notice behind on the next page.
+- **Watched in another place:** when another tab or app already shows the camera, the page says so (STATE *watched in
+  another place*) and **WATCH** joins that view; nothing here stops someone else's view.
 - **PHOTO** takes one photo on the hub (with the flash LED when **with the flash** is on). When nothing was showing,
   the photo appears in the view itself, captioned *the photo* with **SAVE**; while watching, the view pauses around it
   and a small copy shows under the buttons. The line under the buttons gives its path (in pure mode from the captures
@@ -959,12 +962,18 @@ written.
   rests; while watching, a size or detail change restarts the view. After a restart the fold offers **APPLY AGAIN**.
 - **CARD RECORDINGS** (when a card is in) lists them newest first: **PLAY** brings one to the hub and shows it (the
   state reads *playing recording 7 from the card*), **DELETE** (a quiet red word) asks in place and removes it from the
-  card (copies on the hub stay). While a stream runs, both wait (the fold's aside reads STREAMING).
+  card (copies on the hub stay). While a stream runs, both wait (the fold's aside reads STREAMING). While a recording
+  plays, its ring stands in PLAY's place and **STOP PLAYING** under the view stops it (what came stays on the hub).
 - **ON THE HUB** lists the camera's recent photos and recordings that came to the hub, each with a small picture (the
   photo, or a recording's last frame), its first and last frame to open, and its path.
-- **One stream at a time.** When the camera is busy with a stream that is not shown (a photo taken from the CLI, a
-  view in another tab), the buttons that wait say why, and **STOP THAT STREAM** stops it. Engineering › Commands
-  offers **STOP STREAM <id>** for the running stream too.
+- **One stream at a time.** When the camera is busy with a stream that is not shown (a photo or a recording taken from
+  the CLI), the buttons that wait say why, and **STOP THAT STREAM** stops it. Engineering › Commands offers **STOP
+  STREAM <id>** for the running stream too. When the board refuses a start because it still runs a stream the hub lost
+  track of (its link dropped mid-stream), the page says so instead of a failure, with **STOP IT ON THE BOARD**.
+- **Activity** names each stream by what it was for (*cam's live view ended: stopped, 38 frames*, *cam took a photo*,
+  *cam sent recording 7 from the card*) and each command by what it asked (*the dashboard asked status to toggle*);
+  press a row for its raw type and fields. When the board goes offline mid-view, the page drops the stream's rows and marks
+  the card *as last seen*.
 
 **Provisioning a board, step by step.**
 
