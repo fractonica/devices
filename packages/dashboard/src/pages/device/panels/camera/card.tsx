@@ -1,7 +1,7 @@
 // CARD RECORDINGS (DEVICE-SPEC §3.8): a fold over the board's micro-SD card. camera_sd_list runs when it opens and after
 // each recording, play or delete (stream.started / stream.ended invalidate it), never on a poll. One row per
-// recording, newest first: PLAY brings it to the hub and shows it here; DELETE asks in place. While a stream runs both
-// wait, and the fold says so once.
+// recording, newest first: PLAY brings it to the hub and shows it here; DELETE (a quiet word in fault: the loud one is
+// PLAY) asks in place. While a stream runs both wait, and the fold says so once (its aside: STREAMING).
 
 import { useState } from 'react';
 
@@ -51,7 +51,7 @@ export function CardRecordings({ deviceId, alias, instance, sd, streaming, offli
   const shown = all ? recs : recs.slice(0, FIRST_ROWS);
   const count = list.data ? ` · ${recs.length}` : '';
   const unsupported = list.error?.code === 'CAPABILITY_UNSUPPORTED';
-  const aside = sd === 'none' ? 'no card' : sd === 'error' ? 'failed' : sd === null ? 'not known yet' : streaming ? 'waiting for the stream' : null;
+  const aside = sd === 'none' ? 'no card' : sd === 'error' ? 'failed' : sd === null ? 'not known yet' : streaming ? 'streaming' : null;
 
   const remove = (id: number) => {
     setGone(null);
@@ -104,11 +104,12 @@ export function CardRecordings({ deviceId, alias, instance, sd, streaming, offli
               earth={`${(r.bytes / 1e6).toFixed(1)} MB`}
               actions={
                 <>
-                  <Button variant="quiet" disabled={streaming || offline} busy={starting === r.id} onClick={() => onPlay(r.id, r.frames)} data-action="play" aria-label={`Play recording ${r.id}`}>
+                  <Button disabled={streaming || offline} busy={starting === r.id} onClick={() => onPlay(r.id, r.frames)} data-action="play" aria-label={`Play recording ${r.id}`}>
                     Play
                   </Button>
                   <Button
-                    variant="destructive"
+                    variant="quiet"
+                    data-tone="fault"
                     disabled={streaming || offline}
                     busy={del.isPending && del.variables?.recording === r.id}
                     confirm={`Delete recording ${r.id} from the card? It cannot be undone. Copies on the hub stay.`}

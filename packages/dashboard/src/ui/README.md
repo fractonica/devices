@@ -111,7 +111,9 @@ filled fault (errors only), `idle` hollow etch-3 (unknown, nothing yet). `presen
 ## Button, ButtonRow
 
 Hairline caps words. `primary` is lumen (one per page); `destructive` is fault and with `confirm` asks in place
-(a second press confirms; Escape, a click away or CANCEL disarms); `quiet` is an underlined word for row actions.
+(a second press confirms; Escape, a click away or CANCEL disarms); `quiet` is an underlined word for row actions;
+`quiet` with `data-tone="fault"` is a quiet word in fault, for an irreversible row action beside a louder one (DELETE
+beside PLAY).
 
 | Prop | Type | |
 |---|---|---|
@@ -139,7 +141,7 @@ A caps label over a hairline (no box), a note (ash) or an error (fault) under it
 | `TextField` | `label`, `value`, `onChange(value)`, `note?`, `error?`, `mono?`, input attributes (`placeholder`, `maxLength`, `type`, …) |
 | `Select` | `label`, `value`, `onChange(value)`, `options: {value, label, disabled?}[]`, `note?`, `error?`, `disabled?` |
 | `Toggle` | `label`, `checked`, `onChange(checked)`, `states?: [off, on]`, `disabled?` (role switch; the mode toggle's ring, lit with a dot when on; nothing slides) |
-| `Slider` | `label`, `value`, `min`, `max`, `step?`, `onChange(n)`, `format?(n)` (never a percentage), `note?`, `disabled?` |
+| `Slider` | `label`, `value`, `min`, `max`, `step?`, `onChange(n)`, `format?(n)` (never a percentage), `valueText?(n)` (read aloud as `aria-valuetext`, for a scale whose number means nothing to a person), `note?`, `disabled?` |
 
 ```tsx
 <TextField label="Name" value={alias} onChange={setAlias} maxLength={31} error={aliasProblem(alias)} note="31 characters at most" />

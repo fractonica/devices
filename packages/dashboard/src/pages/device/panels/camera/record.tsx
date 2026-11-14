@@ -2,7 +2,7 @@
 // writes as spans), the pace, whether to show it here; under MORE SETTINGS a frame cap and this recording's own frame
 // and detail. START RECORDING runs camera_stream; its does line is written from the choices.
 
-import { type ReactNode, useState } from 'react';
+import { type KeyboardEvent, type ReactNode, useRef, useState } from 'react';
 
 import type { Core } from '@fractonica/time/browser';
 
@@ -10,6 +10,7 @@ import { earthDuration } from '../../../../state/device-units.ts';
 import {
   aboutFrames,
   detailOf,
+  detailValueText,
   FRAME_SIZES,
   PACES_S,
   qualityOf,
@@ -23,7 +24,10 @@ import {
 } from '../../../../state/camera.ts';
 import { Button, ButtonRow, Disclosure, engrave, Select, Slider, spanText, TextField, Toggle, useFractonica, useInPlace, useMode } from './ui.ts';
 
-/** Engraved words that pick one (a camera-only radio group on the chip's look; a word can be disabled with a reason). */
+/**
+ * Engraved words that pick one: a radio group on the chip's look (a word can be disabled with a reason). One tab stop,
+ * the chosen word; the arrow keys move to the next word that is not disabled and choose it.
+ */
 export function Words<T extends string>({
   label,
   value,
@@ -35,21 +39,44 @@ export function Words<T extends string>({
   options: readonly { value: T; label: string; disabled?: boolean; why?: string }[];
   onChange: (v: T) => void;
 }) {
+  const refs = useRef<(HTMLButtonElement | null)[]>([]);
+  const key = (e: KeyboardEvent, i: number) => {
+    const step = e.key === 'ArrowRight' || e.key === 'ArrowDown' ? 1 : e.key === 'ArrowLeft' || e.key === 'ArrowUp' ? -1 : 0;
+    if (!step) {
+      return;
+    }
+    e.preventDefault();
+    for (let k = 1; k <= options.length; k++) {
+      const j = (i + step * k + options.length * k) % options.length;
+      const o = options[j]!;
+      if (!o.disabled) {
+        onChange(o.value);
+        refs.current[j]?.focus();
+        return;
+      }
+    }
+  };
   return (
     <div className="cam-words" role="radiogroup" aria-label={label}>
-      <span className="cam-words-label caps">{engrave(label)}</span>
+      <span className="cam-words-label caps" aria-hidden="true">
+        {engrave(label)}
+      </span>
       <span className="ui-chips">
-        {options.map((o) => (
+        {options.map((o, i) => (
           <button
             key={o.value}
+            ref={(el) => {
+              refs.current[i] = el;
+            }}
             type="button"
             role="radio"
             className="ui-chip"
             aria-checked={value === o.value}
-            aria-pressed={value === o.value}
+            tabIndex={value === o.value ? 0 : -1}
             disabled={o.disabled}
             title={o.disabled ? o.why : undefined}
             onClick={() => onChange(o.value)}
+            onKeyDown={(e) => key(e, i)}
           >
             <span className="ui-chip-word">{engrave(o.label)}</span>
           </button>
@@ -104,6 +131,8 @@ export function RecordForm({ cardIn, maxFrameSize, busy, disabled, why, onStart,
   const choice: RecordChoice = { to: where, seconds, intervalMs: paced ? paceS * 1000 : 0, live, maxFrames: mf };
   const about = aboutFrames(seconds, choice.intervalMs);
   const span = (s: number) => spanOfSeconds(core, s);
+  /** MORE SETTINGS that were changed (the title counts its fields, as a command's form does). */
+  const setCount = [maxFrames.trim() !== '', frame !== '', detail !== null].filter(Boolean).length;
   return (
     <div className="cam-record" ref={ref} data-record-form="">
       <Words
@@ -138,7 +167,7 @@ export function RecordForm({ cardIn, maxFrameSize, busy, disabled, why, onStart,
         />
       ) : null}
       {where !== 'sd' ? <Toggle label="show it here while it records" checked={live} onChange={setLive} states={['no', 'yes']} /> : null}
-      <Disclosure title="more settings" aside={<span className="caps">{engrave(`${[maxFrames.trim() ? 1 : 0, frame ? 1 : 0, detail !== null ? 1 : 0].reduce((a, b) => a + b, 0)}`)}</span>}>
+      <Disclosure title="more settings · 3" aside={setCount > 0 ? <span className="caps">{engrave(`${setCount} set`)}</span> : undefined}>
         <div className="cam-record-more">
           <TextField label="stop after this many frames" value={maxFrames} onChange={setMaxFrames} inputMode="numeric" note="empty: no limit" error={mfBad ? 'a whole count, like 600' : null} />
           <Select
@@ -181,6 +210,7 @@ export function DetailSlider({ value, onChange, label = 'detail', disabled }: { 
         max={59}
         onChange={onChange}
         format={() => (value === null ? engrave('as set') : '')}
+        valueText={(d) => (value === null ? detailValueText(null) : detailValueText(d))}
         disabled={disabled}
         note={<Ends lo="coarse" hi="fine" />}
       />

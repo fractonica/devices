@@ -42,6 +42,8 @@ export interface CapPanel {
   Quick?: ComponentType<CapPanelProps>;
   /** Device commands the panel runs itself; Engineering › Commands marks them "the <instance> page does this". */
   covers?: readonly string[];
+  /** The panel says itself that the device is offline (the camera's view): the page's own presence line is left out. */
+  saysPresence?: boolean;
 }
 
 /** The purpose-built panels, by capability name. */

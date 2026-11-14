@@ -127,11 +127,13 @@ export interface SliderProps extends FieldFrame {
   onChange: (value: number) => void;
   /** How the value is written beside the line (never a percentage). Default: the number. */
   format?: (value: number) => ReactNode;
+  /** The value read aloud (aria-valuetext) when the number means nothing to a person (an inverted scale, a level). */
+  valueText?: (value: number) => string;
   disabled?: boolean;
   id?: string;
 }
 
-export function Slider({ label, note, error, value, min, max, step = 1, onChange, format, disabled, id }: SliderProps) {
+export function Slider({ label, note, error, value, min, max, step = 1, onChange, format, valueText, disabled, id }: SliderProps) {
   const auto = useId();
   const fid = id ?? auto;
   const fill = max > min ? ((value - min) / (max - min)) * 100 : 0;
@@ -147,6 +149,7 @@ export function Slider({ label, note, error, value, min, max, step = 1, onChange
           step={step}
           value={value}
           disabled={disabled}
+          aria-valuetext={valueText ? valueText(value) : undefined}
           style={{ ['--fill' as string]: `${fill}%` }}
           onChange={(e) => onChange(Number(e.target.value))}
         />

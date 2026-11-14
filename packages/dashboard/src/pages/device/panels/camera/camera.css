@@ -28,13 +28,36 @@
   gap: var(--sp-1);
 }
 
+/* The view's height is what the window leaves once the header, the tabs and the transport are in sight (at most 60vh,
+   at least a usable 180 px), and its width follows the frame's aspect (--cam-ar, set inline), so it never letterboxes
+   and WATCH stays above the fold on a laptop (1440 x 790, 1366 x 768, 1280 x 720). */
 .cam-frame {
+  --cam-maxh: max(180px, min(60vh, calc(100dvh - 430px)));
   position: relative;
-  width: 100%;
-  max-height: 60vh;
+  width: min(100%, calc(var(--cam-maxh) * var(--cam-ar, 1.3333)));
+  max-height: var(--cam-maxh);
   border: var(--hair) solid var(--c-etch2);
   background: var(--c-void);
   overflow: hidden;
+}
+
+/* a photo in the view's place, until the view shows frames again */
+.cam-still-in {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+
+.cam-view[data-still] .cam-canvas {
+  opacity: 0;
+}
+
+.cam-still-caption {
+  display: inline-flex;
+  align-items: baseline;
+  gap: var(--sp-3);
 }
 
 .cam-canvas {
@@ -57,6 +80,10 @@
 
 .cam-view[data-live] .cam-frame {
   border-color: var(--c-etch3);
+}
+
+.cam-line:empty {
+  display: none;
 }
 
 .cam-line {
@@ -83,6 +110,33 @@
   display: flex;
   flex-direction: column;
   gap: var(--sp-2);
+}
+
+/* the lit button keeps one width whatever it says (WATCH, STOP, STOP WATCHING…): the others do not move under the hand */
+.cam-transport .ui-button[data-watch] {
+  min-width: 10.5em;
+  justify-content: center;
+}
+
+/* each action's line: its name engraved in a column, what it does (or why it waits) beside it */
+.cam-does-list {
+  display: grid;
+  grid-template-columns: max-content minmax(0, 1fr);
+  column-gap: var(--sp-3);
+  row-gap: 2px;
+  align-items: baseline;
+}
+
+.cam-does-list .cam-does {
+  display: contents;
+}
+
+.cam-does-who {
+  color: var(--c-etch3);
+}
+
+.cam-said:empty {
+  display: none;
 }
 
 .cam-does,
@@ -118,20 +172,44 @@
   margin: 0;
 }
 
-.cam-still {
+.cam-thumb,
+.cam-capture {
   margin: 0;
+  display: flex;
+  align-items: flex-start;
+  gap: var(--sp-3);
+}
+
+.cam-thumb img,
+.cam-capture img {
+  display: block;
+  width: 120px;
+  max-height: 90px;
+  border: var(--hair) solid var(--c-etch2);
+  object-fit: contain;
+  background: var(--c-void);
+}
+
+.cam-thumb figcaption,
+.cam-capture figcaption {
   display: flex;
   flex-direction: column;
   gap: var(--sp-1);
+  min-width: 0;
+  color: var(--c-ash);
+  font-size: var(--fs-data);
 }
 
-.cam-still img {
-  display: block;
-  max-width: 100%;
-  max-height: 40vh;
-  border: var(--hair) solid var(--c-etch2);
-  object-fit: contain;
-  align-self: flex-start;
+.cam-thumb-links {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: var(--sp-3);
+}
+
+.cam-captures {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-3);
 }
 
 .cam-held {
@@ -215,6 +293,22 @@
 @media (max-width: 999.98px) {
   .cam {
     grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+/* a phone: each action's line runs on from its name, no column */
+@media (max-width: 599.98px) {
+  .cam-does-list {
+    display: flex;
+    flex-direction: column;
+  }
+
+  .cam-does-list .cam-does {
+    display: block;
+  }
+
+  .cam-does-who {
+    margin-right: var(--sp-2);
   }
 }
 

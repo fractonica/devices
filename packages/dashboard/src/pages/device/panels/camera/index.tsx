@@ -3,7 +3,7 @@
 // the CapPanel shape are the seam).
 // - Lens: the instrument page (lens.tsx).
 // - Headline: the Overview row's reading: "idle · card in", "live · <per Blink>", "recording to the card",
-//   "recording · 2ι left".
+//   "recording · 2ι left", "playing recording 7".
 // - Quick: a quiet WATCH link to the camera's page with ?watch=1, which starts the view once.
 
 import './camera.css';
@@ -27,6 +27,12 @@ function CameraHeadline({ detail, inst, mirror }: CapPanelProps) {
   }
   if (s && s.to === 'sd') {
     return <span>recording to the card</span>;
+  }
+  if (s?.use === 'play') {
+    return <span>{s.recording !== undefined ? `playing recording ${s.recording}` : 'playing a recording'}</span>;
+  }
+  if (s && s.seconds === 0 && s.use === 'record') {
+    return <span>recording</span>;
   }
   if (s && s.seconds > 0) {
     const started = s.started_at ? Date.parse(s.started_at) : NaN;
@@ -60,4 +66,6 @@ export const CAMERA_PANEL: CapPanel = {
   Quick: CameraQuick,
   // the device commands this panel runs itself, through the hub's camera ops (§3)
   covers: ['stream_start', 'stream_stop', 'set', 'sd_list', 'sd_fetch', 'sd_delete'],
+  // the view says the board is offline in its own words
+  saysPresence: true,
 };

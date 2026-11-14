@@ -39,7 +39,7 @@ export interface HubWay {
 }
 
 const WAYS: Readonly<Record<string, HubWay>> = {
-  'fr.camera': { op: 'camera_stream', words: 'Watch, Record and Play on the camera’s page do this', panel: true, cli: (a) => `fr camera stream ${a}` },
+  'fr.camera': { op: 'camera_stream', words: 'its page does this (WATCH, RECORD…, PLAY)', panel: true, cli: (a) => `fr camera stream ${a}` },
   'fr.csi': { op: 'csi_stream', words: 'the hub streams it', panel: false, cli: (a, i) => `fr csi stream ${a} --instance ${i} --seconds 60` },
   'fr.audio_in': { op: 'audio_record', words: 'the hub records it to a file', panel: false, cli: (a, i) => `fr audio record ${a} <absolute .wav under FR_HOME> --instance ${i} --seconds 10` },
   'fr.audio_out': { op: 'audio_play', words: 'the hub plays a file or a tone on it', panel: false, cli: (a, i) => `fr audio play ${a} <absolute .wav> --instance ${i}` },

@@ -49,6 +49,7 @@ const INFO = { stream_id: 7, kind: 'jpeg', format: 'mjpg1', to: 'hub', interval_
 /** A client on fake sockets and manual timers; decodes resolve only when the test says. */
 function rig(o: { start?: { interval_ms?: number; frame_size?: 'svga'; quality?: number } } = {}) {
   const sockets: FakeStreamSocket[] = [];
+  const disposed: number[] = [];
   const timers = new ManualTimers();
   const events: StreamClientEvent[] = [];
   const decodes: { jpeg: Uint8Array; resolve: (v: number) => void }[] = [];
@@ -66,10 +67,11 @@ function rig(o: { start?: { interval_ms?: number; frame_size?: 'svga'; quality?:
     },
     decode: (jpeg) => new Promise<number>((resolve) => decodes.push({ jpeg, resolve })),
     onFrame: (f) => drawn.push(f.block.index),
+    dispose: (image) => disposed.push(image),
     onEvent: (e) => events.push(e),
     timers,
   });
-  return { client, sockets, timers, events, decodes, drawn };
+  return { client, sockets, timers, events, decodes, drawn, disposed };
 }
 
 const flush = () => new Promise((r) => setTimeout(r, 0));
@@ -200,5 +202,20 @@ describe('the /app/stream client', () => {
     t.decodes[2]!.resolve(4);
     await flush();
     expect(t.drawn).toEqual([0, 3]);
+  });
+
+  it('frees a frame whose decode finished after stop(), and never shows it', async () => {
+    const t = rig({ start: { interval_ms: 0 } });
+    t.client.start();
+    const s = t.sockets[0]!;
+    s.open();
+    s.text({ t: 'stream.welcome', v: 1, device: 'a0b1c2d3e4f5', alias: 'cam-esp32', instance: 'cam', stream: INFO });
+    s.binary(block(0));
+    expect(t.decodes).toHaveLength(1);
+    t.client.stop();
+    t.decodes[0]!.resolve(41);
+    await flush();
+    expect(t.drawn).toEqual([]);
+    expect(t.disposed).toEqual([41]);
   });
 });

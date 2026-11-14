@@ -317,7 +317,7 @@ describe('Activity, Facts and Engineering', () => {
     expect(status).toContain('data-command="status.toggle"');
     expect(status).toContain('SEND AS JSON');
     // stream_start never a form: the hub runs it
-    expect(html).toContain('the hub runs this');
+    expect(html).toContain('its page does this (WATCH, RECORD…, PLAY)');
     expect(html).not.toContain('data-command="cam.stream_start"');
     expect(visible(html)).not.toMatch(EARTH);
   });

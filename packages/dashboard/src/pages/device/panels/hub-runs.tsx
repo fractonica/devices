@@ -2,7 +2,8 @@
 // hub-issued field (state/hub-issued.ts). Builder CAMERA owns this file; builder PAGE renders it from the generic
 // panel (for a hub-issued command no purpose-built panel covers: fr.csi, fr.audio_*) and from Engineering › Commands
 // (for every one). Its props are frozen at {detail, inst, cmd}.
-// - The command's words, and "the hub runs this: <how>".
+// - The command's words, and under them, left-aligned, "the hub runs this: <how>" (for a panel capability, "its page
+//   does this (WATCH, RECORD…, PLAY)", the link beside it carrying the action).
 // - A capability with a panel of its own (fr.camera): a link to that instrument's page, where WATCH, RECORD… and PLAY
 //   run it. Otherwise the `fr` command line to copy.
 // - fr.camera stream_stop while camera_status says a stream runs: STOP STREAM <id>, asked in place, which cancels the
@@ -62,7 +63,7 @@ export function HubRuns({ detail, inst, cmd }: HubRunsProps) {
     <Row
       label={verb}
       id={`${inst.name}.${cmd.name}`}
-      value={<span className="ash">{`the hub runs this: ${way?.words ?? 'not from this page'}`}</span>}
+      sub={<span className="ash">{way?.panel ? way.words : `the hub runs this: ${way?.words ?? 'not from this page'}`}</span>}
       extra={cli ? <Code>{cli}</Code> : undefined}
       actions={
         <>

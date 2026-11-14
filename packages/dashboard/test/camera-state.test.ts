@@ -10,6 +10,17 @@ import { type Core, loadCore } from '@fractonica/time';
 
 import {
   aboutFrames,
+  adoptable,
+  detailValueText,
+  detailWord,
+  frameUrl,
+  headChanged,
+  levelValueText,
+  playEndLine,
+  type RunningStream,
+  transport,
+  type TransportInput,
+  viewEndLine,
   type CameraContext,
   cameraErrorLine,
   cameraState,
@@ -218,5 +229,134 @@ describe('heldPath (§3.9)', () => {
     expect(heldPath('/h/captures/cam-esp32/20261114-020304.567-2/000003.jpg')).toBe('/h/captures/cam-esp32/⊕-2/000003.jpg');
     expect(heldPath('/h/captures/cam-esp32/sd-7/')).toBe('/h/captures/cam-esp32/sd-7/');
     expect(heldPath('/h/captures/cam-esp32/20261114-020304')).not.toMatch(/\d{8}-\d{6}/);
+  });
+});
+
+describe('what runs is read from the hub; the transport for each state (review fixes)', () => {
+  const rec = (over: Partial<RunningStream> = {}): RunningStream => ({ stream_id: 9, to: 'hub', started_at: null, seconds: 0, job_id: 'j9', live: true, use: 'record', subscribers: 0, ...over });
+  const tIn = (over: Partial<TransportInput> = {}): TransportInput => ({ state: 'idle', running: null, own: null, active: false, viewOwn: false, framesShown: false, offline: false, hubDown: false, noWatch: null, ...over });
+  const ids = (x: ReturnType<typeof transport>) => x.actions.map((a) => `${a.id}${a.variant === 'primary' ? '*' : ''}${a.disabled ? '-' : ''}`);
+
+  it('takes up a recording or PLAY camera_status shows (not a live view or a photo)', () => {
+    expect(adoptable(rec())).toEqual({ id: 'j9', kind: 'record' });
+    expect(adoptable(rec({ use: 'play', recording: 7 }))).toEqual({ id: 'j9', kind: 'play', recording: 7 });
+    expect(adoptable(rec({ use: 'view' }))).toBeNull();
+    expect(adoptable(rec({ use: 'photo' }))).toBeNull();
+    expect(adoptable(rec({ use: undefined }))).toBeNull(); // an older hub: not known
+    expect(adoptable(rec({ job_id: undefined }))).toBeNull();
+    expect(adoptable(null)).toBeNull();
+  });
+
+  it('a WATCH that joined a recording this page does not follow is joined, not this page’s own view', () => {
+    const v = run({ t: 'open', own: true, at: 1 }, { t: 'welcome', stream: { ...INFO, stream_id: 9 } }, { t: 'frame' });
+    expect(cameraState(v, ctx({ running: rec() }))).toBe('joined');
+    expect(cameraState(v, ctx({ running: rec(), ownJob: 'j9' }))).toBe('recording');
+    expect(cameraState(v, ctx({ running: rec({ use: 'play' }), ownJob: 'j9', playing: 7 }))).toBe('playing');
+    expect(cameraState(v, ctx({ running: rec({ use: 'view' }) }))).toBe('watching');
+    expect(cameraState(LIVE_OFF, ctx({ running: rec({ use: 'play' }), ownJob: 'j9', playing: 7 }))).toBe('playing');
+    expect(stateWord('playing', rec(), 7)).toBe('playing recording 7 from the card');
+  });
+
+  it('a stream that ends on the socket is no longer stalled; a new stream counts its frames afresh; a new view forgets the last end', () => {
+    let v = run({ t: 'open', own: true, at: 1 }, { t: 'welcome', stream: INFO }, { t: 'frame' }, { t: 'ended', frame: { ...ENDED, reason: 'stopped' } });
+    expect(v.lastEnd?.reason).toBe('stopped');
+    expect(v.lastEndOwn).toBe(true);
+    v = liveReducer(v, { t: 'stop' });
+    expect(cameraState(v, ctx())).toBe('idle');
+    expect(v.lastEndOwn).toBe(true);
+    expect(viewEndLine('stopped')).toBe('The live view was stopped from another place.');
+    expect(viewEndLine('net_lost')).toBe('The live view ended. The camera lost its connection to the hub mid-stream. What arrived is kept.');
+    expect(liveReducer(v, { t: 'open', own: true, at: 2 }).lastEnd).toBeNull();
+    const two = run({ t: 'open', own: false, at: 1 }, { t: 'welcome', stream: INFO }, { t: 'frame' }, { t: 'started', stream: { ...INFO, stream_id: 8 } });
+    expect(two.frames).toBe(0);
+    const joinedEnd = run({ t: 'open', own: false, at: 1 }, { t: 'welcome', stream: INFO }, { t: 'ended', frame: ENDED });
+    expect(joinedEnd.lastEndOwn).toBe(false);
+  });
+
+  it('idle: WATCH is lit; PHOTO and RECORD… say what they do; offline or with the hub down nothing starts and no action line is written', () => {
+    const idle = transport(tIn());
+    expect(ids(idle)).toEqual(['watch*', 'photo', 'record']);
+    expect(idle.lines.map((l) => [l.labels.join('+'), l.text])).toEqual([
+      ['Watch', 'Shows the camera live here. It stops when you leave this page.'],
+      ['Photo', 'Takes one photo; the hub keeps it.'],
+      ['Record…', 'Opens the recording settings.'],
+    ]);
+    const off = transport(tIn({ offline: true }));
+    expect(ids(off)).toEqual(['watch*-', 'photo-', 'record-']);
+    expect(off.lines).toEqual([]);
+    // a view left open as the board went offline: it can be closed, nothing says "stop it first"
+    const cut = transport(tIn({ offline: true, active: true, viewOwn: true, running: rec({ use: 'view', subscribers: 1 }) }));
+    expect(cut.actions[0]).toMatchObject({ id: 'stop', label: 'Close the view', disabled: false });
+    expect(cut.lines).toEqual([]);
+  });
+
+  it('watching its own view: STOP lit; PHOTO pauses it; KEEP THIS FRAME; watched in another place too, PHOTO and RECORD… wait at once', () => {
+    const w = transport(tIn({ state: 'watching', active: true, viewOwn: true, framesShown: true, running: rec({ use: 'view', subscribers: 1 }) }));
+    expect(ids(w)).toEqual(['stop*', 'photo', 'keep-frame', 'record']);
+    expect(w.actions.find((a) => a.id === 'photo')!.does).toBe('Takes one photo; the hub keeps it. The view pauses for it.');
+    const two = transport(tIn({ state: 'watching', active: true, viewOwn: true, framesShown: true, running: rec({ use: 'view', subscribers: 2 }) }));
+    expect(ids(two)).toEqual(['stop*', 'photo-', 'keep-frame', 'record-']);
+    expect(two.lines.find((l) => l.labels.includes('Photo'))).toEqual({ labels: ['Photo', 'Record…'], text: 'The camera is watched in another place too; they wait until that view closes.' });
+  });
+
+  it('a recording this page follows (started here or elsewhere): STOP RECORDING lit; WATCH joins it, or says why it cannot', () => {
+    const r = transport(tIn({ state: 'recording', running: rec(), own: { kind: 'record', to: 'hub', live: true } }));
+    expect(ids(r)).toEqual(['stop-recording*', 'watch']);
+    expect(r.actions[0]!.confirm).toEqual({ question: 'Stop the recording?', yes: 'Stop', keep: 'Keep recording' });
+    expect(r.actions[1]!.does).toBe('Shows the recording live here. It goes on when you leave.');
+    const watching = transport(tIn({ state: 'recording', running: rec(), own: { kind: 'record', to: 'hub', live: true }, active: true, framesShown: true }));
+    expect(ids(watching)).toEqual(['stop-recording*', 'stop-watching', 'keep-frame']);
+    expect(watching.actions[1]!.does).toBe('Hides the view. The recording goes on.');
+    const card = transport(tIn({ state: 'recording', running: rec({ to: 'sd', live: false }), own: { kind: 'record', to: 'sd' } }));
+    expect(ids(card)).toEqual(['stop-recording*', 'watch-']);
+    expect(card.actions[1]!.does).toBe('A card recording runs; its frames stay on the card until you play them.');
+    const hidden = transport(tIn({ state: 'recording', running: rec({ live: false }), own: { kind: 'record', to: 'hub', live: false } }));
+    expect(hidden.actions[1]!.does).toBe('This recording is not shown live.');
+  });
+
+  it('PLAY: STOP WATCHING or WATCH lit; nothing else starts', () => {
+    expect(ids(transport(tIn({ state: 'playing', running: rec({ use: 'play' }), own: { kind: 'play' }, active: true, framesShown: true })))).toEqual(['stop-watching*', 'keep-frame']);
+    expect(ids(transport(tIn({ state: 'playing', running: rec({ use: 'play' }), own: { kind: 'play' } })))).toEqual(['watch*']);
+  });
+
+  it('another stream runs: STOP THAT STREAM sits beside "stop it first"; another place’s view is watched too, never stopped by a note alone', () => {
+    const busy = transport(tIn({ state: 'busy', running: rec({ use: 'photo', live: false }) }));
+    expect(ids(busy)).toEqual(['watch*-', 'photo-', 'record-', 'stop-other']);
+    expect(busy.lines.find((l) => l.labels.includes('Photo'))!.text).toBe('The camera runs another stream; stop it first, or wait for it to end.');
+    const view = transport(tIn({ state: 'busy', running: rec({ use: 'view', subscribers: 1 }) }));
+    expect(ids(view)).toEqual(['watch*', 'photo-', 'record-', 'stop-other']);
+    expect(view.actions[0]!.does).toBe('Shows the camera live here; it is watched in another place too.');
+    const noJob = transport(tIn({ state: 'busy', running: rec({ use: 'photo', live: false, job_id: undefined }) }));
+    expect(noJob.actions.map((a) => a.id)).not.toContain('stop-other');
+    expect(noJob.lines.find((l) => l.labels.includes('Photo'))!.text).toBe('The camera runs another stream; they wait for it to end.');
+  });
+
+  it('words the detail and the levels (no internal number), PLAY’s end, a recording’s frame URLs', () => {
+    expect(detailWord(12)).toBe('fine');
+    expect(detailWord(25)).toBe('medium');
+    expect(detailWord(50)).toBe('coarse');
+    expect(detailValueText(detailOf(12))).toBe('fine detail');
+    expect(detailValueText(null)).toBe('as the camera is set');
+    expect([-2, -1, 0, 1, 2].map(levelValueText)).toEqual(['much less', 'less', 'as it starts', 'more', 'much more']);
+    expect(playEndLine(7, '100', 100, 'done')).toBe('Recording 7 is on the hub: 100 frames.');
+    expect(playEndLine(7, '40', 40, 'stopped')).toBe('Recording 7 is on the hub: 40 frames. Stopped; the 40 frames so far are kept.');
+    expect(frameUrl('/h/captures/cam-esp32/20261114-101500/', 24)).toBe('captures/cam-esp32/20261114-101500/000024.jpg');
+    expect(frameUrl('/elsewhere/x', 1)).toBeNull();
+  });
+
+  it('the head re-renders only when the frame size or quality changes', () => {
+    expect(headChanged(null, { frameSize: 'svga', quality: 12 })).toBe(true);
+    expect(headChanged({ frameSize: 'svga', quality: 12 }, { frameSize: 'svga', quality: 12 })).toBe(false);
+    expect(headChanged({ frameSize: 'svga', quality: 12 }, { frameSize: 'vga', quality: 12 })).toBe(true);
+    expect(headChanged({ frameSize: 'svga', quality: 12 }, { frameSize: 'svga', quality: 10 })).toBe(true);
+  });
+
+  it('a frame from before a setting was set here does not put the old value back', () => {
+    const d = settingsDefaults(CATALOG.capabilities.find((c) => c.name === 'fr.camera')!.config);
+    const before = settingsShown({ frameSize: 'svga', quality: 12, at: 100 }, { frame_size: 'vga' }, d, { frame_size: 200 });
+    expect(before.values.frame_size).toBe('vga');
+    expect(before.from.frame_size).toBe('set-here');
+    const after = settingsShown({ frameSize: 'vga', quality: 12, at: 300 }, { frame_size: 'vga' }, d, { frame_size: 200 });
+    expect(after.from.frame_size).toBe('frame');
   });
 });

@@ -56,8 +56,12 @@ export function invalidationsFor(e: HubEvent): readonly OpName[] {
   if (t === 'stream.started' || t === 'stream.ended') {
     return ['camera_status', 'camera_sd_list'];
   }
-  // a camera's own word that a stream ran or ended (a recording to the card has no hub stream.started: no frame comes)
-  if (/\.(?:streaming|stream_ended)$/.test(t)) {
+  // a camera's own word that a stream ended: a recording to the card has no hub stream.* (no frame comes), so its end
+  // is the card's new recording
+  if (/\.stream_ended$/.test(t)) {
+    return ['camera_status', 'camera_sd_list'];
+  }
+  if (/\.streaming$/.test(t)) {
     return ['camera_status'];
   }
   return [];

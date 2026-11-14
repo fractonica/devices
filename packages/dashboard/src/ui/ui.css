@@ -371,6 +371,17 @@ button.ui-row:hover .ui-row-name {
   color: var(--c-bone);
 }
 
+/* a quiet word for an irreversible act in a row (DELETE beside PLAY): drawn in fault, no outline */
+.ui-button[data-variant='quiet'][data-tone='fault'] {
+  color: var(--c-fault);
+  border-bottom-color: var(--c-fault);
+}
+
+.ui-button[data-variant='quiet'][data-tone='fault']:disabled {
+  color: var(--c-etch2);
+  border-bottom-color: var(--c-etch2);
+}
+
 .ui-button[data-armed] {
   border-color: var(--c-fault);
   color: var(--c-bone);
@@ -561,6 +572,11 @@ button.ui-row:hover .ui-row-name {
 .ui-toggle:disabled {
   color: var(--c-etch2);
   cursor: not-allowed;
+}
+
+/* disabled, its word dims as a disabled button's does */
+.ui-toggle:disabled .caps {
+  color: var(--c-etch3);
 }
 
 /* Slider: a hairline lit in lumen to the value (light, not a bar), a small bead for the thumb */

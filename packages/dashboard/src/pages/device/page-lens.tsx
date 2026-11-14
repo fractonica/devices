@@ -149,7 +149,7 @@ function Lens({ detail, name }: { detail: DeviceDetail; name: string }) {
       <p className="dev-caption caps" data-caption="">
         {engrave(captionWords(row.inst))}
       </p>
-      <PresenceLine detail={detail} />
+      {panelFor(row.inst.cap).saysPresence ? null : <PresenceLine detail={detail} />}
       {row.cap ? <LensBody detail={detail} inst={row.inst} cap={row.cap} instances={instances} /> : <CatalogMissing cap={row.inst.cap} />}
     </>
   );

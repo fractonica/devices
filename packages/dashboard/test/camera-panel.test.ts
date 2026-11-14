@@ -155,16 +155,58 @@ describe('the camera Lens', () => {
     expect(html).toMatch(/data-action="record"[^>]*disabled=""/);
   });
 
-  it('a recording to the card someone else runs: STATE says so, RECORD… waits', () => {
+  it('a recording to the card from an older hub (no `use`): STATE says so; WATCH, PHOTO and RECORD… wait and say why, beside STOP THAT STREAM', () => {
     seed(status({ streaming: true, stream: { stream_id: 941, to: 'sd', started_at: '2026-11-14T00:00:00.000Z', seconds: 0, interval_ms: 0, frames: 12, dropped: 0, bytes: 1, subscribers: 0, gaps: 0, job_id: 'j1' } }));
     const html = render(createElement(camera.CAMERA_PANEL.Lens, props()));
     expect(html).toContain('data-camera-state="recording"');
     expect(html).toContain('recording to the card');
     expect(html).toContain('Recording to the card. Frames stay on the card until you play them.');
+    expect(html).toMatch(/data-action="watch"[^>]*disabled=""/);
     expect(html).toMatch(/data-action="record"[^>]*disabled=""/);
-    expect(html).toContain('a stream runs; stop it first');
-    expect(html).not.toContain('STOP RECORDING'); // not this page's recording: HubRuns and Engineering stop it
+    expect(html).toContain('The camera runs another stream; stop it first, or wait for it to end.');
+    expect(html).toMatch(/data-action="stop-other"[^>]*data-variant="destructive"/);
+    expect(html).not.toContain('STOP RECORDING');
     expect(visible(html)).not.toMatch(EARTH);
+  });
+
+  it('a recording camera_status shows (started elsewhere, or here before the page was left) is this page’s to stop: STOP RECORDING is the lit action', () => {
+    seed(status({ streaming: true, stream: { stream_id: 942, to: 'hub', started_at: '2026-11-14T00:00:00.000Z', seconds: 0, interval_ms: 0, frames: 79, dropped: 0, bytes: 1, subscribers: 0, gaps: 0, job_id: 'j2', live: true, use: 'record', path: '/x/captures/cam-esp32/20261114-000000' } }));
+    const html = render(createElement(camera.CAMERA_PANEL.Lens, props()));
+    expect(html).toContain('data-camera-state="recording"');
+    expect(html).toMatch(/data-action="stop-recording"[^>]*data-variant="primary"/);
+    expect(html.match(/data-variant="primary"/g)).toHaveLength(1);
+    expect(html).toMatch(/data-action="watch"[^>]*data-variant="default"/);
+    expect(html).not.toMatch(/data-action="watch"[^>]*disabled=""/);
+    expect(html).toContain('Shows the recording live here. It goes on when you leave.');
+    expect(html).toContain('Recording to the hub. WATCH shows it here; it goes on when you leave.');
+    expect(html).not.toContain('data-action="photo"');
+    expect(html).not.toContain('stop it first');
+    expect(html).toContain('recording until you stop it');
+    // to the card: WATCH waits, and says why
+    seed(status({ streaming: true, stream: { stream_id: 943, to: 'sd', started_at: null, seconds: 0, interval_ms: 0, frames: 0, dropped: 0, bytes: 0, subscribers: 0, gaps: 0, job_id: 'j3', live: false, use: 'record' } }));
+    const card = render(createElement(camera.CAMERA_PANEL.Lens, props()));
+    expect(card).toMatch(/data-action="stop-recording"[^>]*data-variant="primary"/);
+    expect(card).toMatch(/data-action="watch"[^>]*disabled=""/);
+    expect(card).toContain('A card recording runs; its frames stay on the card until you play them.');
+  });
+
+  it('PLAY camera_status shows: the state says which recording plays', () => {
+    seed(status({ streaming: true, stream: { stream_id: 944, to: 'hub', started_at: null, seconds: 0, interval_ms: 0, frames: 3, dropped: 0, bytes: 1, subscribers: 0, gaps: 0, job_id: 'j4', live: true, use: 'play', recording: 7 } }));
+    const html = render(createElement(camera.CAMERA_PANEL.Lens, props()));
+    expect(html).toContain('data-camera-state="playing"');
+    expect(html).toContain('playing recording 7 from the card');
+    expect(html).toContain('from the card, recording 7');
+  });
+
+  it('idle: LAST FRAME is a dash before any frame, and every action says what it does', () => {
+    seed(status({ last_bytes: 0 }));
+    const p = props();
+    const html = render(createElement(camera.CAMERA_PANEL.Lens, { ...p, mirror: { ...p.mirror, last_bytes: 0 } }));
+    expect(html).toMatch(/data-row="cam-last".*?<span class="ui-row-value">—<\/span>/);
+    expect(html).toContain('Takes one photo; the hub keeps it.');
+    expect(html).toContain('Opens the recording settings.');
+    expect(html).toContain('Shows the camera live here. It stops when you leave this page.');
+    expect(html).toMatch(/<svg class="ui-bead"[^>]*aria-label="idle"/);
   });
 
   it('the Record form: CARD and HUB AND CARD disabled with no card, the lengths as spans, START RECORDING says what it does', () => {
@@ -201,7 +243,7 @@ describe('HubRuns', () => {
     runtime.queryClient.clear();
     const cam = CATALOG.capabilities.find((c) => c.name === 'fr.camera')!;
     const html = render(createElement(hubRuns.HubRuns, { detail: DETAIL as never, inst: INSTANCES[2]!, cmd: cam.commands.find((c) => c.name === 'stream_start')! }));
-    expect(html).toContain('the hub runs this: Watch, Record and Play on the camera’s page do this');
+    expect(html).toContain('its page does this (WATCH, RECORD…, PLAY)');
     expect(html).toContain('href="#/devices/cam-esp32/cam"');
     expect(html).not.toMatch(/<input|<textarea|<select/);
     const csi = CATALOG.capabilities.find((c) => c.name === 'fr.csi')!;
@@ -217,5 +259,25 @@ describe('HubRuns', () => {
     const html = render(createElement(hubRuns.HubRuns, { detail: DETAIL as never, inst: INSTANCES[2]!, cmd: cam.commands.find((c) => c.name === 'stream_stop')! }));
     expect(html).toContain('STOP STREAM 941');
     expect(html).not.toMatch(/<input/);
+  });
+
+  it('ON THE HUB lists the camera’s photos and recordings that came to the hub, newest first, with their frames under /captures', async () => {
+    const { hubCaptures } = await import('../src/pages/device/panels/camera/hub-captures.tsx');
+    const job = (id: string, status: string, result: Record<string, unknown>, targets = [DEV]) => ({ job_id: id, kind: 'camera', status, targets, created_at: '', ended_at: '2026-11-14T00:00:00.000Z', result });
+    const jobs = [
+      job('j1', 'completed', { instance: 'cam', path: '/h/captures/cam-esp32/20261114-000001', frames: 100, first_index: 0, last_index: 101 }),
+      job('j2', 'completed', { instance: 'cam', path: '/h/captures/cam-esp32/20261114-000000.jpg', frames: 1 }),
+      job('j3', 'completed', { instance: 'cam', frames: 40 }), // a live view: no files
+      job('j4', 'failed', { instance: 'cam', path: '/h/captures/cam-esp32/x', frames: 3 }),
+      job('j5', 'completed', { instance: 'cam', path: '/h/captures/other/y', frames: 3 }, ['other']),
+      job('j6', 'cancelled', { instance: 'cam', path: '/h/captures/cam-esp32/sd-7', frames: 12, first_index: 0, last_index: 11 }),
+      { ...job('j7', 'completed', {}), kind: 'flash' },
+    ];
+    const caps = hubCaptures(jobs as never, DEV, 'cam');
+    expect(caps.map((c) => [c.job, c.kind, c.frames, c.image, c.first])).toEqual([
+      ['j1', 'recording', 100, 'captures/cam-esp32/20261114-000001/000101.jpg', 'captures/cam-esp32/20261114-000001/000000.jpg'],
+      ['j2', 'photo', 1, 'captures/cam-esp32/20261114-000000.jpg', null],
+      ['j6', 'recording', 12, 'captures/cam-esp32/sd-7/000011.jpg', 'captures/cam-esp32/sd-7/000000.jpg'],
+    ]);
   });
 });

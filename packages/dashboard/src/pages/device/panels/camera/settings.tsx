@@ -15,6 +15,7 @@ import {
   cameraErrorLine,
   detailOf,
   FRAME_SIZES,
+  levelValueText,
   qualityOf,
   type SensorSettings,
   type SettingKey,
@@ -66,8 +67,8 @@ export interface SettingsProps {
   instance: string;
   config: readonly CatalogConfig[];
   maxFrameSize: string | null;
-  /** The head of the frame on screen (its size and quality), when one shows. */
-  head: { frameSize: string | null; quality: number } | null;
+  /** The head of the frame on screen (its size and quality, and when a frame with it first came), while frames show. */
+  head: { frameSize: string | null; quality: number; at?: number } | null;
   disabled: boolean;
   /** Frame or detail changed while watching: the view restarts with them. */
   onPicture(next: { frame_size: string; quality: number }): void;
@@ -83,8 +84,10 @@ export function SensorSettingsFold({ deviceId, alias, instance, config, maxFrame
   const bootAtMount = useRef(boot);
   const rebooted = boot !== null && boot !== bootAtMount.current && setHere !== null && Object.keys(setHere).length > 0;
   const [applied, setApplied] = useState<number | null>(null);
+  /** When each setting was last accepted here: a frame from before that does not override it (the view restarts). */
+  const [setAt, setSetAt] = useState<Partial<Record<SettingKey, number>>>({});
   const set = useAct('camera_set', { quiet: () => true, refresh: ['camera_status'] });
-  const shown = settingsShown(head, setHere, defaults);
+  const shown = settingsShown(head, setHere, defaults, setAt);
   const values = { ...shown.values, ...draft };
 
   useEffect(() => () => timers.current.forEach((t) => clearTimeout(t)), []);
@@ -95,6 +98,7 @@ export function SensorSettingsFold({ deviceId, alias, instance, config, maxFrame
       onSuccess: () => {
         const next = { ...(setHere ?? {}), [key]: value };
         setSetHere(next);
+        setSetAt((m) => ({ ...m, [key]: Date.now() }));
         writeSetHere(deviceId, instance, next);
         setDraft((d) => {
           const { [key]: _drop, ...rest } = d;
@@ -180,7 +184,7 @@ export function SensorSettingsFold({ deviceId, alias, instance, config, maxFrame
         {errorOn('hmirror')}
         {(['brightness', 'contrast', 'saturation'] as const).map((k) => (
           <div key={k} className="cam-slider">
-            <Slider label={k} value={values[k]} min={-2} max={2} onChange={(v) => change(k, v, 400)} format={() => ''} disabled={disabled} note={<Ends lo="less" hi="more" />} />
+            <Slider label={k} value={values[k]} min={-2} max={2} onChange={(v) => change(k, v, 400)} format={() => ''} valueText={levelValueText} disabled={disabled} note={<Ends lo="less" hi="more" />} />
             {fromWord(k) ? <p className="cam-note">{fromWord(k)}</p> : null}
             {errorOn(k)}
           </div>

@@ -3,7 +3,9 @@
 //   recording or PLAY opens it without (it joins the running stream).
 // - Leaving the page closes it (unmount). A hidden tab closes it and remembers how it was opened; it reopens when the
 //   tab shows again, and the view says it was paused meanwhile.
-// - The canvas keeps the last frame after a session, dimmed, with when it came.
+// - The hub ending the stream the socket shows (this page's own view cancelled elsewhere, the board's end, a joined
+//   recording's end) closes it: the panel goes idle and says how it ended. A final close (4400, 4401, 4409) is not retried when the tab shows again.
+// - The canvas keeps the last frame after a session, dimmed, with when it came; a photo shows in its place.
 
 import { type RefObject, useCallback, useEffect, useReducer, useRef, useState } from 'react';
 
@@ -11,7 +13,7 @@ import type { JpegBlock } from '@fractonica/sdk/camera';
 
 import { appToken } from '../../../../api/app-token.ts';
 import { StreamClient, type StreamSocketLike, type StreamStart, streamUrl } from '../../../../api/stream.ts';
-import { FRAME_PIXELS, type FrameSize, LIVE_OFF, type LiveAction, liveReducer, type LiveView } from '../../../../state/camera.ts';
+import { FRAME_PIXELS, type FrameSize, headChanged, LIVE_OFF, type LiveAction, liveReducer, type LiveView } from '../../../../state/camera.ts';
 import { FTime } from '../../../../ui/index.ts';
 
 /** How the socket was opened: with `start` (WATCH), or joining (`start` undefined). */
@@ -22,8 +24,13 @@ interface Opened {
 export interface LiveViewHandle {
   view: LiveView;
   canvas: RefObject<HTMLCanvasElement | null>;
-  /** The last frame drawn (for KEEP THIS FRAME), and when it came (Date.now()). */
+  /**
+   * The frame head on screen, for the Now rows and the sensor settings: set on the first frame and each time the frame
+   * size or quality changes (`at`: when that frame came), not per frame.
+   */
   last: { block: JpegBlock; at: number } | null;
+  /** The frame on screen now (KEEP THIS FRAME). */
+  lastFrame(): { block: JpegBlock; at: number } | null;
   /** Opens the socket (closing one that is open); `resumed` after a hidden tab. */
   open(start?: StreamStart, resumed?: boolean): void;
   /** Closes it (this page's own stop). */
@@ -101,12 +108,16 @@ export function useLiveView(device: string, instance: string, onEvent?: (a: Live
           image.close();
           const first = drawn.current === 0;
           drawn.current++;
+          const prev = lastRef.current;
           lastRef.current = { block, at: Date.now() };
+          if (first || headChanged(prev?.block ?? null, block)) {
+            setLast(lastRef.current); // a render only when the head changes, not per frame
+          }
           if (first) {
-            setLast(lastRef.current);
             act({ t: 'frame' });
           }
         },
+        dispose: (image) => image.close(),
         onEvent: (e) => {
           if (client.current !== c) {
             return;
@@ -122,6 +133,13 @@ export function useLiveView(device: string, instance: string, onEvent?: (a: Live
             case 'ended':
               setLast(lastRef.current);
               act({ t: 'ended', frame: e.frame });
+              if (opened.current) {
+                // the stream this socket showed is over (this page's own view, a recording or PLAY it joined): the hub
+                // starts no other on it, so it closes and the panel says how it ended
+                opened.current = null;
+                shut();
+                act({ t: 'stop' });
+              }
               break;
             case 'skipped':
               act({ t: 'skipped', frames: e.frames });
@@ -135,6 +153,7 @@ export function useLiveView(device: string, instance: string, onEvent?: (a: Live
               }
               if (e.final) {
                 client.current = null;
+                opened.current = null; // refused (4400/4401/4409): showing the tab again does not ask again
               }
               break;
             default:
@@ -179,6 +198,7 @@ export function useLiveView(device: string, instance: string, onEvent?: (a: Live
     last,
     open,
     close,
+    lastFrame: () => lastRef.current,
     active: view.phase === 'connecting' || view.phase === 'open' || view.phase === 'reconnecting',
     hasToken: token !== null,
     framesDrawn: () => drawn.current,
@@ -196,23 +216,38 @@ export interface ViewProps {
   line: string | null;
   /** The view's caption (from the card, recording 7). */
   caption?: string | null;
+  /** A photo to show in the view while no frames show (its /captures URL), with its SAVE link under it. */
+  still?: { url: string; alt: string } | null;
 }
 
 /** The canvas at the frame's aspect: an outline before any frame, the last frame dimmed after a session. */
-export function LiveCanvas({ handle, instance, live, frameSize, line, caption }: ViewProps) {
+export function LiveCanvas({ handle, instance, live, frameSize, line, caption, still }: ViewProps) {
   const px = FRAME_PIXELS[frameSize] ?? FRAME_PIXELS.svga;
   const had = handle.last !== null;
+  const photo = !live && still ? still : null;
+  // the view's height follows what is left of the window (the transport stays in sight), its width the frame's aspect
+  const style = { aspectRatio: `${px[0]} / ${px[1]}`, ['--cam-ar' as string]: String(px[0] / px[1]) };
   return (
-    <figure className="cam-view" data-live={live ? '' : undefined} data-had={had ? '' : undefined}>
-      <div className="cam-frame" style={{ aspectRatio: `${px[0]} / ${px[1]}` }}>
+    <figure className="cam-view" data-live={live ? '' : undefined} data-had={had ? '' : undefined} data-still={photo ? '' : undefined}>
+      <div className="cam-frame" style={style}>
         <canvas ref={handle.canvas} className="cam-canvas" aria-label={`live view of ${instance}`} role="img" width={px[0]} height={px[1]} />
-        {line ? <p className="cam-line">{line}</p> : null}
+        {photo ? <img className="cam-still-in" src={photo.url} alt={photo.alt} /> : null}
+        <p className="cam-line" role="status">
+          {photo ? null : line}
+        </p>
       </div>
       <figcaption className="cam-caption">
         {caption ? <span>{caption}</span> : null}
-        {!live && had ? (
+        {photo ? (
+          <span className="cam-still-caption">
+            <span>the photo</span>
+            <a className="ui-button" data-variant="quiet" href={photo.url} download data-action="save-photo">
+              <span className="ui-button-text">SAVE</span>
+            </a>
+          </span>
+        ) : !live && had ? (
           <span>
-            the last frame · <FTime at={new Date(handle.last!.at)} form="relative" />
+            the last frame · <FTime at={new Date((handle.lastFrame() ?? handle.last!).at)} form="relative" />
           </span>
         ) : null}
       </figcaption>

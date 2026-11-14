@@ -65,6 +65,8 @@ export interface StreamClientOptions<D> {
   /** The JPEG to something drawable (createImageBitmap in the browser). */
   decode: (jpeg: Uint8Array) => Promise<D>;
   onFrame: (frame: StreamFrame<D>) => void;
+  /** A decoded frame that is not shown (it finished after stop()): free it (ImageBitmap.close). */
+  dispose?: (image: D) => void;
   onEvent?: (e: StreamClientEvent) => void;
   timers?: Timers;
   backoffMs?: readonly number[];
@@ -276,6 +278,8 @@ export class StreamClient<D> {
           if (!this.#stopped) {
             this.counts.frames++;
             this.#o.onFrame({ image, block, stream });
+          } else {
+            this.#o.dispose?.(image);
           }
         },
         () => {
