@@ -12,13 +12,13 @@
 :root {
   color-scheme: dark;
   /* the hub's type scale (CSS px): use these, never a new size */
-  --fs-reading: 44px; /*  a Fractonica reading, Ultralight */
-  --fs-title: 20px; /*    a page title, engraved caps tracked 0.34em (the lens word) */
-  --fs-value: 15px; /*    values in a list */
-  --fs-data: 13px; /*     data and running text */
-  --fs-earth: 11.5px; /*  an Earth translation */
-  --fs-label: 9px; /*     caps labels */
-  --fs-micro: 7.5px; /*   rail words, bezel words */
+  --fs-reading: 46px; /*  a Fractonica reading, Ultralight */
+  --fs-title: 22px; /*    a page title, engraved caps tracked 0.34em (the lens word) */
+  --fs-value: 17px; /*    values in a list */
+  --fs-data: 15px; /*     data and running text */
+  --fs-earth: 13px; /*    an Earth translation */
+  --fs-label: 11px; /*    caps labels */
+  --fs-micro: 9.5px; /*   rail words, bezel words */
   /* The Hub page's instrument (pages/hub/instrument.tsx) draws its letters at the site's instrument sizes (DESIGN.md
      §3: 6.2 / 8 / 12.5 / 22 px at its scale) inside its own SVG; those are the drawing's, not the page's scale. */
   /* spacing */
@@ -31,19 +31,40 @@
   --gutter: 48px;
   --column: 1040px;
   --rail: 88px;
-  --row-min: 34px;
+  --row-min: 40px;
   --hair: 1px;
   --safe-bottom: env(safe-area-inset-bottom, 0px);
   --mono: ui-monospace, 'SF Mono', Menlo, monospace;
+  /* the plates, mixed from the tokens: what can be pressed is told from what is only read by its fill, not by a
+     hairline alone. Raised plates (etch-2 over etch-1) are buttons, toggles, tabs, folds and the rows that open
+     something; recessed wells (etch-1, a darker top edge) take input. The primary action is a lumen plate with void
+     letters, a destructive one a fault plate; disabled is the plate taken away (an etch-2 hairline, dim words). */
+  --plate: color-mix(in srgb, var(--c-etch2) 62%, var(--c-etch1));
+  --plate-hover: color-mix(in srgb, var(--c-etch3) 40%, var(--c-etch2));
+  --plate-press: var(--c-etch1);
+  --plate-edge: color-mix(in srgb, var(--c-etch3) 70%, var(--c-etch2));
+  --plate-lip: color-mix(in srgb, var(--c-etch3) 55%, var(--c-etch2));
+  --well: color-mix(in srgb, var(--c-etch1) 75%, var(--c-void));
+  --well-edge: var(--c-etch2);
+  --row-plate: color-mix(in srgb, var(--c-etch2) 34%, transparent);
+  --row-plate-hover: color-mix(in srgb, var(--c-etch2) 80%, transparent);
+  --lit: color-mix(in srgb, var(--c-lumen) 14%, transparent);
+  --lit-edge: color-mix(in srgb, var(--c-lumen) 55%, var(--c-etch2));
+  --fault-plate: color-mix(in srgb, var(--c-fault) 16%, var(--c-etch1));
+  --fault-plate-hover: color-mix(in srgb, var(--c-fault) 28%, var(--c-etch1));
+  --dim-word: color-mix(in srgb, var(--c-ash) 55%, var(--c-etch3));
+  --radius: 3px;
+  --fade: 120ms linear;
 }
 
 @media (max-width: 699.98px) {
   :root {
-    --fs-reading: 34px;
-    --fs-title: 17px;
+    --fs-reading: 36px;
+    --fs-title: 18px;
+    --fs-micro: 8.5px;
     --gutter: 16px;
     --rail: 0px;
-    --row-min: 40px;
+    --row-min: 46px;
   }
 }
 
@@ -151,10 +172,11 @@ kbd {
   outline: none;
 }
 
+/* keyboard focus: a 2 px lumen ring, clear of the plate */
 :focus-visible {
-  outline: 1px solid var(--c-lumen);
-  outline-offset: 4px;
-  border-radius: 2px;
+  outline: 2px solid var(--c-lumen);
+  outline-offset: 3px;
+  border-radius: var(--radius);
 }
 
 ::selection {
@@ -313,29 +335,41 @@ html.mode-fade .earth {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 6px;
-  width: 72px;
-  padding: 6px 0 4px;
-  color: var(--c-etch3);
-  transition: color 200ms linear;
+  gap: 7px;
+  width: 76px;
+  padding: 9px 0 8px;
+  border-radius: calc(var(--radius) + 1px);
+  color: color-mix(in srgb, var(--c-etch3) 45%, var(--c-ash));
+  transition:
+    background-color var(--fade),
+    color var(--fade);
 }
 
 .sigil:hover {
-  color: var(--c-ash);
+  background: var(--plate);
+  color: var(--c-bone);
 }
 
 .sigil .caps {
   font-size: var(--fs-micro);
-  line-height: 9px;
+  line-height: 12px;
   margin-right: calc(var(--track-caps) * -1);
+  color: color-mix(in srgb, var(--c-etch3) 30%, var(--c-ash));
 }
 
+.sigil:hover .caps {
+  color: var(--c-bone);
+}
+
+/* the current page: a lit plate, its lumen bar on the side that faces the page */
 .sigil[aria-current='page'] {
+  background: var(--lit);
   color: var(--c-lumen);
+  box-shadow: inset 2px 0 0 var(--c-lumen);
 }
 
 .sigil[aria-current='page'] .caps {
-  color: var(--c-ash);
+  color: var(--c-bone);
 }
 
 /* a touch target of 44 x 44 around a small mark, without changing what is drawn */
@@ -346,19 +380,34 @@ html.mode-fade .earth {
   inset: min(0px, calc((100% - 44px) / 2));
 }
 
+/* the mode toggle: a raised plate, as every control that can be pressed */
 .mode-toggle {
   position: relative;
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 8px;
-  color: var(--c-etch3);
+  gap: 7px;
+  padding: 9px 10px 8px;
+  border: var(--hair) solid var(--plate-edge);
+  border-top-color: var(--plate-lip);
+  border-radius: calc(var(--radius) + 1px);
+  background: var(--plate);
+  color: var(--c-ash);
+  transition:
+    background-color var(--fade),
+    border-color var(--fade);
 }
 
 .mode-toggle .caps {
   font-size: var(--fs-micro);
-  line-height: 9px;
+  line-height: 12px;
   margin-right: calc(var(--track-caps) * -1);
+  color: var(--c-bone);
+}
+
+.mode-toggle:hover {
+  background: var(--plate-hover);
+  border-color: var(--c-ash);
 }
 
 .mode-toggle .cross {
@@ -368,10 +417,7 @@ html.mode-fade .earth {
 
 [data-mode='earth'] .mode-toggle {
   color: var(--c-bone);
-}
-
-[data-mode='earth'] .mode-toggle .caps {
-  color: var(--c-ash);
+  border-color: var(--c-ash);
 }
 
 [data-mode='earth'] .mode-toggle .cross {
@@ -387,11 +433,6 @@ html.mode-fade .earth {
 @media (max-height: 520px) and (min-width: 700px) {
   .sigils {
     gap: 4px;
-  }
-
-  .sigil {
-    gap: 0;
-    padding: 4px 0;
   }
 
   .sigil .caps {
@@ -428,14 +469,14 @@ html.mode-fade .earth {
   .shell-mode {
     display: block;
     position: absolute;
-    top: 18px;
+    top: 14px;
     right: 12px;
     z-index: 3;
   }
 
   .shell-mode .mode-toggle {
     flex-direction: row-reverse;
-    gap: 8px;
+    padding: 6px 10px;
   }
 
   .rail {
@@ -460,14 +501,27 @@ html.mode-fade .earth {
     justify-content: space-around;
     gap: 0;
     margin: 0;
-    padding: 8px 4px 10px;
+    padding: 6px 4px 8px;
   }
 
   .sigil {
     width: auto;
     flex: 1 1 0;
     min-width: 0;
-    gap: 4px;
+    gap: 5px;
+    padding: 8px 0 7px;
+  }
+
+  /* the current page's plate is lit, its bar on top */
+  .sigil[aria-current='page'] {
+    box-shadow: inset 0 2px 0 var(--c-lumen);
+  }
+
+  /* six words in 390 px: 9 px and tracked closer than the desktop rail's, so PROVISION clears its plate's edges */
+  .sigil .caps {
+    font-size: 9px;
+    letter-spacing: 0.08em;
+    margin-right: -0.08em;
   }
 }
 
@@ -490,6 +544,11 @@ html.mode-fade .earth {
 
   html.mode-fade .earth {
     animation: none;
+  }
+
+  .sigil,
+  .mode-toggle {
+    transition: none;
   }
 }
 

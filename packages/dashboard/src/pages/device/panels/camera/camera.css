@@ -33,7 +33,7 @@
    at least a usable 180 px), and its width follows the frame's aspect (--cam-ar, set inline), so it never letterboxes
    and WATCH stays above the fold on a laptop (1440 x 790, 1366 x 768, 1280 x 720). */
 .cam-frame {
-  --cam-maxh: max(180px, min(60vh, calc(100dvh - 430px)));
+  --cam-maxh: max(180px, min(60vh, calc(100dvh - 480px)));
   position: relative;
   width: min(100%, calc(var(--cam-maxh) * var(--cam-ar, 1.3333)));
   max-height: var(--cam-maxh);
@@ -140,8 +140,9 @@
   display: contents;
 }
 
+/* small words: ash leaning to etch-3, about 5:1 */
 .cam-does-who {
-  color: var(--c-etch3);
+  color: color-mix(in srgb, var(--c-ash) 75%, var(--c-etch3));
 }
 
 .cam-said:empty {
@@ -157,7 +158,7 @@
 }
 
 .cam-note {
-  color: var(--c-etch3);
+  color: color-mix(in srgb, var(--c-ash) 75%, var(--c-etch3));
 }
 
 /* the board runs a stream the hub does not know of: why, and its stop */
@@ -246,7 +247,7 @@
 .cam-record {
   display: flex;
   flex-direction: column;
-  gap: var(--sp-3);
+  gap: var(--sp-4);
   padding: var(--sp-3) 0;
   border-top: var(--hair) solid var(--c-etch2);
   border-bottom: var(--hair) solid var(--c-etch2);
@@ -255,21 +256,31 @@
 .cam-record-more {
   display: flex;
   flex-direction: column;
-  gap: var(--sp-3);
+  gap: var(--sp-4);
+}
+
+/* the form's own gap spaces its fields, so a field adds no margin of its own */
+.cam-record .ui-field + .ui-field,
+.cam-record .ui-toggle + .ui-field {
+  margin-top: 0;
 }
 
 .cam-words {
   display: flex;
   flex-direction: column;
-  gap: var(--sp-1);
+  gap: 8px;
 }
 
 .cam-words-label {
   color: var(--c-ash);
 }
 
+/* a word the card does not allow: the plate taken away, a dashed etch-2 edge, a dim word */
 .cam-words .ui-chip:disabled {
-  color: var(--c-etch2);
+  background: transparent;
+  border-style: dashed;
+  border-color: var(--c-etch2);
+  color: var(--dim-word);
   cursor: not-allowed;
 }
 
@@ -293,14 +304,37 @@
   align-items: center;
   justify-content: center;
   min-width: 64px;
-  min-height: 32px;
+  min-height: 40px;
 }
 
 .cam-settings,
 .cam-card {
   display: flex;
   flex-direction: column;
+}
+
+.cam-settings {
+  gap: var(--sp-4);
+}
+
+.cam-card {
   gap: var(--sp-3);
+}
+
+/* the settings' own gap spaces their fields, so a field adds no margin of its own */
+.cam-settings > .ui-field + .ui-field,
+.cam-settings .ui-toggle + .ui-field {
+  margin-top: 0;
+}
+
+/* the first slider's 'as it starts' is its sibling, not inside it: drawn up to its slider */
+.cam-settings > .cam-note {
+  margin-top: calc(var(--sp-3) * -1);
+}
+
+/* the two toggles of a pair (FLIP, MIRROR) stay a pair */
+.cam-settings > .ui-toggle + .ui-toggle {
+  margin-top: calc(var(--sp-2) * -1);
 }
 
 .cam-rebooted {

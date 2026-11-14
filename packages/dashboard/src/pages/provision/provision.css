@@ -157,8 +157,17 @@
   border-bottom: var(--hair) solid var(--c-etch3);
 }
 
+.prov-note a {
+  border-bottom: 0; /* the underline marks it; the hairline would double it */
+  text-decoration: underline;
+  text-decoration-color: var(--c-lumen-mid);
+  text-decoration-thickness: 1px;
+  text-underline-offset: 4px;
+}
+
 .prov-note a:hover {
   color: var(--c-lumen);
+  text-decoration-color: var(--c-lumen);
 }
 
 .prov-fault {
@@ -228,11 +237,26 @@
   min-height: 34px;
 }
 
+/* the board's name is a row-tone plate with its ring visible at rest; the chosen one is lit */
 .prov-choice-lead {
   flex: 1 1 auto;
+  padding: 8px 12px;
+  border-radius: var(--radius);
+  background: var(--row-plate);
+  transition: background-color var(--fade);
+}
+
+.prov-choice-lead:hover:not(:disabled) {
+  background: var(--row-plate-hover);
+}
+
+.prov-choice-lead[aria-checked='true'] {
+  background: var(--lit);
+  box-shadow: inset 2px 0 0 var(--c-lumen);
 }
 
 .prov-choice-lead:disabled {
+  background: transparent;
   cursor: not-allowed;
 }
 
@@ -242,7 +266,7 @@
 
 .prov-choice-mark .ring {
   fill: none;
-  stroke: var(--c-etch3);
+  stroke: var(--c-ash);
   stroke-width: 1;
   transition: stroke 200ms linear;
 }
@@ -254,7 +278,7 @@
 }
 
 .prov-choice-lead:hover .ring {
-  stroke: var(--c-ash);
+  stroke: var(--c-lumen);
 }
 
 .prov-choice[data-chosen] .prov-choice-mark .ring {

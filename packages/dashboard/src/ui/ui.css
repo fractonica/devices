@@ -55,7 +55,7 @@
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: var(--sp-2);
+  gap: var(--sp-2) 10px;
 }
 
 /* the phone keeps the title clear of the fixed mode toggle in the top right corner */
@@ -76,11 +76,13 @@
   flex-direction: column;
 }
 
+/* an aside with a button wraps under the title rather than running off */
 .ui-section-head {
   display: flex;
+  flex-wrap: wrap;
   align-items: baseline;
   justify-content: space-between;
-  gap: var(--sp-3);
+  gap: var(--sp-2) var(--sp-3);
   padding-bottom: var(--sp-2);
   border-bottom: 0.75px solid var(--c-etch2);
 }
@@ -91,8 +93,12 @@
 
 .ui-section-aside {
   display: flex;
-  align-items: baseline;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  align-items: center;
   gap: var(--sp-2);
+  margin-left: auto;
+  min-width: 0;
   color: var(--c-ash);
 }
 
@@ -124,7 +130,7 @@
   padding: 9px 0 8px;
   border-bottom: var(--hair) solid var(--c-etch1);
   font-size: var(--fs-data);
-  line-height: 16px;
+  line-height: 20px;
 }
 
 .ui-row-lead {
@@ -140,9 +146,10 @@
   display: flex;
 }
 
-.ui-row-label {
+/* named with its row, so its line height outranks .caps's (base.css loads after this file) */
+.ui-row .ui-row-label {
   color: var(--c-ash);
-  line-height: 10px;
+  line-height: 14px;
 }
 
 .ui-row-name {
@@ -168,14 +175,14 @@
 .ui-row-extra {
   display: block;
   font-size: var(--fs-earth);
-  line-height: 14px;
+  line-height: 17px;
   color: var(--c-ash);
   overflow-wrap: anywhere;
 }
 
 .ui-row-earth {
   display: block;
-  line-height: 14px;
+  line-height: 17px;
 }
 
 .ui-row-mark {
@@ -195,7 +202,7 @@
 .ui-row-sub {
   color: var(--c-ash);
   font-size: var(--fs-earth);
-  line-height: 14px;
+  line-height: 17px;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -222,17 +229,43 @@
   }
 }
 
+/* a row that opens something: a row-tone plate with a › at its end */
 a.ui-row,
 button.ui-row {
+  align-items: center;
   width: 100%;
+  margin-bottom: 3px;
+  padding-inline: 12px;
+  border-bottom: var(--hair) solid transparent;
+  border-radius: var(--radius);
+  background: var(--row-plate);
   text-align: left;
   cursor: pointer;
-  transition: border-color 200ms linear;
+  transition:
+    background-color var(--fade),
+    border-color 600ms linear;
+}
+
+a.ui-row::after,
+button.ui-row::after {
+  content: '›';
+  order: 99;
+  flex: none;
+  margin-left: var(--sp-1);
+  font-size: 18px;
+  line-height: 1;
+  color: var(--c-ash);
+  transition: color var(--fade);
 }
 
 a.ui-row:hover,
 button.ui-row:hover {
-  border-bottom-color: var(--c-etch3);
+  background: var(--row-plate-hover);
+}
+
+a.ui-row:hover::after,
+button.ui-row:hover::after {
+  color: var(--c-lumen);
 }
 
 a.ui-row:hover .ui-row-name,
@@ -240,9 +273,13 @@ button.ui-row:hover .ui-row-name {
   color: var(--c-lumen);
 }
 
-/* an input on a row (a live event): a 600 ms lumen fade of its hairline (design README "Hub" 6) */
+/* an input on a row (a live event): a 600 ms lumen fade of its hairline (design README "Hub" 6); a plain row's
+   hairline lights at once, a plate's fades in as well */
 .ui-row[data-flash] {
   border-bottom-color: var(--c-lumen);
+}
+
+div.ui-row[data-flash] {
   transition: none;
 }
 
@@ -303,25 +340,30 @@ button.ui-row:hover .ui-row-name {
 
 /* ---------------------------------------------------------------- Button */
 
+/* a raised plate (etch-2 over etch-1, a lighter top edge): what can be pressed is told by its fill */
 .ui-button {
   position: relative;
   display: inline-flex;
   align-items: center;
   justify-content: center;
   gap: 8px;
-  min-height: 32px;
-  padding: 0 14px;
-  border: var(--hair) solid var(--c-etch3);
-  border-radius: 2px;
+  min-height: 40px;
+  padding: 0 18px;
+  border: var(--hair) solid var(--plate-edge);
+  border-top-color: var(--plate-lip);
+  border-radius: var(--radius);
+  background: var(--plate);
   color: var(--c-bone);
   font-family: var(--font-caps);
   font-weight: var(--w-caps);
   font-size: var(--fs-label);
   letter-spacing: var(--track-caps);
   white-space: nowrap;
+  box-shadow: 0 1px 0 var(--c-void);
   transition:
-    border-color 200ms linear,
-    color 200ms linear;
+    background-color var(--fade),
+    border-color var(--fade),
+    color var(--fade);
 }
 
 .ui-button > .ui-button-text {
@@ -336,85 +378,146 @@ button.ui-row:hover .ui-row-name {
 }
 
 .ui-button:hover:not(:disabled) {
-  border-color: var(--c-ash);
+  background: var(--plate-hover);
+  border-color: color-mix(in srgb, var(--c-ash) 60%, var(--c-bone));
+  color: var(--c-bone);
 }
 
+.ui-button:active:not(:disabled) {
+  background: var(--plate-press);
+  box-shadow: none;
+}
+
+/* primary: a lit plate, void letters */
 .ui-button[data-variant='primary'] {
+  background: var(--c-lumen);
+  border-color: var(--c-lumen);
+  color: var(--c-void);
+}
+
+.ui-button[data-variant='primary']:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--c-lumen) 78%, var(--c-bone));
+  border-color: color-mix(in srgb, var(--c-lumen) 78%, var(--c-bone));
+  color: var(--c-void);
+}
+
+.ui-button[data-variant='primary']:active:not(:disabled) {
+  background: var(--c-lumen-mid);
+  border-color: var(--c-lumen-mid);
+}
+
+/* the device header's Identify is primary off a lens: a lit plate, not the solid slab, so it does not outshine the
+   instruments and keeps the header's weight the same from tab to tab */
+.ui-button[data-action='identify'][data-variant='primary'] {
+  background: var(--lit);
+  border-color: var(--lit-edge);
+  color: var(--c-lumen);
+}
+
+.ui-button[data-action='identify'][data-variant='primary']:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--c-lumen) 22%, transparent);
   border-color: var(--c-lumen);
   color: var(--c-lumen);
 }
 
-.ui-button[data-variant='primary']:hover:not(:disabled) {
-  border-color: var(--c-lumen);
-  color: var(--c-bone);
-}
-
+/* destructive: a plate tinted with fault, its word in fault */
 .ui-button[data-variant='destructive'] {
+  background: var(--fault-plate);
   border-color: var(--c-fault);
   color: var(--c-fault);
 }
 
 .ui-button[data-variant='destructive']:hover:not(:disabled) {
-  color: var(--c-bone);
-}
-
-.ui-button[data-variant='quiet'] {
-  border-color: transparent;
-  border-bottom-color: var(--c-etch2);
-  color: var(--c-ash);
-  padding: 0 4px;
-}
-
-.ui-button[data-variant='quiet']:hover:not(:disabled) {
-  border-color: transparent;
-  border-bottom-color: var(--c-ash);
-  color: var(--c-bone);
-}
-
-/* a quiet word for an irreversible act in a row (DELETE beside PLAY): drawn in fault, no outline */
-.ui-button[data-variant='quiet'][data-tone='fault'] {
-  color: var(--c-fault);
-  border-bottom-color: var(--c-fault);
-}
-
-.ui-button[data-variant='quiet'][data-tone='fault']:disabled {
-  color: var(--c-etch2);
-  border-bottom-color: var(--c-etch2);
-}
-
-.ui-button[data-armed] {
+  background: var(--fault-plate-hover);
   border-color: var(--c-fault);
   color: var(--c-bone);
 }
 
-.ui-button:disabled {
+/* armed (the question is asked in place): the confirming plate is solid fault */
+.ui-button[data-armed],
+.ui-button[data-armed]:hover:not(:disabled) {
+  background: var(--c-fault);
+  border-color: var(--c-fault);
+  color: var(--c-void);
+}
+
+/* quiet: the secondary level, a smaller and fainter plate (the row tone, an etch-2 edge) for a row's own actions
+   and for Cancel beside the action it cancels */
+.ui-button[data-variant='quiet'] {
+  min-height: 32px;
+  padding: 0 12px;
+  border: var(--hair) solid var(--c-etch2);
+  border-radius: var(--radius);
+  background: var(--row-plate);
+  color: color-mix(in srgb, var(--c-bone) 85%, var(--c-ash));
+  box-shadow: none;
+}
+
+.ui-button[data-variant='quiet']:hover:not(:disabled) {
+  background: var(--plate-hover);
+  border-color: var(--c-etch3);
+  color: var(--c-lumen);
+}
+
+/* a quiet plate for an irreversible act in a row (DELETE beside PLAY): its word in fault */
+.ui-button[data-variant='quiet'][data-tone='fault'] {
+  color: var(--c-fault);
+  border-color: color-mix(in srgb, var(--c-fault) 45%, var(--c-etch2));
+}
+
+.ui-button[data-variant='quiet'][data-tone='fault']:hover:not(:disabled) {
+  background: var(--fault-plate);
+  border-color: var(--c-fault);
+  color: var(--c-fault);
+}
+
+/* disabled: the plate is taken away; an etch-2 hairline and a dim, still legible word */
+.ui-button:disabled,
+.ui-button[data-variant='primary']:disabled,
+.ui-button[data-variant='destructive']:disabled,
+.ui-button[data-variant='quiet']:disabled,
+.ui-button[data-variant='quiet'][data-tone='fault']:disabled {
+  background: transparent;
+  border: var(--hair) dashed var(--c-etch2);
+  color: var(--dim-word);
+  box-shadow: none;
   cursor: not-allowed;
-  border-color: var(--c-etch2);
-  color: var(--c-etch3);
 }
 
-/* a quiet word stays a word when it waits: dimmed, never boxed */
-.ui-button[data-variant='quiet']:disabled {
-  border-color: transparent;
-  border-bottom-color: var(--c-etch2);
-}
-
-.ui-button[data-busy] {
+/* busy: the plate sinks and a lumen-mid line runs under it, its word trailed by an ellipsis; nothing spins */
+.ui-button[data-busy],
+.ui-button[data-busy]:disabled,
+.ui-button[data-variant][data-busy]:disabled {
+  background: var(--plate-press);
+  border: var(--hair) solid var(--c-etch2);
+  color: var(--c-ash);
+  box-shadow: inset 0 -2px 0 var(--c-lumen-mid);
   cursor: progress;
+}
+
+.ui-button[data-busy]::after {
+  content: '…';
+  margin-left: -5px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ui-button {
+    transition: none;
+  }
 }
 
 .ui-button-row {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: var(--sp-2);
+  gap: var(--sp-2) 10px;
 }
 
 .ui-confirm {
   display: inline-flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: var(--sp-2);
+  gap: var(--sp-2) 10px;
 }
 
 .ui-confirm-question {
@@ -427,9 +530,17 @@ button.ui-row:hover .ui-row-name {
 .ui-field {
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: 8px;
   min-width: 0;
   max-width: 560px; /* a form reads down a column, not across the page */
+}
+
+/* one field from the next: more room than inside a field (8 px), so a slider's scale and note stay with their slider
+   and the next caps label starts a new group */
+.ui-field + .ui-field,
+.ui-field + .ui-toggle,
+.ui-toggle + .ui-field {
+  margin-top: 10px;
 }
 
 .ui-field-label {
@@ -446,19 +557,23 @@ button.ui-row:hover .ui-row-name {
   color: var(--c-fault);
 }
 
+/* a recessed well (etch-1, a darker top edge): what takes input */
 .ui-input,
 .ui-select {
   width: 100%;
-  min-height: 34px;
-  padding: 6px 0 5px;
-  border: 0;
-  border-bottom: var(--hair) solid var(--c-etch3);
-  border-radius: 0;
-  background: none;
+  min-height: 40px;
+  padding: 8px 12px;
+  border: var(--hair) solid var(--well-edge);
+  border-bottom-color: var(--c-etch3);
+  border-radius: var(--radius);
+  background: var(--well);
   color: var(--c-bone);
   font-size: var(--fs-value);
   font-weight: var(--w-value);
-  transition: border-color 200ms linear;
+  box-shadow: inset 0 1px 0 var(--c-void);
+  transition:
+    border-color var(--fade),
+    background-color var(--fade);
 }
 
 .ui-input.mono {
@@ -467,24 +582,29 @@ button.ui-row:hover .ui-row-name {
 
 .ui-input:hover,
 .ui-select:hover {
+  border-color: var(--c-etch3);
   border-bottom-color: var(--c-ash);
 }
 
 .ui-input:focus-visible,
 .ui-select:focus-visible {
-  outline: none;
-  border-bottom-color: var(--c-lumen);
+  outline: 2px solid var(--c-lumen);
+  outline-offset: 2px;
+  border-color: var(--c-lumen);
 }
 
 .ui-field[data-invalid] .ui-input,
 .ui-field[data-invalid] .ui-select {
-  border-bottom-color: var(--c-fault);
+  border-color: var(--c-fault);
 }
 
 .ui-input:disabled,
 .ui-select:disabled {
-  color: var(--c-etch3);
-  border-bottom-color: var(--c-etch2);
+  background: transparent;
+  border: var(--hair) dashed var(--c-etch2);
+  color: var(--dim-word);
+  box-shadow: none;
+  cursor: not-allowed;
 }
 
 .ui-select-wrap {
@@ -515,7 +635,7 @@ button.ui-row:hover .ui-row-name {
 
 .ui-select {
   appearance: none;
-  padding-right: 22px;
+  padding-right: 34px;
   cursor: pointer;
 }
 
@@ -526,27 +646,42 @@ button.ui-row:hover .ui-row-name {
 
 .ui-select-mark {
   position: absolute;
-  right: 2px;
+  right: 13px;
   top: 50%;
   margin-top: -4px;
-  color: var(--c-ash);
+  color: var(--c-bone);
   pointer-events: none;
 }
 
-/* Toggle: the mode toggle's ring; on, it fills with lumen */
+/* Toggle: the mode toggle's ring on a raised plate; on, the plate is lit and the ring fills with lumen */
 .ui-toggle {
   position: relative;
   display: inline-flex;
+  align-self: flex-start;
   align-items: center;
   gap: 10px;
-  min-height: 32px;
-  color: var(--c-etch3);
+  min-height: 40px;
+  padding: 0 14px 0 11px;
+  border: var(--hair) solid var(--plate-edge);
+  border-top-color: var(--plate-lip);
+  border-radius: var(--radius);
+  background: var(--plate);
+  color: var(--c-ash);
+  transition:
+    background-color var(--fade),
+    border-color var(--fade),
+    color var(--fade);
 }
 
 .ui-toggle::before {
   content: '';
   position: absolute;
   inset: min(0px, calc((100% - 44px) / 2)) 0;
+}
+
+.ui-toggle:hover:not(:disabled) {
+  background: var(--plate-hover);
+  border-color: var(--c-ash);
 }
 
 /* the mode toggle's ring (shell/sigils.tsx ModeRing): engraved at rest; on, the ring and a dot in it lit in lumen.
@@ -564,6 +699,8 @@ button.ui-row:hover .ui-row-name {
 }
 
 .ui-toggle[aria-checked='true'] {
+  background: var(--lit);
+  border-color: var(--lit-edge);
   color: var(--c-lumen);
 }
 
@@ -572,20 +709,28 @@ button.ui-row:hover .ui-row-name {
 }
 
 .ui-toggle .caps {
-  color: var(--c-ash);
+  color: var(--c-bone);
 }
 
 .ui-toggle:disabled {
-  color: var(--c-etch2);
+  background: transparent;
+  border: var(--hair) dashed var(--c-etch2);
+  color: var(--c-etch3);
   cursor: not-allowed;
 }
 
 /* disabled, its word dims as a disabled button's does */
 .ui-toggle:disabled .caps {
-  color: var(--c-etch3);
+  color: var(--dim-word);
 }
 
-/* Slider: a hairline lit in lumen to the value (light, not a bar), a small bead for the thumb */
+@media (prefers-reduced-motion: reduce) {
+  .ui-toggle {
+    transition: none;
+  }
+}
+
+/* Slider: a recessed groove lit to the value, a bead you can take hold of */
 .ui-slider-line {
   display: flex;
   align-items: center;
@@ -596,7 +741,7 @@ button.ui-row:hover .ui-row-name {
   --fill: 0%;
   flex: 1 1 auto;
   min-width: 80px;
-  height: 28px;
+  height: 32px;
   margin: 0;
   appearance: none;
   background: none;
@@ -604,40 +749,63 @@ button.ui-row:hover .ui-row-name {
 }
 
 .ui-slider::-webkit-slider-runnable-track {
-  height: 1px;
-  background: linear-gradient(to right, var(--c-lumen) 0 var(--fill), var(--c-etch3) var(--fill) 100%);
+  height: 4px;
+  border-radius: 2px;
+  background: linear-gradient(to right, var(--c-lumen-mid) 0 var(--fill), var(--c-etch2) var(--fill) 100%);
 }
 
 .ui-slider::-moz-range-track {
-  height: 1px;
-  background: var(--c-etch3);
+  height: 4px;
+  border-radius: 2px;
+  background: var(--c-etch2);
 }
 
 .ui-slider::-moz-range-progress {
-  height: 1px;
-  background: var(--c-lumen);
+  height: 4px;
+  border-radius: 2px;
+  background: var(--c-lumen-mid);
 }
 
 .ui-slider::-webkit-slider-thumb {
   appearance: none;
-  width: 9px;
-  height: 9px;
-  margin-top: -4px;
+  width: 18px;
+  height: 18px;
+  margin-top: -7px;
+  border: 2px solid var(--c-void);
   border-radius: 50%;
   background: var(--c-lumen);
-  border: 0;
+  box-shadow: 0 0 0 1px var(--c-lumen);
 }
 
 .ui-slider::-moz-range-thumb {
-  width: 9px;
-  height: 9px;
+  width: 14px;
+  height: 14px;
+  border: 2px solid var(--c-void);
   border-radius: 50%;
   background: var(--c-lumen);
-  border: 0;
+  box-shadow: 0 0 0 1px var(--c-lumen);
+}
+
+.ui-slider:hover::-webkit-slider-thumb {
+  background: var(--c-bone);
+  box-shadow: 0 0 0 1px var(--c-bone);
+}
+
+.ui-slider:focus-visible {
+  outline-offset: 2px;
+}
+
+.ui-slider:disabled {
+  cursor: not-allowed;
 }
 
 .ui-slider:disabled::-webkit-slider-thumb {
   background: var(--c-etch3);
+  box-shadow: 0 0 0 1px var(--c-etch3);
+}
+
+.ui-slider:disabled::-webkit-slider-runnable-track {
+  background: var(--c-etch2);
 }
 
 .ui-slider-value {
@@ -850,21 +1018,47 @@ button.ui-row:hover .ui-row-name {
   flex-direction: column;
 }
 
+/* a fold: a row-tone plate, raised to a plate under the hand and while open */
 .ui-disclosure-toggle {
   position: relative;
   display: flex;
   flex-wrap: wrap;
   align-items: center;
   gap: 2px 10px;
-  min-height: var(--row-min);
-  padding: 8px 0;
-  border-bottom: var(--hair) solid var(--c-etch1);
-  color: var(--c-ash);
+  min-height: 44px;
+  padding: 8px 14px;
+  border: var(--hair) solid var(--c-etch2);
+  border-radius: var(--radius);
+  background: var(--row-plate);
+  color: var(--c-bone);
   text-align: left;
+  transition:
+    background-color var(--fade),
+    border-color var(--fade);
+}
+
+.ui-disclosure-toggle .mark {
+  width: 11px;
+  height: 11px;
+  color: var(--c-lumen-mid);
 }
 
 .ui-disclosure-toggle:hover {
-  color: var(--c-bone);
+  background: var(--plate);
+  border-color: var(--c-etch3);
+}
+
+.ui-disclosure-toggle:hover .mark {
+  color: var(--c-lumen);
+}
+
+.ui-disclosure-toggle[aria-expanded='true'] {
+  background: var(--plate);
+  border-color: var(--c-etch3);
+}
+
+.ui-disclosure-toggle[aria-expanded='true'] .mark {
+  color: var(--c-lumen);
 }
 
 .ui-disclosure-toggle .mark .bar {
@@ -875,29 +1069,36 @@ button.ui-row:hover .ui-row-name {
   opacity: 0;
 }
 
+/* a fold's aside (KEPT UNTIL IT RESTARTS) goes under its title on purpose, at every width, rather than wrapping
+   there only when the column is narrow: such a fold is always a two-line plate */
 .ui-disclosure-aside {
-  margin-left: auto;
-  text-align: right;
+  flex-basis: 100%;
+  padding-left: 21px;
+  color: var(--c-ash);
 }
 
 .ui-disclosure-body {
   padding-top: var(--sp-3);
 }
 
-/* Disclosure `sub`: what the fold's action does, always visible under its title, above the hairline */
+/* Disclosure `sub`: what the fold's action does, always visible under its plate; such a plate's lower edge stays
+   etch-2 under the hand and while open */
 .ui-disclosure:has(> .ui-disclosure-sub) > .ui-disclosure-toggle {
-  min-height: 0;
-  padding-bottom: 2px;
-  border-bottom: 0;
+  border-bottom-color: var(--c-etch2);
 }
 
 .ui-disclosure-sub {
   margin: 0;
-  padding: 0 0 8px 19px;
-  border-bottom: var(--hair) solid var(--c-etch1);
+  padding: 6px 0 10px 15px;
   font-size: var(--fs-earth);
-  line-height: 16px;
+  line-height: 19px;
   color: var(--c-ash);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ui-disclosure-toggle {
+    transition: none;
+  }
 }
 
 /* ------------------------------------------------------------ EmptyState */
@@ -910,8 +1111,9 @@ button.ui-row:hover .ui-row-name {
   padding: var(--sp-4) 0;
 }
 
+/* lifted from etch-3 (about 2.6:1) to about 5:1 */
 .ui-empty-mark {
-  color: var(--c-etch3);
+  color: color-mix(in srgb, var(--c-ash) 75%, var(--c-etch3));
 }
 
 .ui-empty-title {
@@ -1110,12 +1312,18 @@ button.ui-row:hover .ui-row-name {
 
 /* ---------------------------------------------------------------- SubNav */
 
+/* tabs: a segmented strip, raised plates in a recessed well */
 .ui-subnav {
   display: flex;
-  gap: var(--sp-4);
+  gap: 2px;
+  width: fit-content;
+  max-width: 100%;
+  padding: 3px;
   overflow-x: auto;
   scrollbar-width: none;
-  border-bottom: var(--hair) solid var(--c-etch1);
+  border: var(--hair) solid var(--c-etch2);
+  border-radius: calc(var(--radius) + 2px);
+  background: var(--well);
 }
 
 /* a sideways scroller cut at its end fades there, so it says there is more (as the site's .more-below) */
@@ -1126,18 +1334,66 @@ button.ui-row:hover .ui-row-name {
 
 .ui-subnav-item {
   position: relative;
-  padding: 10px 0 9px;
-  color: var(--c-etch3);
-  border-bottom: var(--hair) solid var(--c-void);
-  margin-bottom: -1px;
-  transition: color 200ms linear;
+  display: inline-flex;
+  align-items: center;
+  flex: none;
+  min-height: 34px;
+  padding: 0 16px;
+  border-radius: var(--radius);
+  color: var(--c-ash);
+  transition:
+    background-color var(--fade),
+    color var(--fade);
 }
 
 .ui-subnav-item:hover {
-  color: var(--c-ash);
+  background: var(--plate);
+  color: var(--c-bone);
 }
 
 .ui-subnav-item[aria-current='page'] {
+  background: var(--plate-hover);
   color: var(--c-lumen);
-  border-bottom-color: var(--c-lumen);
+  box-shadow: inset 0 -2px 0 var(--c-lumen);
+}
+
+/* the ring inside the well, clear of its edge */
+.ui-subnav-item:focus-visible {
+  outline-offset: -2px;
+}
+
+@media (max-width: 699.98px) {
+  /* the strip spans the column and wraps inside its box rather than scrolling (a fade would cut the box's own edge):
+     four tabs on one row, five or six as rows of three; its words a little smaller and closer */
+  .ui-subnav,
+  .ui-subnav[data-more] {
+    flex-wrap: wrap;
+    width: 100%;
+    overflow-x: visible;
+    -webkit-mask-image: none;
+    mask-image: none;
+  }
+
+  .ui-subnav:has(> .ui-subnav-item:nth-child(5)) > .ui-subnav-item {
+    flex: 1 1 30%;
+  }
+
+  .ui-subnav-item {
+    flex: 1 0 auto;
+    justify-content: center;
+    min-height: 38px;
+    padding: 0 8px;
+  }
+
+  /* named with its strip, so the words outrank .caps (base.css loads after this file) */
+  .ui-subnav .ui-subnav-item {
+    font-size: 10px;
+    letter-spacing: 0.16em;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ui-subnav-item {
+    transition: none;
+  }
 }

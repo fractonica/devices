@@ -16,8 +16,9 @@ Rules every page keeps (test/design-rules.test.ts checks the first four):
   `var(--track-caps)`) and `var(--mono)` for ids, paths and logs. No bold, no semibold.
 - Sizes from the scale in `styles/base.css`: `--fs-reading --fs-title --fs-value --fs-data --fs-earth --fs-label
   --fs-micro`; spacing `--sp-1 … --sp-6`, `--gutter`.
-- Nothing pulses, blinks or spins; transitions are fades of 200–600 ms and vanish under reduced motion.
-- No cards, cells, filled bars or percentages. Lists are `Row`s; progress is a `StageRing`.
+- Nothing pulses, blinks or spins; transitions are fades of 120–600 ms and vanish under reduced motion.
+- No cards or cells around what is read, no filled bars, no percentages: a fill marks only what can be pressed
+  (design README, Hub ruling 7). Lists are `Row`s; progress is a `StageRing`.
 - Pure mode shows only Fractonica units: no clock time, date, zone, second, Hz, metre or per cent, not even in a
   `title` or `aria-label`. Anything Earth goes through `<Earth>`, `Row earth=`, `Page earth=`, `FTime` or `Span`,
   which render it only in Earth mode, led by ⊕. A text the hub wrote goes through `useHubText()` (ErrorLine does it
@@ -65,7 +66,8 @@ A block: a caps title over an `etch-2` rule, rows under it.
 
 ## Row
 
-The LENS row: label (caps) or name (bone) left, value right, a hairline under it; wraps at phone width.
+The LENS row: label (caps) or name (bone) left, value right, a hairline under it; wraps at phone width. A row that
+opens something (`to` or `onClick`) is a row-tone plate with a › at its end, lighter under the hand.
 
 | Prop | Type | |
 |---|---|---|
@@ -110,10 +112,12 @@ filled fault (errors only), `idle` hollow etch-3 (unknown, nothing yet). `presen
 
 ## Button, ButtonRow
 
-Hairline caps words. `primary` is lumen (one per page); `destructive` is fault and with `confirm` asks in place
-(a second press confirms; Escape, a click away or CANCEL disarms); `quiet` is an underlined word for row actions;
-`quiet` with `data-tone="fault"` is a quiet word in fault, for an irreversible row action beside a louder one (DELETE
-beside PLAY).
+Caps words on raised plates: what can be pressed is told by its fill. `primary` is a lumen plate with void letters
+(one per page); `destructive` is a fault-tinted plate and with `confirm` asks in place (a second press confirms, on a
+solid fault plate; Escape, a click away or CANCEL disarms); `quiet` is a smaller, fainter plate in the row tone for row
+actions and for Cancel; `quiet` with `data-tone="fault"` is a quiet plate in fault, for an irreversible row action
+beside a louder one (DELETE beside PLAY). Disabled, the plate is taken away (a dashed etch-2 hairline, a dim word);
+busy, it sinks, a lumen-mid line under it and an ellipsis after its word.
 
 | Prop | Type | |
 |---|---|---|
@@ -134,7 +138,9 @@ beside PLAY).
 
 ## TextField, Select, Toggle, Slider
 
-A caps label over a hairline (no box), a note (ash) or an error (fault) under it.
+A caps label over a recessed well (etch-1, a darker top edge), a note (ash) or an error (fault) under it. A Toggle
+is a raised plate around the ring, lit when on; a Slider a groove lit lumen-mid to the value, with a bead to take hold
+of.
 
 | Component | Props |
 |---|---|
@@ -200,8 +206,9 @@ reset · hello · join); builds and OTA pass their own (state/provision.ts), a w
 
 ## Disclosure
 
-A fold on a hairline: `+` when closed, `−` open. Props: `title`, `aside?`, `sub?` (an ash line under the title, shown
-open or closed: what the fold's action does), `defaultOpen?`, or controlled `open` and `onOpenChange`.
+A fold on a row-tone plate, raised to a plate under the hand and while open: `+` when closed, `−` open; an `aside`
+goes under the title. Props: `title`, `aside?`, `sub?` (an ash line under the plate, shown open or closed: what the
+fold's action does), `defaultOpen?`, or controlled `open` and `onOpenChange`.
 
 ```tsx
 <Disclosure title="Engineering"><Row label="Bindings" value="3" /></Disclosure>
@@ -291,7 +298,8 @@ A relative time redraws when its text next changes (the core's `spanNextChange`)
 
 ## SubNav
 
-A page's sections as caps words on a hairline, the current one lumen. Props: `items: { to, params?, label,
+A page's sections as a segmented strip: caps words on plates in a recessed well, the current one lit lumen with a
+lumen line under it; at phone width the strip wraps rather than scrolling. Props: `items: { to, params?, label,
 current? }[]`, `label?`.
 
 ```tsx

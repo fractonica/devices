@@ -5,8 +5,8 @@
 .ui-chips {
   display: flex;
   flex-wrap: wrap;
-  column-gap: var(--sp-4);
-  row-gap: var(--sp-1);
+  column-gap: var(--sp-2);
+  row-gap: var(--sp-2);
 }
 
 .ui-chip {
@@ -14,11 +14,13 @@
   display: inline-flex;
   align-items: center;
   gap: 7px;
-  min-height: 28px;
+  min-height: 32px;
   max-width: 100%;
-  padding: 0;
-  border-bottom: var(--hair) solid transparent;
-  color: var(--c-etch3);
+  padding: 0 12px;
+  border: var(--hair) solid var(--c-etch2);
+  border-radius: var(--radius);
+  background: var(--row-plate);
+  color: var(--c-ash);
   font-family: var(--font-caps);
   font-weight: var(--w-caps);
   font-size: var(--fs-label);
@@ -57,18 +59,43 @@
   color: var(--c-ash);
 }
 
-/* an engraved word, as the sub-nav's (no box: a filter is not a button, ruling 4); pressed: bone over a lumen hairline */
+/* an engraved word on a faint plate; under the finger the full plate; pressed: lit, bone over a lumen bar */
 .ui-chip:hover {
-  color: var(--c-ash);
+  background: var(--plate);
+  border-color: var(--c-etch3);
+  color: var(--c-bone);
 }
 
-.ui-chip[aria-pressed='true'] {
-  border-bottom-color: var(--c-lumen);
+.ui-chip[aria-pressed='true'],
+.ui-chip[aria-checked='true'] {
+  background: var(--lit);
+  border-color: var(--lit-edge);
   color: var(--c-bone);
+  box-shadow: inset 0 -2px 0 var(--c-lumen);
 }
 
 .ui-chip[aria-pressed='true'] .ui-chip-count {
   color: var(--c-lumen-mid);
+}
+
+/* disabled: the plate taken away, a dashed hairline and dim words */
+.ui-chip:disabled {
+  background: transparent;
+  border-style: dashed;
+  border-color: var(--c-etch2);
+  color: var(--dim-word);
+}
+
+/* phone: a row of chips wraps (as at every width), so none is sliced at the screen's edge and no end fades */
+@media (max-width: 699.98px) {
+  .ui-chips[data-more] {
+    -webkit-mask-image: none;
+    mask-image: none;
+  }
+
+  .ui-chip {
+    padding: 0 10px;
+  }
 }
 
 .ui-code {
@@ -94,7 +121,7 @@
   padding: 10px 0 11px;
   border-bottom: var(--hair) solid var(--c-etch1);
   font-size: var(--fs-data);
-  line-height: 17px;
+  line-height: 21px;
 }
 
 .ui-line-head {
@@ -118,9 +145,10 @@
   display: flex;
 }
 
-.ui-line-label {
+/* through .ui-line, so its line height wins over the .caps it also carries (base.css, loaded after this file) */
+.ui-line .ui-line-label {
   color: var(--c-ash);
-  line-height: 10px;
+  line-height: 14px;
 }
 
 .ui-line-name {

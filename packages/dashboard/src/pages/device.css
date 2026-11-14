@@ -10,14 +10,26 @@
   gap: var(--sp-5);
 }
 
+/* the back link: a small plate */
 .dev-back {
   align-self: flex-start;
-  margin-top: calc(var(--sp-4) * -1);
-  color: var(--c-etch3);
-  transition: color 200ms linear;
+  display: inline-flex;
+  align-items: center;
+  min-height: 28px;
+  margin-top: calc(var(--sp-3) * -1.5);
+  padding: 0 12px;
+  border: var(--hair) solid var(--c-etch2);
+  border-radius: var(--radius);
+  background: var(--row-plate);
+  color: var(--c-bone);
+  transition:
+    background-color var(--fade),
+    color var(--fade);
 }
 
 .dev-back:hover {
+  background: var(--plate-hover);
+  border-color: var(--c-etch3);
   color: var(--c-lumen);
 }
 
@@ -56,15 +68,16 @@
   gap: var(--sp-3);
 }
 
+/* small words: ash leaning to etch-3, about 5:1 */
 .dev-inst-aside .mono {
   font-size: var(--fs-earth);
-  color: var(--c-etch3);
+  color: color-mix(in srgb, var(--c-ash) 75%, var(--c-etch3));
 }
 
 .dev-summary {
   padding: var(--sp-2) 0 var(--sp-1);
   font-size: var(--fs-earth);
-  line-height: 16px;
+  line-height: 19px;
   color: var(--c-ash);
   max-width: 62ch;
 }
@@ -128,7 +141,9 @@
 .dev-inline-select {
   width: auto;
   min-width: 120px;
-  min-height: 28px;
+  min-height: 34px;
+  padding-top: 5px;
+  padding-bottom: 5px;
 }
 
 .dev-onoff {
@@ -174,10 +189,25 @@
   color: var(--c-ash);
 }
 
+/* the colour well: a plate */
 .dev-colour-well {
   position: relative;
   cursor: pointer;
-  min-height: 32px;
+  min-height: 40px;
+  padding: 0 12px 0 8px;
+  border: var(--hair) solid var(--plate-edge);
+  border-radius: var(--radius);
+  background: var(--plate);
+}
+
+.dev-colour-well:hover {
+  background: var(--plate-hover);
+  border-color: var(--c-ash);
+}
+
+.dev-colour-well:has(input:focus-visible) {
+  outline: 2px solid var(--c-lumen);
+  outline-offset: 3px;
 }
 
 .dev-colour-well input {
@@ -244,7 +274,7 @@
 
 .dev-doc {
   font-size: var(--fs-earth);
-  line-height: 16px;
+  line-height: 19px;
   color: var(--c-ash);
   max-width: 62ch;
 }
@@ -272,7 +302,7 @@
 }
 
 .dev-optional {
-  color: var(--c-etch3);
+  color: color-mix(in srgb, var(--c-ash) 75%, var(--c-etch3));
 }
 
 .dev-json,
@@ -280,25 +310,33 @@
   width: 100%;
   margin: 0;
   padding: 10px 12px;
-  border: 0;
-  border-top: var(--hair) solid var(--c-etch2);
-  border-bottom: var(--hair) solid var(--c-etch2);
-  background: var(--c-plate);
   color: var(--c-bone);
   font-size: var(--fs-data);
   line-height: 1.45;
   resize: vertical;
 }
 
+/* the JSON a person types: a recessed well, as a field */
+.dev-json {
+  border: var(--hair) solid var(--well-edge);
+  border-bottom-color: var(--c-etch3);
+  border-radius: var(--radius);
+  background: var(--well);
+}
+
 .dev-raw {
   max-height: 360px;
   overflow: auto;
+  border: 0;
+  border-top: var(--hair) solid var(--c-etch2);
+  border-bottom: var(--hair) solid var(--c-etch2);
+  background: var(--c-plate);
   white-space: pre;
 }
 
 .dev-json:focus-visible {
-  outline: none;
-  border-bottom-color: var(--c-lumen);
+  outline: 2px solid var(--c-lumen);
+  outline-offset: 2px;
 }
 
 .dev-outcome {
@@ -393,35 +431,75 @@
   text-align: right;
 }
 
-/* the raw type and fields, folded under the words */
+/* the raw type and fields, folded under the words: a row-tone plate with a + at its end, a − while open */
 .dev-event-raw {
   min-width: 0;
 }
 
 .dev-event-raw summary {
+  display: inline-flex;
+  align-items: baseline;
+  gap: var(--sp-2);
+  max-width: 100%;
+  padding: 6px 10px;
+  border-radius: var(--radius);
+  background: var(--row-plate);
   list-style: none;
   cursor: pointer;
+  transition: background-color var(--fade);
 }
 
 .dev-event-raw summary::-webkit-details-marker {
   display: none;
 }
 
+.dev-event-raw summary:hover,
+.dev-event-raw[open] summary {
+  background: var(--row-plate-hover);
+}
+
 .dev-event-raw summary:hover {
   color: var(--c-lumen);
+}
+
+.dev-event-raw summary::after {
+  content: '+';
+  color: var(--c-lumen-mid);
+}
+
+.dev-event-raw[open] summary::after {
+  content: '−';
 }
 
 .dev-event-raw[open] .dev-event-fields {
   margin-top: 2px;
 }
 
+/* a way on (ALL FACTS, ALL ACTIVITY): a small plate */
 .dev-more {
-  color: var(--c-ash);
-  transition: color 200ms linear;
+  display: inline-flex;
+  align-items: center;
+  min-height: 26px;
+  padding: 0 10px;
+  border: var(--hair) solid var(--c-etch2);
+  border-radius: var(--radius);
+  background: var(--row-plate);
+  color: var(--c-bone);
+  transition:
+    background-color var(--fade),
+    color var(--fade);
 }
 
 .dev-more:hover {
+  background: var(--plate-hover);
+  border-color: var(--c-etch3);
   color: var(--c-lumen);
+}
+
+/* a section head holding one sits its title level with the plate */
+.ui-section-head:has(.dev-more) {
+  align-items: center;
+  padding-bottom: 6px;
 }
 
 .dev-quiet {
@@ -563,8 +641,9 @@
 
 /* ------------------------------------------------------- the sub-pages */
 
+/* the page tabs sit close under the back link */
 .dev-page > .ui-subnav {
-  margin-top: calc(var(--sp-2) * -1);
+  margin-top: calc(var(--sp-3) * -1.5);
 }
 
 /* the Overview: the rows on the left, the glance and Lately on the right; glance, rows, Lately at phone width */
@@ -608,22 +687,31 @@
   }
 }
 
-/* an instrument's row: port, name over its word, headline, quick control, the way in; the link covers the row */
+/* an instrument's row: port, name over its word, headline, quick control, the way in; the link covers the row.
+   A row-tone plate, lit under the hand. */
 .dev-rung {
   position: relative;
   display: flex;
   align-items: center;
   gap: var(--sp-4);
   min-height: 56px;
-  padding: 8px 0;
-  border-bottom: var(--hair) solid var(--c-etch1);
+  margin-bottom: 3px;
+  padding: 8px 14px 8px 8px;
+  border-bottom: var(--hair) solid transparent;
+  border-radius: var(--radius);
+  background: var(--row-plate);
   font-size: var(--fs-data);
-  transition: border-color 600ms linear;
+  transition:
+    background-color var(--fade),
+    border-color 600ms linear;
+}
+
+.dev-rung:hover {
+  background: var(--row-plate-hover);
 }
 
 .dev-rung[data-flash] {
   border-bottom-color: var(--c-lumen);
-  transition: none;
 }
 
 .dev-rung-link {
@@ -645,7 +733,7 @@
   flex: none;
   width: 2.5ch;
   text-align: right;
-  color: var(--c-etch3);
+  color: var(--c-ash);
   font-variant-numeric: tabular-nums;
 }
 
@@ -681,9 +769,13 @@
   flex: none;
 }
 
+/* the way in: a › in the reading face */
 .dev-rung-go {
   flex: none;
-  color: var(--c-etch3);
+  font-family: var(--font-reading);
+  font-size: 18px;
+  letter-spacing: 0;
+  color: var(--c-ash);
   transition: color 200ms linear;
 }
 
@@ -692,11 +784,14 @@
   color: var(--c-lumen);
 }
 
+/* the row draws the link's ring */
 .dev-rung-link:focus-visible {
   outline: none;
 }
 
 .dev-rung:has(.dev-rung-link:focus-visible) {
+  outline: 2px solid var(--c-lumen);
+  outline-offset: -2px;
   border-bottom-color: var(--c-lumen);
 }
 
@@ -740,9 +835,30 @@ button.dev-group-head {
   font-size: var(--fs-data);
 }
 
-/* an instrument's page: its strip, its caption, the panel */
+/* an instrument's page: its strip, its caption, the panel. The strip is the second level of tabs: no box, shorter
+   row-tone plates, the current one lit. */
 .dev-strip .ui-subnav {
-  gap: var(--sp-4);
+  gap: 4px;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: none;
+}
+
+.dev-strip .ui-subnav-item {
+  min-height: 30px;
+  padding: 0 12px;
+  background: var(--row-plate);
+}
+
+.dev-strip .ui-subnav-item:hover {
+  background: var(--plate);
+}
+
+.dev-strip .ui-subnav-item[aria-current='page'] {
+  background: var(--lit);
+  color: var(--c-lumen);
+  box-shadow: inset 0 -2px 0 var(--c-lumen);
 }
 
 .dev-strip {
@@ -810,7 +926,7 @@ button.dev-group-head {
 .dev-does {
   flex: 1 1 24ch;
   font-size: var(--fs-earth);
-  line-height: 16px;
+  line-height: 19px;
   color: var(--c-ash);
 }
 
@@ -830,12 +946,14 @@ button.dev-group-head {
 .dev-inline-link {
   color: var(--c-bone);
   text-decoration: underline;
-  text-decoration-color: var(--c-etch3);
-  text-underline-offset: 3px;
+  text-decoration-color: var(--c-lumen-mid);
+  text-decoration-thickness: 1px;
+  text-underline-offset: 4px;
 }
 
 .dev-inline-link:hover {
   color: var(--c-lumen);
+  text-decoration-color: var(--c-lumen);
 }
 
 /* Activity */

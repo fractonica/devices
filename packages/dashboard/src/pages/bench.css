@@ -25,42 +25,93 @@
   font-size: var(--fs-data);
 }
 
+/* the way back: a small plate */
 .bench-back {
   align-self: flex-start;
-  color: var(--c-ash);
-  padding: 6px 0;
+  display: inline-flex;
+  align-items: center;
+  min-height: 32px;
+  padding: 0 12px;
+  border: var(--hair) solid var(--c-etch2);
+  border-radius: var(--radius);
+  background: var(--row-plate);
+  color: var(--c-bone);
+  transition:
+    background-color var(--fade),
+    color var(--fade);
 }
 
 .bench-back:hover {
+  background: var(--plate-hover);
+  border-color: var(--c-etch3);
   color: var(--c-lumen);
 }
 
 .bench-ext {
   font-size: var(--fs-data);
   color: var(--c-bone);
-  border-bottom: var(--hair) solid var(--c-etch2);
+  text-decoration: underline;
+  text-decoration-color: var(--c-lumen-mid);
+  text-decoration-thickness: 1px;
+  text-underline-offset: 4px;
   overflow-wrap: anywhere;
 }
 
 .bench-ext:hover {
-  border-bottom-color: var(--c-lumen);
+  color: var(--c-lumen);
+  text-decoration-color: var(--c-lumen);
 }
 
 .bench-buy {
   color: var(--c-bone);
 }
 
-/* a row that is a link: the Line inside it lights its name on hover */
+/* the rows that open a guide or a part: row-tone plates with a › at their end */
+.bench-guide-row,
+.bench-rowlink {
+  position: relative;
+  margin-bottom: 3px;
+  border-radius: var(--radius);
+  background: var(--row-plate);
+  transition: background-color var(--fade);
+}
+
+.bench-guide-row::before,
+.bench-rowlink::before {
+  content: '›';
+  position: absolute;
+  right: 14px;
+  top: 50%;
+  margin-top: -11px;
+  font-size: 18px;
+  line-height: 20px;
+  color: var(--c-ash);
+  pointer-events: none;
+  transition: color var(--fade);
+}
+
+.bench-guide-row:hover,
+.bench-rowlink:hover {
+  background: var(--row-plate-hover);
+}
+
+.bench-guide-row:hover::before,
+.bench-rowlink:hover::before {
+  color: var(--c-lumen);
+}
+
+/* a row that is a link: the Line inside it (its hairline put away by the plate) lights its name on hover */
 .bench-rowlink {
   display: block;
+  padding: 0 40px 0 12px;
+}
+
+.bench-rowlink .ui-line {
+  border-bottom-color: transparent;
 }
 
 .bench-rowlink:hover .ui-line-name {
   color: var(--c-lumen);
-}
-
-.bench-rowlink:hover .ui-line {
-  border-bottom-color: var(--c-etch3);
 }
 
 /* ------------------------------------------------------------- step ring */
@@ -72,13 +123,8 @@
   grid-template-columns: 30px minmax(0, 1fr) auto;
   align-items: center;
   column-gap: var(--sp-4);
-  padding: 14px 0;
-  border-bottom: var(--hair) solid var(--c-etch1);
-  transition: border-color 200ms linear;
-}
-
-.bench-guide-row:hover {
-  border-bottom-color: var(--c-etch3);
+  padding: 14px 40px 14px 12px;
+  border-bottom: var(--hair) solid transparent;
 }
 
 .bench-guide-row:hover .bench-guide-title {
@@ -484,7 +530,6 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .bench-guide-row,
   .bench-guide-title,
   .bench-tick .ring,
   .bench-tick .dot {
@@ -496,13 +541,13 @@
 .bench-earth-hint {
   margin-left: var(--sp-2);
   font-size: var(--fs-micro);
-  color: var(--c-etch3);
+  color: color-mix(in srgb, var(--c-ash) 75%, var(--c-etch3));
   white-space: nowrap;
 }
 
 /* pure mode: the ⊕ an Earth value leaves in a sentence someone wires from (pages/bench/said.tsx HeldMarks) */
 .bench-held {
-  color: var(--c-etch3);
+  color: color-mix(in srgb, var(--c-ash) 75%, var(--c-etch3));
   font-size: var(--fs-earth);
   cursor: help;
 }
@@ -516,5 +561,5 @@
 
 .bench-pure-note .caps {
   font-size: var(--fs-label);
-  color: var(--c-etch3);
+  color: color-mix(in srgb, var(--c-ash) 75%, var(--c-etch3));
 }

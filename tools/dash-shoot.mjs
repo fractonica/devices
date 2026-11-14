@@ -3,12 +3,12 @@
 // driven over the DevTools protocol (tools/chrome.mjs: exact viewports, the page's console collected).
 //
 //   node tools/dash-shoot.mjs --url http://127.0.0.1:<port> --out <dir> [--label hub] [--route /] [--widths 1440,390]
-//                              [--mode pure|earth] [--look now|a|b|c] [--css <file>] [--wait 1500] [--full] [--motion reduce] [route=label ...]
+//                              [--mode pure|earth] [--css <file>] [--wait 1500] [--full] [--motion reduce] [route=label ...]
 //
 // Each route is shot at every width: 1440 x 900 (scale 1) and 390 x 844 (scale 2), as <label>-<width>.png in --out
 // (`route=label` pairs shoot several pages in one run: `/=hub /devices=devices`). --mode sets the PURE / EARTH
-// switch first (the dashboard remembers it in localStorage, as the site does); --look picks a design proposal the same
-// way, and --css injects a stylesheet after the built ones (a proposal's file under work, with no rebuild). --full photographs the whole
+// switch first (the dashboard remembers it in localStorage, as the site does). --css injects a stylesheet after the built ones (a
+// style change under work, seen with no rebuild). --full photographs the whole
 // scrolling content instead of the viewport. It waits for the page's data-ready="1" and then --wait ms (live data,
 // the core), prints every console error, warning and failed request, and exits 1 when there was any.
 
@@ -18,7 +18,7 @@ import { join, resolve } from 'node:path';
 import { launchChrome } from './chrome.mjs';
 
 const argv = process.argv.slice(2);
-const opts = { url: process.env.FR_DASH_URL ?? '', out: '', label: 'hub', route: '/', widths: '1440,390', mode: '', look: '', css: '', wait: '1500', full: false, motion: '' };
+const opts = { url: process.env.FR_DASH_URL ?? '', out: '', label: 'hub', route: '/', widths: '1440,390', mode: '', css: '', wait: '1500', full: false, motion: '' };
 const pairs = [];
 for (let i = 0; i < argv.length; i++) {
   const a = argv[i];
@@ -54,9 +54,6 @@ try {
       if (opts.mode) {
         await page.evaluate(`localStorage.setItem('fractonica.mode', ${JSON.stringify(opts.mode)})`);
       }
-      if (opts.look) {
-        await page.evaluate(`localStorage.setItem('fractonica.hub.look', ${JSON.stringify(opts.look)})`);
-      }
       await page.evaluate(`location.replace(${JSON.stringify(target)}); location.reload(); true`).catch(() => {});
       await new Promise((r) => setTimeout(r, 300));
       const deadline = Date.now() + 8000;
@@ -64,7 +61,7 @@ try {
         await new Promise((r) => setTimeout(r, 50));
       }
       if (opts.css) {
-        // a stylesheet under work, injected after the built ones (design proposals: styles/looks/<x>.css, no rebuild)
+        // a stylesheet under work, injected after the built ones (seen with no rebuild)
         const text = readFileSync(resolve(opts.css), 'utf8');
         await page.evaluate(`(() => { const s = document.createElement('style'); s.id = 'dash-shoot-css'; s.textContent = ${JSON.stringify(text)}; document.head.append(s); return true; })()`);
       }

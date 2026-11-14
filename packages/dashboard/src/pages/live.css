@@ -1,6 +1,6 @@
 /*
- * live.css - the Live page (pages/live.tsx): filters as chips, the event rows on etch1 hairlines, thresholds as quiet
- * engraved lines. Tokens only (styles/base.css header). Desktop: one line per event in four columns; phone: the time
+ * live.css - the Live page (pages/live.tsx): filters as chips, the event rows as row-tone plates that open, thresholds
+ * as quiet engraved lines. Tokens only (styles/base.css header). Desktop: one line per event in four columns; phone: the time
  * and the device over the type and fields.
  */
 
@@ -39,22 +39,56 @@
 
 /* ------------------------------------------------------------------ a row */
 
+/* an event's line opens its fields; a row-tone plate with a + at its end, lit under the hand and while open. The gap
+   between plates is the event's own padding (not a margin), so the virtual list's measure includes it. */
 .live-event {
-  border-bottom: var(--hair) solid var(--c-etch1);
+  padding-bottom: 3px;
 }
 
 .live-line {
+  position: relative;
   display: grid;
   grid-template-columns: 9.6em minmax(7rem, 10rem) minmax(8rem, 12rem) minmax(0, 1fr);
   align-items: baseline;
   column-gap: var(--sp-4);
   width: 100%;
   min-height: 37px;
-  padding: 10px 0 9px;
+  padding: 10px 34px 9px 10px;
+  border-radius: var(--radius);
+  background: var(--row-plate);
   text-align: left;
   font-size: var(--fs-data);
   line-height: 16px;
-  transition: color 200ms linear;
+  transition:
+    background-color var(--fade),
+    color var(--fade);
+}
+
+.live-line::after {
+  content: '+';
+  position: absolute;
+  right: 13px;
+  top: 50%;
+  transform: translateY(-50%);
+  font-family: var(--font-reading);
+  font-size: 16px;
+  line-height: 1;
+  color: var(--c-lumen-mid);
+  transition: color var(--fade);
+}
+
+.live-line:hover,
+.live-event[data-open] .live-line {
+  background: var(--row-plate-hover);
+}
+
+.live-line:hover::after {
+  color: var(--c-lumen);
+}
+
+.live-event[data-open] .live-line::after {
+  content: '−';
+  color: var(--c-lumen);
 }
 
 html[data-mode='earth'] .live-line {
@@ -64,10 +98,6 @@ html[data-mode='earth'] .live-line {
 .live-line:hover .live-type,
 .live-event[data-open] .live-type {
   color: var(--c-lumen);
-}
-
-.live-event[data-open] {
-  border-bottom-color: var(--c-etch2);
 }
 
 .live-time {
@@ -165,8 +195,8 @@ html[data-mode='earth'] .live-open {
   align-items: center;
   column-gap: var(--sp-4);
   min-height: 37px;
+  margin-bottom: 3px;
   padding: 9px 0 8px;
-  border-bottom: var(--hair) solid var(--c-etch1);
   font-size: var(--fs-data);
 }
 
@@ -206,15 +236,6 @@ html[data-mode='earth'] .live-threshold {
 
   .live-filter-clear {
     padding-left: 0;
-  }
-
-  /* one line of chips that scrolls sideways, so many devices do not push the events off the screen */
-  .live-filters .ui-chips {
-    flex-wrap: nowrap;
-    overflow-x: auto;
-    scrollbar-width: none;
-    margin-right: calc(var(--gutter) * -1);
-    padding-right: var(--gutter);
   }
 
   .live-filters .ui-chip {
@@ -267,7 +288,6 @@ html[data-mode='earth'] .live-threshold {
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .live-line,
   .live-type {
     transition: none;
   }

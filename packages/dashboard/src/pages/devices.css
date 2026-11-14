@@ -1,20 +1,21 @@
 /*
  * devices.css - the Devices page (pages/devices.tsx). Tokens only. Classes `devs-`.
- * Desktop: one row per device on an etch-1 hairline, in columns (bead, name and hardware, signal, firmware, last
- * event, identify) under a caps header. Phone: the row stacks: bead and name, then the signal and the last event.
+ * Desktop: one plate per device (the row tone, a › at its end), in columns (bead, name and hardware, signal, firmware,
+ * last event, identify) under a caps header. Phone: the row stacks: bead and name, then the signal and the last event.
  */
 
+/* the header and the rows share one fixed actions column, so the fr columns divide the same width and the header
+   words stand over their values (the head's sixth cell is empty; a row's is the Identify plate) */
 .devs-head,
 .devs-row {
   display: grid;
-  grid-template-columns: 14px minmax(0, 2.4fr) minmax(0, 1.3fr) minmax(0, 0.9fr) minmax(0, 1.6fr) auto;
+  grid-template-columns: 14px minmax(0, 2.4fr) minmax(0, 1.3fr) minmax(0, 0.9fr) minmax(0, 1.6fr) 96px;
   column-gap: var(--sp-4);
   align-items: baseline;
 }
 
 .devs-head {
-  padding: var(--sp-3) 0 var(--sp-2);
-  border-bottom: var(--hair) solid var(--c-etch1);
+  padding: var(--sp-3) 40px var(--sp-2) 12px;
   color: var(--c-ash);
 }
 
@@ -24,27 +25,48 @@
 
 .devs-list {
   margin: 0;
-  padding: 0;
+  padding: 3px 0 0;
   list-style: none;
 }
 
 .devs-row {
   position: relative;
   min-height: 52px;
-  padding: 12px 0 11px;
-  border-bottom: var(--hair) solid var(--c-etch1);
+  margin-bottom: 3px;
+  padding: 12px 40px 11px 12px;
+  border-bottom: var(--hair) solid transparent;
+  border-radius: var(--radius);
+  background: var(--row-plate);
   font-size: var(--fs-data);
-  line-height: 16px;
-  transition: border-color 600ms linear;
+  line-height: 20px;
+  transition:
+    background-color var(--fade),
+    border-color 600ms linear;
+}
+
+.devs-row::before {
+  content: '›';
+  position: absolute;
+  right: 14px;
+  top: 50%;
+  margin-top: -11px;
+  font-size: 18px;
+  line-height: 20px;
+  color: var(--c-ash);
+  pointer-events: none;
+  transition: color var(--fade);
 }
 
 .devs-row:hover {
-  border-bottom-color: var(--c-etch3);
+  background: var(--row-plate-hover);
+}
+
+.devs-row:hover::before {
+  color: var(--c-lumen);
 }
 
 .devs-row[data-flash] {
   border-bottom-color: var(--c-lumen);
-  transition: none;
 }
 
 .devs-bead {
@@ -59,7 +81,7 @@
   min-width: 0;
 }
 
-/* the alias is the row's link; its ::after covers the row, so the whole row opens the device */
+/* the alias is the row's link; its ::after covers the row, so the whole row opens the device (and draws its ring) */
 .devs-link {
   font-size: var(--fs-value);
   color: var(--c-bone);
@@ -80,9 +102,9 @@
 }
 
 .devs-link:focus-visible::after {
-  outline: 1px solid var(--c-lumen);
-  outline-offset: 2px;
-  border-radius: 2px;
+  outline: 2px solid var(--c-lumen);
+  outline-offset: -2px;
+  border-radius: var(--radius);
 }
 
 .devs-row:hover .devs-link {
@@ -179,7 +201,7 @@
 @media (max-width: 999.98px) {
   .devs-head,
   .devs-row {
-    grid-template-columns: 14px minmax(0, 2fr) minmax(0, 1.2fr) minmax(0, 1.5fr) auto;
+    grid-template-columns: 14px minmax(0, 2fr) minmax(0, 1.2fr) minmax(0, 1.5fr) 96px;
   }
 
   .devs-head > :nth-child(4),
@@ -201,6 +223,11 @@
     row-gap: 6px;
     column-gap: var(--sp-3);
     min-height: 64px;
+    padding-right: 36px;
+  }
+
+  .devs-row::before {
+    right: 12px;
   }
 
   .devs-bead {

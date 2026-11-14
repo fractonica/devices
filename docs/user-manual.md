@@ -893,7 +893,8 @@ thresholds of the last minute are announced in time order; older ones are skippe
 
 The hub serves the dashboard at <http://127.0.0.1:7420/>. It is drawn in the same instrument language as
 [fractonica.com](https://fractonica.com): dark, hairline rows, engraved capitals, light for progress (never a bar or a
-percentage), and nothing that blinks. The rail (left on a computer, along the bottom on a phone) has six pages; the
+percentage), and nothing that blinks. Whatever you can press sits on a plate (a button, a tab, a fold, a row that
+opens a page); what is only to be read has none. The rail (left on a computer, along the bottom on a phone) has six pages; the
 switch at its top (on a phone, in the page's top right corner) is **PURE / EARTH**, as on the site: pure mode shows
 only Fractonica units, Earth mode keeps them and adds the clock time, dates and physical units after a ⊕. On the
 Bench, pure mode puts a small ⊕ where a guide, a part or a drawing states a rating or a size (“below ⊕ it is damaged”),
