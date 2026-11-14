@@ -91,6 +91,9 @@ export const CameraStreamSchema = z.looseObject({
   device_frames: z.number().int().optional(),
   device_dropped: z.number().int().optional(),
   device_bytes: z.number().int().optional(),
+  /** The first and last frames' indexes in `path` (`<index 6 digits>.jpg`), when frames were written to a directory. */
+  first_index: z.number().int().optional(),
+  last_index: z.number().int().optional(),
   /** The first frame that reached the hub: its pixels (from the JPEG's SOF0), frame size, quality and the wall time from the command to it; absent when none came. */
   first_frame: z
     .looseObject({
@@ -135,6 +138,12 @@ export const CameraStatusSchema = z.looseObject({
       /** /app/stream sockets subscribed to it, and blocks they were not sent (backpressure). */
       subscribers: z.number().int(),
       gaps: z.number().int(),
+      /** Published on /app/stream (a client can join it). */
+      live: z.boolean().optional(),
+      /** What it is for: an app's live view (/app/stream `start`), a photo (camera_snap), a recording (camera_stream), or a card recording fetched (camera_sd_fetch). */
+      use: z.enum(['view', 'photo', 'record', 'play']).optional(),
+      /** `use` play: the card's recording being fetched. */
+      recording: z.number().int().optional(),
       path: z.string().optional(),
       job_id: z.string().optional(),
     })

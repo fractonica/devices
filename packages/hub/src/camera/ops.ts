@@ -256,6 +256,8 @@ export function beginCameraStream(hub: HubContext, req: CameraStreamRequest): Be
     counts: sink.counts,
     ...(path ? { path } : {}),
     appOwned: req.appOwned === true,
+    use: req.appOwned ? 'view' : req.fetch ? 'play' : out && 'file' in out ? 'photo' : 'record',
+    ...(req.fetch ? { recording: req.fetch.recording } : {}),
     live: req.live,
     stop: () => stopper.abort(),
     pastGaps: 0,
@@ -475,6 +477,8 @@ async function streamJob(hub: HubContext, ctx: JobCtx, req: CameraStreamRequest,
       ...(event ? { device_frames: f.frames, device_dropped: f.dropped, device_bytes: f.bytes } : {}),
       ...(expectPost && end.reason !== 'done' ? { http_end: end.reason, ...(end.error ? { http_error: end.error } : {}) } : {}),
       ...(firstFrame ? { first_frame: firstFrame } : {}),
+      // The first and last frame files in `path` (`<index 6 digits>.jpg`), when frames were written there.
+      ...(sink.path && sink.first && sink.lastIndex !== null && req.out && 'dir' in req.out ? { first_index: sink.first.index, last_index: sink.lastIndex } : {}),
       ...(req.flash ? { flash: lit } : {}),
     };
   } catch (e) {
@@ -678,6 +682,9 @@ export const CAMERA_HANDLERS: Record<CameraOpName, Handler> = {
             bytes: s.counts.bytes,
             subscribers: s.live ? live.subscribers(dev.device_id, inst.name) : 0,
             gaps: live.gaps(dev.device_id, inst.name),
+            live: s.live,
+            ...(s.use ? { use: s.use } : {}),
+            ...(s.recording !== undefined ? { recording: s.recording } : {}),
             ...(s.path ? { path: s.path } : {}),
             ...(s.jobId ? { job_id: s.jobId } : {}),
           }

@@ -113,6 +113,11 @@ export class JpegSink implements StreamSink {
   first: JpegBlock | null = null;
   /** The last frame's index, null before the first. */
   #last: number | null = null;
+
+  /** The highest frame index received (its file is `<dir>/<index 6 digits>.jpg`), null before the first. */
+  get lastIndex(): number | null {
+    return this.#last;
+  }
   /** The frame files written, for a revoke. */
   readonly written: string[] = [];
   #o: JpegSinkOptions;

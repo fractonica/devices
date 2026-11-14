@@ -47,6 +47,10 @@ export interface LiveStream {
   path?: string;
   /** Began by an app (/app/stream `start`): stopped when its last starter leaves. */
   appOwned: boolean;
+  /** A camera stream's purpose (camera_status `use`): an app's live view, a photo, a recording, or a recording fetched from the card. */
+  use?: 'view' | 'photo' | 'record' | 'play';
+  /** `use` play: the card's recording being fetched. */
+  recording?: number;
   /** Published on /app/stream; a stream that is not is only counted (the status ops, BUSY). */
   live: boolean;
   /** Ends the stream (its job sends stream_stop): the last starter of an app's stream left. */

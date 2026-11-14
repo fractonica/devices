@@ -754,13 +754,13 @@ describe('camera ops against a fake board, with /app/stream (D11, D12)', { timeo
     const started = (await HANDLERS.camera_stream({ device: 'cam-esp32', seconds: 1, interval_ms: 40, max_frames: 0, to: 'hub', out, live: true, wait_s: 0 }, b.hub)) as Job;
     await until(() => (HANDLERS.camera_status({ device: 'cam-esp32' }, b.hub) as CameraStatus).stream?.frames, 5000, 'frames');
     const st = HANDLERS.camera_status({ device: 'cam-esp32' }, b.hub) as CameraStatus;
-    expect(st.stream).toMatchObject({ to: 'hub', seconds: 1, interval_ms: 40, subscribers: 1, gaps: 0, path: out, job_id: started.job_id, started_at: expect.any(String) });
+    expect(st.stream).toMatchObject({ to: 'hub', seconds: 1, interval_ms: 40, subscribers: 1, gaps: 0, path: out, job_id: started.job_id, started_at: expect.any(String), live: true, use: 'record' });
     await expect(Promise.resolve().then(() => HANDLERS.camera_stream({ device: 'cam-esp32', seconds: 1, interval_ms: 0, max_frames: 0, to: 'hub', live: true, wait_s: 0 }, b.hub))).rejects.toMatchObject({ code: 'DEVICE_BUSY' });
     const job = await jobDone(b.r, started);
     expect(job.error).toBeUndefined();
     const res = job.result as CameraStream & { device_frames?: number };
     expect(b.starts).toEqual([{ stream_id: res.stream_id, seconds: 1, interval_ms: 40, max_frames: 0, to: 'hub' }]);
-    expect(res).toMatchObject({ device: DEV, alias: 'cam-esp32', instance: 'cam', to: 'hub', path: out, live: true, interval_ms: 40, frames: 24, dropped: 1, reason: 'done' });
+    expect(res).toMatchObject({ device: DEV, alias: 'cam-esp32', instance: 'cam', to: 'hub', path: out, live: true, interval_ms: 40, frames: 24, dropped: 1, reason: 'done', first_index: 0, last_index: 24 });
     expect(res.device_frames).toBe(24);
     expect(res.fps).toBeGreaterThan(10);
     // The first frame's facts under first_frame (§11: not a `snap` object; a plain stream has no flash either).
