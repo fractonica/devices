@@ -159,11 +159,19 @@ Files the hub writes (photos, recordings, WAVs) always go under `~/.fractonica/`
    fr camera snap cam-esp32 --flash
    ```
 
-5. **Watch it live in the browser.** Open <http://127.0.0.1:7420/apps/cam/>, pick **cam-esp32**, press **Start**. You should see the picture at about 9 to 12 frames per second, with "board drops 0" and "hub gaps 0". From the same page:
-   - **Snapshot** saves one frame on the Mac; **Download frame** saves the frame shown.
-   - **Flash on** lights the white LED.
-   - **Settings** change frame size, quality, brightness, contrast, saturation, flip and mirror. A size or quality change restarts the live view on its own.
-   - Press **Start** again (now **Stop**) when done.
+5. **Watch it live in the browser.** Open the dashboard at <http://127.0.0.1:7420/>, **Devices** › **cam-esp32**,
+   and press **WATCH** on the `cam` row (or open the row and press **WATCH**). You should see the picture at about 9 to
+   12 frames per second. On the same page:
+   - **PHOTO** takes a photo on the Mac (with **with the flash** on, the white LED lights for it); **KEEP THIS FRAME**
+     saves the frame shown.
+   - **RECORD…** records to the Mac, the card or both, for a span you choose (steps 6 to 8 from the page).
+   - **SENSOR SETTINGS** change frame size, detail, brightness, contrast, saturation, flip and mirror. A size or detail
+     change restarts the live view on its own.
+   - **CARD RECORDINGS** lists, plays and deletes what is on the card.
+   - Press **STOP** when done; leaving the page stops it too.
+
+   The older standalone page, <http://127.0.0.1:7420/apps/cam/>, still works where it is installed. The whole page is
+   described in *The device page* (§21).
 
 6. **Stream a short clip to the Mac.** 15 s of frames, one JPEG each, into a new folder under `~/.fractonica/captures/cam-esp32/`:
 
@@ -251,7 +259,7 @@ Without `--via wifi` the hub picks the USB route for a board on a USB bridge, an
 | `sd none` in the status | The card is checked at boot only. Insert it, then `fr devices reset cam-esp32`. |
 | "Wrong boot mode detected (0xb)" when flashing over USB | The SD card holds a boot pin high once used. Unplug the board, take the card out, plug it back in, flash, then put the card back. Over Wi-Fi this never happens. |
 | Low frame rate | Use a smaller frame size or more light; check the board's Wi-Fi signal in `fr devices get cam-esp32` (`rssi_ap`). |
-| "BUSY" | One stream at a time: stop the live view in the app, or `fr jobs cancel <job id>`. |
+| "BUSY" | One stream at a time: stop the live view (**STOP** on the camera's page), **STOP THAT STREAM** or **STOP RECORDING** there, or `fr jobs cancel <job id>`. |
 | The free space looks too small | The figure is the card's own (FAT) count; check the card on the Mac. |
 
 ---
@@ -896,11 +904,55 @@ written.
 |---|---|
 | **Hub** | The present moment as a small instrument computed by the temporal core, the fleet as beads (one per device, lit when online) with each device's last word, one line of hub health (the hub's last checks at once, with when they ran, and **Run fixes** for what the hub can fix itself), a banner for what **needs you** (an agent's prompt, a port lent to a program) and, quietly, what is **running**. At most ten devices are listed, those that need a look first; all of them are on Devices. |
 | **Devices** | Every registered board on one line: presence, profile and chip, signal, firmware, its last event, Identify. **PROVISION A BOARD** starts a new one. |
-| **Device** (open one) | Its capabilities as controls generated from the catalog (switches, sliders, colour wells, command forms), a sparkline per number, its recent events, its log on demand, and on the right its link, clock sync, running state, build and registry facts. **Engineering** (folded) holds diagnostics, bindings, OTA history and the raw record. |
+| **Device** (open one) | One device in four sub-pages, **INSTRUMENTS · ACTIVITY · FACTS · ENGINEERING**, under its name, presence, Identify and Rename. **Instruments** has one row per instrument (a light, the camera, a button, …) with its reading and at most one quick control, beside a glance (link, last word, clock) and its last events; a row opens that instrument's own page. **Activity** holds its events (filter by instrument) and its log; **Facts** its link, clock sync, running state, build and registry; **Engineering** diagnostics, bindings, OTA history, every raw command and the raw record. See *The device page* below. |
 | **Provision** | **New board**: six steps (plug in · network · board · name · flash · done), with a ring of nine arcs that light as the hub's stages complete; the flash arc fills with the bytes written. **Firmware**: profiles with Build, the builds kept, recent jobs. **Over the air**: preview, then deploy. A job page, `#/provision/<job>`, survives a reload. |
 | **Live** | The event stream as rows, newest first, with Fractonica times (⊕ the clock time in Earth mode). Filter by device and by type; Pause holds the list while events keep coming. |
 | **Bench** | The wiring guides step by step (tick each step off; the hub remembers), the parts catalogue with what is on hand, and a shopping list. Old links to `/apps/bench/` land here. |
 | **Settings** | **Health** (`fr doctor`'s checks: **Run fix** on a check runs that check's fix only, and its row says what the fix changes; a fix that rewrites the `fr` command in `~/.local/bin` asks first, and a hub started with its own `FR_HOME` leaves that one to you as a command to copy; other fixes as a command to copy or steps), **Networks** (Wi-Fi for the nodes, add or change one; a password is never shown again), **Ports** (every USB port and who holds it), **Agents** (prompts, leases, agent jobs), **Storage** (`hub.db`), **About** (versions and what this build is pinned to). |
+
+**The device page.** Open a device from **Devices**. Each sub-page has its own address
+(`#/devices/<alias>`, `…/<instrument>`, `…/activity`, `…/facts`, `…/engineering`), so Back walks the tabs.
+
+- **Instruments** lists the device's instruments in port order: the port, the name, what it is (LIGHT, CAMERA,
+  BUTTON, ANALOG INPUT, …), its reading in words and, for a light, its on/off ring; a camera row has a quiet
+  **WATCH**. Four or more of one kind (an analog board's `ch0`–`ch13`) fold into one row that opens in place. A device
+  with one instrument shows that instrument's page right there.
+- **An instrument's page** (press its row) has a strip of its sibling instruments (←/→ move along it) and a caption
+  (`CAMERA · PORT 3 · OV2640 · UP TO UXGA`). A generic instrument shows its **readings** (a property a command sets is
+  its own switch or slider), its everyday **actions**, each with a line saying what it does and a button that names
+  it (`BLINK STATUS`; never "Send"), its events, and at the foot **EXPERT · ITS OWN COMMANDS ›**. A choice is a list
+  of words (*hub*, *card*, *hub and card*), a duration is a span with its rung (ν λ ι), optional fields sit under
+  **MORE SETTINGS**, and a required field stays empty until you fill it: an example is only a hint (`e.g. 3`). A
+  board built with test injection adds a **SIMULATE** fold (button gestures, an analog value).
+- **Engineering › Commands** has every command each instance takes (the node's own too), as the same forms, each with
+  **SEND AS JSON** for what a form cannot say. A command whose id only the hub can issue (a camera or CSI stream, an
+  audio play) is never a form: the row says how the hub runs it, with a link to the page that does it or the `fr`
+  command to copy.
+
+**The camera's page** (`#/devices/cam-esp32/cam`, or **WATCH** on its row, which starts the view at once):
+
+- **WATCH** (the page's one lit button) shows the camera live in the page, through the hub. **STOP** ends it; leaving
+  the page or hiding the tab stops it too (it comes back when the tab does, "Paused while this tab was hidden").
+  **KEEP THIS FRAME** saves the frame you see to this computer.
+- **PHOTO** takes one photo on the hub (with the flash LED when **with the flash** is on); while watching, the view
+  pauses around it. The photo shows under the view with **SAVE** and its path (in pure mode the date in the file name
+  is a ⊕; **COPY PATH** copies it whole).
+- **RECORD…** opens the recording settings in place: where (**HUB**, **CARD**, **HUB AND CARD**; the card choices
+  need a card mounted at boot), how long (until stopped, or a span), the pace (as fast as it can, or one frame every
+  span), whether to show it while it records, and under **MORE SETTINGS** a frame count, frame size and detail.
+  **START RECORDING** starts a hub job: a small ring shows how far it is, **STOP RECORDING** stops it and keeps what
+  came, and the end says how many frames, how it ended and where they are.
+- **Now** says its state in words (idle, watching, recording to the card, busy, offline, …), the frame size and
+  detail, the rate per Blink, the last frame's size, this stream's counts, how long it has run, where it is watched,
+  the card (and room for about how many frames) and the sensor; Earth mode adds frames a second and megabytes.
+- **SENSOR SETTINGS** (kept until the board restarts): frame size (sizes above what its buffers take are off),
+  detail from coarse to fine, flip, mirror, brightness, contrast and saturation. Each change is sent once your hand
+  rests; while watching, a size or detail change restarts the view. After a restart the fold offers **APPLY AGAIN**.
+- **CARD RECORDINGS** (when a card is in) lists them newest first: **PLAY** brings one to the hub and shows it,
+  **DELETE** asks in place and removes it from the card (copies on the hub stay). While a stream runs, both wait.
+- **One stream at a time.** When the camera is busy with a stream that is not shown (a card recording started from
+  the CLI, say), WATCH says so, starts by itself when it ends, and offers **STOP THAT STREAM**. Engineering ›
+  Commands offers **STOP STREAM <id>** for the running stream too.
 
 **Provisioning a board, step by step.**
 

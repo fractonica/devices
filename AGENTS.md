@@ -100,6 +100,15 @@ The dashboard (`packages/dashboard`, stage 4) is drawn in the site's Astrolabe l
   `src/state/*`: pure logic, tested in node (`words.ts` is the one vocabulary for states, `checks.ts` the doctor
   checks, `ports.ts` the ports). `src/api`, `runtime.ts`, `hooks.ts`: the tested plumbing (reconnect, resume, jobs).
   `src/app.tsx`: the routes (hash history; old paths redirect).
+- **The device page** is four sub-pages in one frame (`pages/device/frame.tsx`: INSTRUMENTS · ACTIVITY · FACTS ·
+  ENGINEERING) plus one page per instrument (`page-lens.tsx`, `/devices/$id/$instance`). An instrument is drawn by its
+  capability's panel from the registry `pages/device/panels.ts` (`Lens`, `Headline`, `Quick?`, `covers?`):
+  `panels/camera/*`, `panels/led.tsx`, `panels/display.tsx`, else `panels/generic.tsx`. A new purpose-built panel goes
+  there; `CapPanelProps` is built only by `usePanelProps`. Words and units of a capability's members live in
+  `state/cap-words.ts` (a test fails on a `_x10`/`_ms`/`_mb`/… member it does not cover); a command whose field only the
+  hub can issue (`state/hub-issued.ts`) is never a form, it renders `HubRuns`. No button under `pages/device` says
+  "Send". The camera panel reads the `/app` token the hub injects into the dashboard's index (`api/app-token.ts`) and
+  streams through `api/stream.ts` (only `@fractonica/sdk/wire` and `/camera` are bundled).
 
 To see it with simulated devices and never a board or the lab hub:
 
@@ -107,6 +116,7 @@ To see it with simulated devices and never a board or the lab hub:
 node tools/host-test.mjs --fleet                                    # once: build/host-fleet/fr_fleet
 pnpm -C packages/dashboard build                                    # after each change (or `watch`)
 node --conditions=@fractonica/source tools/dash-dev.ts --url-file /tmp/hub.url   # a scratch hub + fleet; Ctrl-C ends it
+#   add --camera for a fake ESP32-CAM (cam-esp32: live frames, a card; --no-card empties the slot; SIGUSR2 takes it offline and back)
 node tools/dash-shoot.mjs --url "$(cat /tmp/hub.url)" --out <dir> /=hub /devices=devices   # PNGs at 1440 and 390
 ```
 
