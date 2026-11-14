@@ -68,18 +68,27 @@ function site(src: string, token: string | null = TOKEN) {
 const sha256 = (s: string) => createHash('sha256').update(s).digest('base64');
 
 describe('the dashboard at /', () => {
-  it('serves index.html no-cache with the guard CSP, hashed assets immutable, root files, no dotfiles', async () => {
+  it('serves index.html no-store with the /app token script and its CSP hash, hashed assets immutable, root files, no dotfiles', async () => {
     const { app } = site(checkout());
     const index = await app.inject({ url: '/', headers: HOST });
     expect(index.statusCode).toBe(200);
     expect(index.headers['content-type']).toMatch(/^text\/html/);
-    expect(index.headers['cache-control']).toBe('no-cache');
-    // WebAssembly compiles (the temporal core); nothing else is evaluated: no 'unsafe-eval', no inline script
-    expect(index.headers['content-security-policy']).toMatch(/script-src 'self' 'wasm-unsafe-eval';/);
-    expect(index.headers['content-security-policy']).not.toMatch(/'unsafe-eval'|script-src[^;]*'unsafe-inline'/);
+    // The token (DEVICE-SPEC §3.1: the camera panel's /app/stream) is never cached.
+    expect(index.headers['cache-control']).toBe('no-store');
+    const script = `window.__FRACTONICA__={token:"${TOKEN}"}`;
+    expect(index.body).toContain(`<head><script>${script}</script><script type="module"`);
+    expect(index.body.indexOf(script)).toBeLessThan(index.body.indexOf('type="module"'));
+    // WebAssembly compiles (the temporal core); the one inline script runs by its hash; nothing else is evaluated
+    const csp = String(index.headers['content-security-policy']);
+    expect(csp).toContain(`script-src 'self' 'sha256-${sha256(script)}' 'wasm-unsafe-eval';`);
+    expect(csp).not.toMatch(/'unsafe-eval'|script-src[^;]*'unsafe-inline'/);
+    expect(csp).toContain("frame-ancestors 'none'");
     expect(index.headers['x-frame-options']).toBe('DENY');
     expect(index.body).toContain('/assets/index-a1.js');
-    expect((await app.inject({ url: '/index.html', headers: HOST })).statusCode).toBe(200);
+    const again = await app.inject({ url: '/index.html', headers: HOST });
+    expect(again.statusCode).toBe(200);
+    expect(again.headers['cache-control']).toBe('no-store');
+    expect(again.body).toContain(script);
 
     const js = await app.inject({ url: '/assets/index-a1.js', headers: HOST });
     expect(js.statusCode).toBe(200);

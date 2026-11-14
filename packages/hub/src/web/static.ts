@@ -11,13 +11,18 @@
 //   hub_status.dashboard and a warning. The source hash is recomputed every 30 s, off the request path.
 // - GET /api/v1/openapi.json, the op registry as OpenAPI 3.1 (web/openapi.ts).
 // - `/wiring/<guide>/<file>` and `/parts/<file>` (design wiring-w1 D3): a wiring guide's SVG diagrams and part images.
+// - The dashboard's index.html gets the same token script as an app's (DEVICE-SPEC §3.1: its camera panel opens
+//   `/app/stream`), with no-store and the CSP hash of that one script; its hashed assets stay immutable.
+// - `/captures/<path>.jpg` (DEVICE-SPEC §3.2): a photo or a recorded frame under FR_HOME/captures, read-only, so the
+//   dashboard can show what camera_snap and camera_stream wrote: only .jpg files whose real path is inside the
+//   captures root (no `..`, no symlink out, no directory, no listing).
 // The guard (web/guard.ts) has checked Host, Origin and the method before any of these routes runs, and
 // gives HTML its CSP and X-Frame-Options unless a route sets its own (the app index does).
 
 import { existsSync, readFileSync } from 'node:fs';
-import { readFile } from 'node:fs/promises';
+import { readFile, realpath, stat } from 'node:fs/promises';
 import type { AddressInfo } from 'node:net';
-import { basename, dirname, extname, join } from 'node:path';
+import { basename, dirname, extname, join, resolve, sep } from 'node:path';
 
 import fastifyStatic from '@fastify/static';
 import type { FastifyInstance, FastifyReply } from 'fastify';
@@ -25,6 +30,7 @@ import type { FastifyInstance, FastifyReply } from 'fastify';
 import { appDir, dashboardDir, distStatus, paths, SOURCE_HASH_FILE } from '@fractonica/host';
 import { errorResult, FrError } from '@fractonica/protocol';
 
+import { capturesRoot } from '../camera/ops.ts';
 import type { HubContext, HubRunOptions, StaticSite } from '../context.ts';
 import { mintCursor } from '../events/index.ts';
 import { htmlSecurityHeaders } from './guard.ts';
@@ -81,6 +87,26 @@ export function injectToken(html: string, script: string): string {
   const tag = `<script>${script}</script>`;
   const head = /<head(\s[^>]*)?>/i.exec(html);
   return head ? html.slice(0, head.index + head[0].length) + tag + html.slice(head.index + head[0].length) : tag + html;
+}
+
+/**
+ * The file `/captures/<rel>` names: a .jpg whose real path (symlinks resolved) is inside the real captures root, else
+ * null (a `..` segment, a symlink out, another type, a directory, a missing file).
+ */
+export async function captureFile(rel: string, root: string = capturesRoot()): Promise<string | null> {
+  if (!rel || extname(rel).toLowerCase() !== '.jpg' || rel.split(/[\\/]/).some((seg) => seg === '..' || seg === '.' || seg === '') || rel.includes('\0')) {
+    return null;
+  }
+  try {
+    const realRoot = await realpath(root);
+    const real = await realpath(resolve(realRoot, rel));
+    if (!real.startsWith(realRoot + sep) || extname(real).toLowerCase() !== '.jpg') {
+      return null;
+    }
+    return (await stat(real)).isFile() ? real : null;
+  } catch {
+    return null;
+  }
 }
 
 const escapeHtml = (s: string) => s.replace(/[&<>"']/g, (c) => `&#${c.charCodeAt(0)};`);
@@ -185,12 +211,23 @@ export function createStaticSite(hub: () => HubContext, run: HubRunOptions, opts
       });
 
       // ---- the dashboard ----
-      const index = (reply: FastifyReply) => {
+      const index = async (reply: FastifyReply) => {
         const dist = join(dashDir(), 'dist');
         if (!existsSync(join(dist, 'index.html'))) {
           return notBuilt(reply, 'The dashboard', dist, 'pnpm --filter @fractonica/dashboard build');
         }
-        return reply.header('cache-control', 'no-cache').sendFile('index.html', dist, { cacheControl: false });
+        let html: string;
+        try {
+          html = await readFile(join(dist, 'index.html'), 'utf8');
+        } catch {
+          return notBuilt(reply, 'The dashboard', dist, 'pnpm --filter @fractonica/dashboard build');
+        }
+        // The /app token, as an app page gets it (DEVICE-SPEC §3.1): the camera panel's /app/stream needs it.
+        const script = tokenScript(appToken());
+        return reply
+          .headers({ 'cache-control': 'no-store', ...htmlSecurityHeaders(boundPort(), { inlineScripts: [script] }) })
+          .type('text/html; charset=utf-8')
+          .send(injectToken(html, script));
       };
       app.get('/', (_req, reply) => index(reply));
       app.get('/index.html', (_req, reply) => index(reply));
@@ -254,6 +291,17 @@ export function createStaticSite(hub: () => HubContext, run: HubRunOptions, opts
           return notFound(reply, `no part image ${req.params.file}`);
         }
         return reply.headers(fileHeaders(path)).sendFile(basename(path), dirname(path), { cacheControl: false });
+      });
+
+      // ---- photos and recorded frames (DEVICE-SPEC §3.2): read-only, .jpg only, inside FR_HOME/captures ----
+      app.get<{ Params: { '*': string } }>('/captures/*', async (req, reply) => {
+        const file = await captureFile(req.params['*']);
+        if (!file) {
+          return notFound(reply, `no capture ${req.params['*']}`);
+        }
+        return reply
+          .headers({ ...fileHeaders(file), 'cross-origin-resource-policy': 'same-origin', 'content-type': 'image/jpeg' })
+          .sendFile(basename(file), dirname(file), { cacheControl: false });
       });
     },
   };
