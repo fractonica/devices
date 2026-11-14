@@ -82,6 +82,8 @@ describe('the Overview’s rows', () => {
   it('caption an instrument page in words', () => {
     expect(captionWords({ cap: 'fr.camera', port: 3, traits: { sensor: 1, max_frame_size: 5 } })).toBe('camera · port 3 · ov2640 · up to uxga');
     expect(captionWords({ cap: 'fr.led', port: 1, traits: null })).toBe('light · port 1');
+    expect(captionWords({ cap: 'fr.led', port: 1, traits: { color: 'mono', dimmable: false } })).toBe('light · port 1 · one colour');
+    expect(captionWords({ cap: 'fr.led', port: 2, traits: { color: 'rgb', dimmable: true } })).toBe('light · port 2 · full colour · dimmable');
   });
 });
 
@@ -99,5 +101,24 @@ describe('the Activity filter', () => {
     expect(deviceEvents(ring, 'd1', null, 2)).toHaveLength(2);
     expect(eventInstance('cam.stream_ended')).toBe('cam');
     expect(eventInstance('boot')).toBeNull();
+    // the hub's own words about an instance belong to it
+    expect(eventInstance('stream.ended', { instance: 'cam' })).toBe('cam');
+    expect(eventInstance('op.called', { command: 'status.set' })).toBe('status');
+    expect(eventInstance('op.called', { instance: 'flash', command: 'blink' })).toBe('flash');
+    expect(eventInstance('stream.ended')).toBeNull();
+  });
+
+  it('shows a stream’s end once: the camera’s own echo is left out when the hub’s stream.ended of that stream is there', () => {
+    const ring = [
+      { device: 'd1', type: 'stream.started', fields: { instance: 'cam', stream_id: 4 } },
+      { device: 'd1', type: 'stream.ended', fields: { instance: 'cam', stream_id: 4 } },
+      { device: 'd1', type: 'cam.stream_ended', fields: { stream_id: 4 } },
+      // a card recording: the hub saw no frame, so the camera's own word is the only end
+      { device: 'd1', type: 'cam.stream_ended', fields: { stream_id: 5 } },
+      { device: 'd1', type: 'op.called', fields: { instance: 'status', command: 'set' } },
+    ];
+    expect(deviceEvents(ring, 'd1', null).map((e) => `${e.type}:${e.fields.stream_id ?? ''}`)).toEqual(['op.called:', 'cam.stream_ended:5', 'stream.ended:4', 'stream.started:4']);
+    expect(deviceEvents(ring, 'd1', 'cam').map((e) => e.type)).toEqual(['cam.stream_ended', 'stream.ended', 'stream.started']);
+    expect(deviceEvents(ring, 'd1', 'status').map((e) => e.type)).toEqual(['op.called']);
   });
 });

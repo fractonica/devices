@@ -76,6 +76,12 @@ export function groupInstruments<T extends { inst: { name: string; cap: string }
   return out;
 }
 
+/** Traits whose value says it all ("one colour", not "colour mono"); an empty word says nothing (the usual case). */
+const TRAIT_WORDS: Readonly<Record<string, Readonly<Record<string, string>>>> = {
+  'fr.led.color': { mono: 'one colour', rgb: 'full colour', '0': 'one colour', '1': 'full colour' },
+  'fr.led.dimmable': { true: 'dimmable', false: '' },
+};
+
 /**
  * An instrument's traits in words for its caption ("ov2640 · up to uxga"): the camera's sensor and largest frame,
  * else each true flag's words and each other value after its words; at most three.
@@ -100,7 +106,12 @@ export function traitWords(cap: string, traits: Record<string, unknown> | null |
   }
   const out: string[] = [];
   for (const [k, v] of Object.entries(traits)) {
-    if (v === true) {
+    const said = TRAIT_WORDS[`${cap}.${k}`]?.[String(v)];
+    if (said !== undefined) {
+      if (said) {
+        out.push(said);
+      }
+    } else if (v === true) {
       out.push(fieldWords(k));
     } else if (typeof v === 'string' && v) {
       out.push(`${fieldWords(k)} ${enumWords(cap, '', v)}`);
@@ -116,23 +127,48 @@ export function captionWords(inst: { cap: string; port: number; traits: Record<s
   return [capWord(inst.cap), `port ${inst.port}`, ...traitWords(inst.cap, inst.traits)].join(' · ');
 }
 
-/** The instance an event belongs to: the part of its type before the first dot ("cam.stream_ended" → "cam"). */
-export function eventInstance(type: string): string | null {
+/**
+ * The instance an event belongs to: for the hub's own words about one (stream.started / stream.ended, op.called) its
+ * `instance` field (or the instance of an `<instance>.<command>`), else the part of its type before the first dot
+ * ("cam.stream_ended" → "cam").
+ */
+export function eventInstance(type: string, fields?: Readonly<Record<string, unknown>> | null): string | null {
+  if (type.startsWith('stream.') || type === 'op.called') {
+    if (typeof fields?.instance === 'string') {
+      return fields.instance;
+    }
+    const cmd = fields?.command;
+    return typeof cmd === 'string' && cmd.indexOf('.') > 0 ? cmd.slice(0, cmd.indexOf('.')) : null;
+  }
   const dot = type.indexOf('.');
   return dot > 0 ? type.slice(0, dot) : null;
 }
 
+type RingEvent = { device?: string; type: string; fields?: Readonly<Record<string, unknown>> | undefined };
+
 /**
  * A device's events in a ring (newest last), newest first, at most `max`, only those of `instrument` when one is
- * chosen (an event of the hub's own about the device, `device.online`, belongs to no instrument).
+ * chosen (an event of the hub's own about the device, `device.online`, belongs to no instrument). A camera's own word
+ * that a stream ended (`cam.stream_ended`) is left out when the hub's stream.ended of that stream is in the ring: that
+ * row says the same end, with what the stream was for and its frames.
  */
-export function deviceEvents<E extends { device?: string; type: string }>(ring: readonly E[], deviceId: string, instrument: string | null, max = 50): E[] {
+export function deviceEvents<E extends RingEvent>(ring: readonly E[], deviceId: string, instrument: string | null, max = 50): E[] {
+  const told = new Set<string>();
+  for (const e of ring) {
+    if (e.device === deviceId && e.type === 'stream.ended' && typeof e.fields?.stream_id === 'number') {
+      told.add(`${String(e.fields.instance)}:${e.fields.stream_id}`);
+    }
+  }
   const out: E[] = [];
   for (let i = ring.length - 1; i >= 0 && out.length < max; i--) {
     const e = ring[i]!;
-    if (e.device === deviceId && (instrument === null || eventInstance(e.type) === instrument)) {
-      out.push(e);
+    if (e.device !== deviceId || (instrument !== null && eventInstance(e.type, e.fields) !== instrument)) {
+      continue;
     }
+    if (e.type.endsWith('.stream_ended') && typeof e.fields?.stream_id === 'number' && told.has(`${e.type.slice(0, -'.stream_ended'.length)}:${e.fields.stream_id}`)) {
+      continue; // the device's echo of a stream.ended already shown
+    }
+    out.push(e);
   }
   return out;
 }

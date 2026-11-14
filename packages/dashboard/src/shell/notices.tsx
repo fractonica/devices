@@ -12,6 +12,7 @@ import { useLive, useOp } from '../hooks.ts';
 import { hubClock, store } from '../runtime.ts';
 import { useLinkDown } from './link.ts';
 import { pendingPrompts, type Tone } from '../state/live.ts';
+import { quietToast } from '../state/quiet-toasts.ts';
 import { Bead, type BeadState, Button, engrave, ErrorLine, FTime, Row, useHubText } from '../ui/index.ts';
 
 /** The dashboard's build-time op registry hash (vite.config.ts), to compare with the hub's hello. */
@@ -96,6 +97,7 @@ function useStackHeight(el: HTMLElement | null): void {
 export function Toasts({ hubDown = false }: { hubDown?: boolean }) {
   const prompts = useLive((s) => s.prompts);
   const toasts = useLive((s) => s.toasts);
+  const jobs = useLive((s) => s.jobs);
   const say = useHubText();
   const devices = useOp('device_list', {});
   const alias = (id: string) => devices.data?.devices.find((d) => d.device_id === id)?.alias ?? id;
@@ -112,7 +114,15 @@ export function Toasts({ hubDown = false }: { hubDown?: boolean }) {
   );
   const pending = hubDown ? [] : pendingPrompts({ prompts }, hubClock.now());
   useUntilFirst(pending.map((p) => p.expires_at));
-  const shown = toasts.slice(-5);
+  // the end of a live view this dashboard showed is the page's to say (state/quiet-toasts.ts)
+  // (decided once, when it comes: a quiet one is dropped from the store, so it does not show once the view is long closed)
+  const quiet = toasts.filter((t) => quietToast(t, t.job_id ? jobs[t.job_id] : undefined));
+  useEffect(() => {
+    for (const t of quiet) {
+      store.getState().dismiss(t.id);
+    }
+  }, [quiet]);
+  const shown = (quiet.length ? toasts.filter((t) => !quiet.includes(t)) : toasts).slice(-5);
   useStackHeight(pending.length || shown.length ? box : null);
   if (!pending.length && !shown.length) {
     return null;

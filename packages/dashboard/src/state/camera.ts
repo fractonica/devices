@@ -118,6 +118,10 @@ export type CameraStateName =
   | 'playing'
   | 'photo'
   | 'busy-hidden'
+  /** Another page's (or app's) live view runs: this page may join it (WATCH); nothing of it is kept, so nothing here stops it. */
+  | 'elsewhere'
+  /** The board refused a start as busy while the hub runs nothing on it: a stream goes on there from before. */
+  | 'board-busy'
   | 'paused'
   | 'not-provisioned'
   | 'no-key'
@@ -178,6 +182,8 @@ export interface CameraContext {
   photo: boolean;
   /** ms since the socket opened (for the hello's time). */
   sinceOpenMs: number;
+  /** The last start was refused DEVICE_BUSY while the hub ran no stream (the page's BoardBusy says it). */
+  boardBusy?: boolean;
 }
 
 /** How long a WATCH waits for its first frame before it says none came (the hub's hello time). */
@@ -241,7 +247,10 @@ export function cameraState(v: LiveView, c: CameraContext): CameraStateName {
     return ownWord;
   }
   if (c.running) {
-    return c.running.to === 'sd' ? 'recording' : 'busy';
+    return c.running.to === 'sd' ? 'recording' : c.running.use === 'view' ? 'elsewhere' : 'busy';
+  }
+  if (c.boardBusy) {
+    return 'board-busy';
   }
   return c.presence === 'suspect' ? 'suspect' : 'idle';
 }
@@ -272,7 +281,10 @@ export function stateWord(s: CameraStateName, running: RunningStream | null, pla
       return 'taking a photo';
     case 'busy':
     case 'busy-hidden':
+    case 'board-busy':
       return 'busy';
+    case 'elsewhere':
+      return 'watched in another place';
     case 'hub-down':
       return 'not known';
     default:
@@ -288,6 +300,7 @@ export function stateBead(s: CameraStateName): CameraBead {
     case 'joined':
     case 'recording':
     case 'playing':
+    case 'elsewhere':
       return 'online';
     case 'connecting':
     case 'starting':
@@ -295,6 +308,7 @@ export function stateBead(s: CameraStateName): CameraBead {
     case 'photo':
     case 'busy':
     case 'busy-hidden':
+    case 'board-busy':
     case 'suspect':
     case 'paused':
       return 'waiting';
@@ -336,6 +350,10 @@ export function stateLine(s: CameraStateName, c: StateLineContext): string | nul
       return 'Nothing shown yet. WATCH starts the camera.';
     case 'busy':
       return 'The camera runs a stream that is not shown here.';
+    case 'elsewhere':
+      return 'The camera is watched in another place. WATCH shows it here too.';
+    case 'board-busy':
+      return 'The camera is busy with a stream this hub does not know of.';
     case 'connecting':
       return 'Asking the hub for the view…';
     case 'starting':
@@ -382,7 +400,7 @@ export function gapLine(skipped: number): string | null {
 
 // ---- the transport ----
 
-export type TransportId = 'watch' | 'stop' | 'stop-watching' | 'stop-recording' | 'photo' | 'keep-frame' | 'record' | 'stop-other';
+export type TransportId = 'watch' | 'stop' | 'stop-watching' | 'stop-recording' | 'stop-play' | 'photo' | 'keep-frame' | 'record' | 'stop-other';
 
 export interface TransportAction {
   id: TransportId;
@@ -461,6 +479,7 @@ export function transport(t: TransportInput): { actions: TransportAction[]; line
       const why = run?.live === false ? 'This recording is not shown live.' : t.noWatch;
       a.push({ id: 'watch', label: 'Watch', variant: 'primary', disabled: down || why !== null, does: why ?? 'Shows the recording here as it comes to the hub.' });
     }
+    a.push({ id: 'stop-play', label: 'Stop playing', variant: 'default', disabled: t.hubDown, does: 'Stops bringing it; what came so far stays on the hub, and the card keeps the recording.' });
     keep();
   } else {
     if (t.active && t.viewOwn) {
@@ -487,12 +506,13 @@ export function transport(t: TransportInput): { actions: TransportAction[]; line
     // PHOTO and RECORD… need the camera free: this page's own view is closed for them, anything else must end first
     const mine = t.active && t.viewOwn;
     const others = run ? Math.max(0, (run.subscribers ?? 0) - (t.active ? 1 : 0)) : 0;
-    const stoppable = run?.job_id !== undefined && !mine;
-    let blocker: string | null = null;
     const view = run !== null && (run.use === 'view' || (run.use === undefined && mine));
+    // another place's live view keeps nothing and is someone's view: this page joins it, it does not stop it
+    const stoppable = run?.job_id !== undefined && !mine && run.use !== 'view';
+    let blocker: string | null = null;
     if (run && !(mine && view && others === 0)) {
       blocker = view
-        ? 'The camera is watched in another place too; they wait until that view closes.'
+        ? `The camera is watched in another place${t.active ? ' too' : ''}; they wait until that view closes.`
           : stoppable
             ? 'The camera runs another stream; stop it first, or wait for it to end.'
             : 'The camera runs another stream; they wait for it to end.';
@@ -612,6 +632,54 @@ export function cameraErrorLine(code: string, message: string, c: ErrorContext):
     default:
       return null;
   }
+}
+
+// ---- a stream the hub does not know of ----
+
+/**
+ * The line when the board refused a start as busy (DEVICE_BUSY) while the hub runs no stream on it: a stream goes on
+ * there from before (its link was lost mid-stream, or another hub started it). `canStop`: the stream's id is known, so
+ * STOP IT ON THE BOARD can end it.
+ */
+export function boardBusyLine(canStop: boolean): string {
+  return `The camera is busy with a stream this hub does not know of; it may have gone on after its link was lost. ${canStop ? 'STOP IT ON THE BOARD ends it.' : 'Restart the board to end it, then try again.'}`;
+}
+
+/** The id of the last stream the hub started on the instance (its newest stream.started event), or null. */
+export function lastIssuedStream(events: readonly { type: string; device?: string; fields?: Readonly<Record<string, unknown>> | undefined }[], deviceId: string, instance: string): number | null {
+  for (let i = events.length - 1; i >= 0; i--) {
+    const e = events[i]!;
+    if (e.type === 'stream.started' && e.device === deviceId && e.fields?.instance === instance && typeof e.fields.stream_id === 'number') {
+      return e.fields.stream_id;
+    }
+  }
+  return null;
+}
+
+/** A job as job_list answers it, as far as failedViewJob reads it. */
+export interface ListedJob {
+  kind: string;
+  status: string;
+  origin?: string;
+  targets: readonly string[];
+  created_at: string;
+  error?: unknown;
+}
+
+/**
+ * Why this page's live view did not start: the newest failed app job of the camera on the device (the hub starts a
+ * view as an `app` camera job) made after `since` (Date.now() of the open, with a minute's slack for the clocks), as
+ * its error's code and message; null when none is found. `jobs` newest first, as job_list answers.
+ */
+export function failedViewJob(jobs: readonly ListedJob[], deviceId: string, since: number): { code: string; message: string } | null {
+  for (const j of jobs) {
+    const made = Date.parse(j.created_at);
+    if (j.kind === 'camera' && j.origin === 'app' && j.status === 'failed' && j.targets.includes(deviceId) && Number.isFinite(made) && made >= since - 60_000) {
+      const e = (j.error ?? {}) as { code?: unknown; message?: unknown };
+      return { code: typeof e.code === 'string' ? e.code : 'INTERNAL', message: typeof e.message === 'string' ? e.message : '' };
+    }
+  }
+  return null;
 }
 
 // ---- the card ----

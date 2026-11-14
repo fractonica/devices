@@ -393,6 +393,12 @@ button.ui-row:hover .ui-row-name {
   color: var(--c-etch3);
 }
 
+/* a quiet word stays a word when it waits: dimmed, never boxed */
+.ui-button[data-variant='quiet']:disabled {
+  border-color: transparent;
+  border-bottom-color: var(--c-etch2);
+}
+
 .ui-button[data-busy] {
   cursor: progress;
 }

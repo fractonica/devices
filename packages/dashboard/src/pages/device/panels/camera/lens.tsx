@@ -6,6 +6,8 @@
 // What runs is read from the hub: a recording or PLAY that camera_status shows (started here, on another page, by the
 // CLI or an agent, or here before the page was left) is followed as this page's own, so it can be watched and stopped.
 // The transport (which actions, which one is lit, what each does or why it waits) is state/camera.ts `transport`.
+// A start the board refuses as busy while the hub runs nothing (a stream that went on after its link was lost) is said
+// as such, from the hub's job error (never as a failed sensor), with STOP IT ON THE BOARD (BoardBusy).
 
 import { useNavigate, useSearch } from '@tanstack/react-router';
 import { type ReactNode, type Ref, useEffect, useRef, useState } from 'react';
@@ -18,16 +20,21 @@ import { useAct, useLive, useOp } from '../../../../hooks.ts';
 import { useLinkDown, usePresence } from '../../../../shell/link.ts';
 import {
   adoptable,
+  boardBusyLine,
+  cameraErrorLine,
   cameraState,
   type CameraStateName,
   capturesUrl,
   detailWord,
   endLine,
+  failedViewJob,
   FRAME_SIZES,
   type FrameSize,
   frameUrl,
   gapLine,
   keptFrameName,
+  lastIssuedStream,
+  type ListedJob,
   playEndLine,
   type RecordChoice,
   recordInput,
@@ -42,6 +49,7 @@ import {
   viewEndLine,
 } from '../../../../state/camera.ts';
 import { countText, rateText, spanText } from '../../../../state/device-units.ts';
+import { viewClosed, viewOpened } from '../../../../state/quiet-toasts.ts';
 import type { CapPanelProps } from '../../panels.ts';
 import { CardRecordings } from './card.tsx';
 import { asOpError, CamError } from './errors.tsx';
@@ -49,7 +57,7 @@ import { HubCaptures } from './hub-captures.tsx';
 import { HeldPath } from './path.tsx';
 import { RecordForm } from './record.tsx';
 import { SensorSettingsFold } from './settings.tsx';
-import { Button, ButtonRow, engrave, instantOf, Row, Section, Span, StageRing, Toggle, useFractonica, useNowFor } from './ui.ts';
+import { Button, ButtonRow, engrave, ErrorLine, instantOf, Row, Section, Span, StageRing, Toggle, useFractonica, useNowFor } from './ui.ts';
 import { downloadFrame, LiveCanvas, useLiveView } from './view.tsx';
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
@@ -126,7 +134,22 @@ function SinceSpan({ iso }: { iso: string }) {
 }
 
 /** One transport button from its description. */
-function TransportButton({ a, onPress, busy, describedBy, primaryRef }: { a: TransportAction; onPress: () => void; busy?: boolean; describedBy?: string; primaryRef?: Ref<HTMLButtonElement> }) {
+function TransportButton({
+  a,
+  onPress,
+  busy,
+  describedBy,
+  primaryRef,
+  controls,
+}: {
+  a: TransportAction;
+  onPress: () => void;
+  busy?: boolean;
+  describedBy?: string;
+  primaryRef?: Ref<HTMLButtonElement>;
+  /** RECORD…: the form it opens in place, and whether it is open. */
+  controls?: { id: string; expanded: boolean };
+}) {
   return (
     <Button
       variant={a.variant}
@@ -138,6 +161,7 @@ function TransportButton({ a, onPress, busy, describedBy, primaryRef }: { a: Tra
       aria-describedby={describedBy}
       {...(a.confirm ? { confirm: a.confirm.question, confirmLabel: a.confirm.yes, cancelLabel: a.confirm.keep } : {})}
       {...(a.id === 'record' ? { 'data-opens': 'record' } : {})}
+      {...(controls ? { 'aria-expanded': controls.expanded, ...(controls.expanded ? { 'aria-controls': controls.id } : {}) } : {})}
       {...(a.variant === 'primary' && primaryRef ? { ref: primaryRef } : {})}
     >
       {a.label}
@@ -166,6 +190,10 @@ export function CameraLens({ detail, inst, cap, mirror, instances }: CapPanelPro
   const [busy, setBusy] = useState<null | 'photo' | 'record' | 'play'>(null);
   const [madeHere, setMadeHere] = useState<Record<number, number>>({});
   const [picture, setPicture] = useState<{ frame_size?: string; quality?: number }>({});
+  /** Why the last start (WATCH's view, a photo, a recording, PLAY) failed, when the hub's job said so. */
+  const [startFailure, setStartFailure] = useState<{ code: string; message: string } | null>(null);
+  /** What the board said to STOP IT ON THE BOARD, once it stopped. */
+  const [boardNote, setBoardNote] = useState<string | null>(null);
   const [, setTick] = useState(0);
   const outcomeRef = useRef<HTMLDivElement>(null);
   const primaryRef = useRef<HTMLButtonElement>(null);
@@ -206,7 +234,7 @@ export function CameraLens({ detail, inst, cap, mirror, instances }: CapPanelPro
   const cancel = useAct('job_cancel', { refresh: ['camera_status'] });
 
   // the jobs this page follows (a photo, a recording, PLAY, its own live views) end with a toast of the hub's; the page
-  // says their outcome itself, so their ordinary end toasts are dismissed (a failure's toast stays)
+  // says their outcome itself, a failure included (CamError, BoardBusy), so their toasts are dismissed while it shows
   const quiet = useRef(new Set<string>());
   if (ownJob) {
     quiet.current.add(ownJob.id);
@@ -217,7 +245,7 @@ export function CameraLens({ detail, inst, cap, mirror, instances }: CapPanelPro
   const toasts = useLive((s) => s.toasts);
   useEffect(() => {
     for (const t of toasts) {
-      if (t.job_id && quiet.current.has(t.job_id) && t.tone !== 'bad') {
+      if (t.job_id && quiet.current.has(t.job_id)) {
         store.getState().dismiss(t.id);
       }
     }
@@ -232,8 +260,49 @@ export function CameraLens({ detail, inst, cap, mirror, instances }: CapPanelPro
     return () => clearTimeout(t);
   }, [view.phase, view.own, view.frames]);
 
+  // while this page shows a view of its own, the hub's view job ends without a toast (state/quiet-toasts.ts): the page
+  // says how it ended, and leaving the page is how a view stops
+  const viewing = handle.active && view.own;
+  useEffect(() => {
+    if (!viewing) {
+      return;
+    }
+    viewOpened(detail.device_id);
+    return () => viewClosed(detail.device_id);
+  }, [viewing, detail.device_id]);
+
+  // this page's view ended with no frame and reason error: its start failed. The hub's job says why (DEVICE_BUSY: the
+  // board runs a stream the hub does not know of), so the page does not guess a failed sensor.
+  const openedAt = useRef<number | null>(null);
+  if (view.openedAt !== null) {
+    openedAt.current = view.openedAt;
+  }
+  useEffect(() => {
+    const end = view.lastEnd;
+    if (!end || !view.lastEndOwn || end.reason !== 'error' || end.records > 0) {
+      return;
+    }
+    let alive = true;
+    const since = openedAt.current ?? Date.now();
+    void rest
+      .op('job_list', { origin: 'app', limit: 20 })
+      .then((r) => {
+        const f = failedViewJob((r as { jobs: ListedJob[] }).jobs, detail.device_id, since);
+        if (alive && f) {
+          setStartFailure(f);
+        }
+      })
+      .catch(() => {});
+    return () => {
+      alive = false;
+    };
+  }, [view.lastEnd, view.lastEndOwn, detail.device_id]);
+
   const followed = ownJob && ownJob.kind !== 'photo' ? ownJob : null;
+  // the board refused a start as busy while the hub runs nothing on it: a stream goes on there from before
+  const boardBusy = startFailure?.code === 'DEVICE_BUSY' && !stream && !offline && !hubDown;
   const state: CameraStateName = cameraState(view, {
+    boardBusy,
     presence,
     hubDown,
     hasToken: handle.hasToken,
@@ -255,6 +324,11 @@ export function CameraLens({ detail, inst, cap, mirror, instances }: CapPanelPro
     const o: Outcome = { kind: ownJob.kind, line: '' };
     if (job.status === 'failed') {
       o.failed = job.error;
+      const e = (job.error ?? {}) as { code?: unknown; message?: unknown };
+      if (e.code === 'DEVICE_BUSY') {
+        // the board refused the start: what runs there is said with its stop (BoardBusy), not as a bare error
+        setStartFailure({ code: 'DEVICE_BUSY', message: typeof e.message === 'string' ? e.message : '' });
+      }
     } else if (ownJob.kind === 'photo') {
       o.line = 'The photo is on the hub.';
       if (r.path) {
@@ -331,6 +405,8 @@ export function CameraLens({ detail, inst, cap, mirror, instances }: CapPanelPro
   /** WATCH: a live view of its own, or, while a recording or PLAY is followed, joining its stream. */
   const watch = () => {
     setOpError(null);
+    setStartFailure(null);
+    setBoardNote(null);
     if (followed) {
       handle.open();
       return;
@@ -369,6 +445,8 @@ export function CameraLens({ detail, inst, cap, mirror, instances }: CapPanelPro
 
   const photo = async () => {
     setOpError(null);
+    setStartFailure(null);
+    setBoardNote(null);
     setOutcome(null);
     const resume = handle.active && view.own ? watchStart() : null;
     setBusy('photo');
@@ -388,6 +466,8 @@ export function CameraLens({ detail, inst, cap, mirror, instances }: CapPanelPro
 
   const record = async (choice: RecordChoice, extra: { frame_size?: string; quality?: number }) => {
     setOpError(null);
+    setStartFailure(null);
+    setBoardNote(null);
     setOutcome(null);
     setBusy('record');
     try {
@@ -407,6 +487,8 @@ export function CameraLens({ detail, inst, cap, mirror, instances }: CapPanelPro
 
   const play = async (recording: number, frames: number) => {
     setOpError(null);
+    setStartFailure(null);
+    setBoardNote(null);
     setOutcome(null);
     setStartingPlay(recording);
     try {
@@ -478,6 +560,7 @@ export function CameraLens({ detail, inst, cap, mirror, instances }: CapPanelPro
     stop: () => handle.close(),
     'stop-watching': () => handle.close(),
     'stop-recording': () => followed && cancel.mutate({ job_id: followed.id }),
+    'stop-play': () => followed && cancel.mutate({ job_id: followed.id }),
     photo: () => void photo(),
     'keep-frame': () => {
       const f = handle.lastFrame();
@@ -511,7 +594,15 @@ export function CameraLens({ detail, inst, cap, mirror, instances }: CapPanelPro
   const room = roomForFrames(sdFree, lastBytes);
   const others = stream ? Math.max(0, (stream.subscribers ?? 0) - (handle.active ? 1 : 0)) : 0;
   const shownQuality = head?.quality ?? picture.quality ?? null;
-  const viewEnded = view.lastEnd && view.lastEndOwn && !handle.active && !ownJob && !outcome ? viewEndLine(view.lastEnd.reason) : null;
+  const boardStream = useLive((s) => lastIssuedStream(s.events, detail.device_id, inst.name));
+  const viewEnded =
+    view.lastEnd && view.lastEndOwn && !handle.active && !ownJob && !outcome && !boardBusy
+      ? boardNote
+        ? null
+        : startFailure
+        ? `The live view did not start. ${cameraErrorLine(startFailure.code, startFailure.message, errCtx) ?? endLine(view.lastEnd.reason)}`
+        : viewEndLine(view.lastEnd.reason)
+      : null;
 
   return (
     <div className="cam" data-camera-state={state} data-lens="fr.camera">
@@ -524,12 +615,25 @@ export function CameraLens({ detail, inst, cap, mirror, instances }: CapPanelPro
                 key={a.id}
                 a={a}
                 onPress={press[a.id]}
-                busy={a.id === 'photo' ? busy === 'photo' || ownJob?.kind === 'photo' : a.id === 'stop-recording' || a.id === 'stop-other' ? cancel.isPending : undefined}
+                busy={a.id === 'photo' ? busy === 'photo' || ownJob?.kind === 'photo' : a.id === 'stop-recording' || a.id === 'stop-other' || a.id === 'stop-play' ? cancel.isPending : undefined}
                 primaryRef={primaryRef}
+                {...(a.id === 'record' ? { controls: { id: `cam-record-${inst.name}`, expanded: recordOpen && !recordingNow } } : {})}
                 {...(lineOf(a) !== null ? { describedBy: `cam-does-${inst.name}-${lineOf(a)}` } : {})}
               />
             ))}
           </ButtonRow>
+          {boardBusy ? (
+            <BoardBusy
+              deviceId={detail.device_id}
+              instance={inst.name}
+              streamId={boardStream}
+              onStopped={() => {
+                setStartFailure(null);
+                setOutcome(null);
+                setBoardNote('The board’s stream is stopped. WATCH starts the camera.');
+              }}
+            />
+          ) : null}
           {t.lines.length ? (
             <div className="cam-does-list" data-does="">
               {t.lines.map((l, i) => (
@@ -565,11 +669,13 @@ export function CameraLens({ detail, inst, cap, mirror, instances }: CapPanelPro
           {gapLine(view.skipped) && handle.active ? <p className="cam-note">{gapLine(view.skipped)}</p> : null}
           <div className="cam-said" role="status" ref={outcomeRef}>
             {viewEnded ? <p className="cam-note">{viewEnded}</p> : null}
-            {outcome ? <Outcomes outcome={outcome} errCtx={errCtx} stillUrl={stillUrl} stillInView={still !== null} onCard={() => openCard()} /> : null}
+            {boardNote ? <p className="cam-note" data-board-busy="stopped">{boardNote}</p> : null}
+            {outcome && !(boardBusy && outcome.failed) ? <Outcomes outcome={outcome} errCtx={errCtx} stillUrl={stillUrl} stillInView={still !== null} onCard={() => openCard()} /> : null}
           </div>
         </div>
         {recordOpen && !recordingNow ? (
           <RecordForm
+            id={`cam-record-${inst.name}`}
             cardIn={cardIn}
             maxFrameSize={st?.max_frame_size ?? null}
             busy={busy === 'record'}
@@ -592,7 +698,7 @@ export function CameraLens({ detail, inst, cap, mirror, instances }: CapPanelPro
             id="cam-rate"
           />
           <Row label="last frame" value={lastBytes !== null ? `${countText(core, lastBytes)} B` : '—'} earth={lastBytes !== null ? `${(lastBytes / 1024).toFixed(1)} KB` : undefined} id="cam-last" />
-          {stream ? (
+          {stream && !offline ? (
             <Row
               label="this stream"
               value={`${countText(core, stream.frames)} frame${stream.frames === 1 ? '' : 's'}`}
@@ -600,8 +706,8 @@ export function CameraLens({ detail, inst, cap, mirror, instances }: CapPanelPro
               id="cam-stream"
             />
           ) : null}
-          {stream?.started_at ? <Row label="running for" value={<SinceSpan iso={stream.started_at} />} id="cam-running" /> : null}
-          {stream ? (
+          {stream?.started_at && !offline ? <Row label="running for" value={<SinceSpan iso={stream.started_at} />} id="cam-running" /> : null}
+          {stream && !offline ? (
             <Row label="watched" value={handle.active ? (others ? `here and in ${others} other place${others === 1 ? '' : 's'}` : 'here') : stream.subscribers ? `in ${stream.subscribers} place${stream.subscribers === 1 ? '' : 's'}` : 'nowhere'} id="cam-watched" />
           ) : null}
           <Row
@@ -609,6 +715,7 @@ export function CameraLens({ detail, inst, cap, mirror, instances }: CapPanelPro
             bead={sd === 'error' ? 'fault' : undefined}
             value={sd === 'mounted' ? (room !== null ? `in · room for about ${countText(core, room)} frames` : 'in') : sd === 'none' ? 'no card' : sd === 'error' ? 'failed' : '—'}
             earth={sd === 'mounted' && sdFree !== null ? `${countText(core, sdFree)} MB free` : undefined}
+            {...(offline && sd ? { extra: 'as last seen' } : {})}
             id="cam-card"
           />
           <Row label="sensor" value={st?.sensor || st?.max_frame_size ? [st?.sensor ?? 'a camera', st?.max_frame_size ? `up to ${st.max_frame_size}` : null].filter(Boolean).join(' · ') : '—'} id="cam-sensor" />
@@ -629,7 +736,7 @@ export function CameraLens({ detail, inst, cap, mirror, instances }: CapPanelPro
           alias={alias}
           instance={inst.name}
           sd={sd}
-          streaming={streamRuns}
+          streaming={streamRuns && !offline}
           offline={offline || hubDown}
           madeHere={madeHere}
           playing={followed?.kind === 'play' && followed.recording !== undefined ? { recording: followed.recording, received: stream?.frames ?? 0, frames: followed.frames ?? 0 } : null}
@@ -710,6 +817,51 @@ function Outcomes({
           {`Recording ${outcome.recording} · in card recordings ›`}
         </Button>
       ) : null}
+    </div>
+  );
+}
+
+/**
+ * The board refused a start as busy while the hub runs no stream on it (DEVICE_BUSY): a stream goes on there from
+ * before, most likely one whose link was lost mid-stream. Its stop goes to the board itself (command_send stream_stop
+ * with the last stream id the hub issued on the instance); without that id, or when the board runs another, a restart
+ * ends it.
+ */
+function BoardBusy({ deviceId, instance, streamId, onStopped }: { deviceId: string; instance: string; streamId: number | null; onStopped(): void }) {
+  const act = useAct('command_send', { quiet: () => true, refresh: ['camera_status'] });
+  const res = act.data?.results[0];
+  const stopped = res?.status === 'ok';
+  useEffect(() => {
+    if (stopped) {
+      onStopped();
+    }
+    // the stop's answer is the only trigger
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [stopped]);
+  return (
+    <div className="cam-board-busy" data-board-busy="">
+      <ErrorLine code="DEVICE_BUSY" message={boardBusyLine(streamId !== null && res?.status !== 'not_found')} />
+      {streamId !== null && res?.status !== 'not_found' ? (
+        <ButtonRow>
+          <Button
+            variant="destructive"
+            busy={act.isPending}
+            confirm={`Stop stream ${streamId} on the board? Nothing of it reaches the hub now.`}
+            confirmLabel="Stop"
+            cancelLabel="Leave it"
+            onClick={() => act.mutate({ selector: `id:${deviceId}`, command: `${instance}.stream_stop`, args: { stream_id: streamId } })}
+            data-action="stop-board"
+          >
+            Stop it on the board
+          </Button>
+        </ButtonRow>
+      ) : null}
+      {res && res.status !== 'ok' ? (
+        <p className="cam-note">
+          {res.status === 'not_found' ? 'The board runs a stream this hub did not start. Restart the board to end it.' : `The board did not stop it (${res.status.replace(/_/g, ' ')}). Restart the board to end it.`}
+        </p>
+      ) : null}
+      {act.error ? <ErrorLine error={act.error} what="The stop" /> : null}
     </div>
   );
 }

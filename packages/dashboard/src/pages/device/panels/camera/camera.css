@@ -95,6 +95,14 @@
   line-height: 1.5;
 }
 
+/* over the dimmed last frame the line sits on a solid band, so the picture does not run through its words */
+.cam-view[data-had]:not([data-live]) .cam-line {
+  inset: auto 0 0 0;
+  padding: var(--sp-2) var(--sp-3);
+  background: var(--c-void);
+  border-top: var(--hair) solid var(--c-etch2);
+}
+
 .cam-caption {
   display: flex;
   flex-wrap: wrap;
@@ -149,6 +157,13 @@
 
 .cam-note {
   color: var(--c-etch3);
+}
+
+/* the board runs a stream the hub does not know of: why, and its stop */
+.cam-board-busy {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-2);
 }
 
 .cam-progress {
@@ -270,6 +285,15 @@
 }
 
 /* ---- the folds ---- */
+
+/* PLAY's ring, in PLAY's place on the recording being played: the same width, so the row keeps its layout */
+.cam-card-playing {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 64px;
+  min-height: 32px;
+}
 
 .cam-settings,
 .cam-card {

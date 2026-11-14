@@ -29,9 +29,40 @@ function streamEnd(f: Readonly<Record<string, unknown>>): string {
   return [reason, n].filter(Boolean).join(', ');
 }
 
+/** What a command asks of an instance, as the verb after "asked flash to": the everyday ones, else its name in words. */
+const COMMAND_VERBS: Record<string, string> = {
+  set: 'change',
+  toggle: 'toggle',
+  blink: 'blink',
+  stop: 'stop its effect',
+  identify: 'show itself',
+  stream_start: 'start a stream',
+  stream_stop: 'stop its stream',
+  sd_list: 'list its card',
+  sd_fetch: 'send a recording from its card',
+  sd_delete: 'delete a recording from its card',
+};
+
+/** What a camera stream was for, from its stream.* fields (`use`, `to`, `recording`): "the live view", "a recording to the card". */
+function streamWhat(f: Readonly<Record<string, unknown>>): string | null {
+  const to = f.to === 'sd' ? 'to the card' : f.to === 'both' ? 'to the hub and the card' : 'to the hub';
+  switch (f.use) {
+    case 'view':
+      return 'the live view';
+    case 'photo':
+      return 'a photo';
+    case 'record':
+      return `a recording ${to}`;
+    case 'play':
+      return typeof f.recording === 'number' ? `recording ${f.recording} from the card` : 'a recording from the card';
+    default:
+      return null;
+  }
+}
+
 /**
  * The words an event is shown as on a device's line: the hub's own words for presence and links, a command sent
- * ("the dashboard sent blink to flash"), a stream ("cam ended a stream: stopped, 949 frames"), else its type in words.
+ * ("the dashboard asked flash to blink"), a stream ("cam’s live view ended: stopped, 949 frames"), else its type in words.
  */
 export function eventWords(e: Pick<HubEvent, 'type'> & { fields?: Readonly<Record<string, unknown>> | undefined }): string {
   const f = e.fields ?? {};
@@ -39,15 +70,31 @@ export function eventWords(e: Pick<HubEvent, 'type'> & { fields?: Readonly<Recor
     case 'op.called': {
       const who = typeof f.client === 'string' ? (CLIENT_WORDS[f.client] ?? f.client) : 'a client';
       if (f.op === 'command_send' && typeof f.command === 'string') {
-        return `${who} sent ${f.command.replace(/_/g, ' ')}${typeof f.instance === 'string' ? ` to ${f.instance}` : ''}`;
+        // the command may carry its instance ("flash.blink")
+        const dot = f.command.indexOf('.');
+        const inst = typeof f.instance === 'string' ? f.instance : dot > 0 ? f.command.slice(0, dot) : null;
+        const cmd = dot > 0 ? f.command.slice(dot + 1) : f.command;
+        const verb = COMMAND_VERBS[cmd] ?? cmd.replace(/_/g, ' ');
+        return inst ? `${who} asked ${inst} to ${verb}` : `${who} sent ${cmd.replace(/_/g, ' ')}`;
       }
       return typeof f.op === 'string' ? `${who} ran ${f.op.replace(/_/g, ' ')}` : `${who} ran an op`;
     }
-    case 'stream.started':
-      return `${typeof f.instance === 'string' ? f.instance : 'it'} started a stream`;
+    case 'stream.started': {
+      const who = typeof f.instance === 'string' ? f.instance : 'it';
+      const what = streamWhat(f);
+      return f.use === 'play' ? `${who} started sending ${what}` : f.use === 'photo' ? `${who} started a photo` : `${who} started ${what ?? 'a stream'}`;
+    }
     case 'stream.ended': {
+      const who = typeof f.instance === 'string' ? f.instance : 'it';
       const how = streamEnd(f);
-      return `${typeof f.instance === 'string' ? f.instance : 'it'} ended a stream${how ? `: ${how}` : ''}`;
+      const what = streamWhat(f);
+      if (f.use === 'photo' && f.reason === 'done') {
+        return `${who} took a photo`;
+      }
+      if (f.use === 'play') {
+        return `${who} sent ${what}${how ? `: ${how}` : ''}`;
+      }
+      return what ? `${who}’s ${what.replace(/^(the|a) /, '')} ended${how ? `: ${how}` : ''}` : `${who} ended a stream${how ? `: ${how}` : ''}`;
     }
     case 'device.online':
       return 'came online';
@@ -163,7 +210,7 @@ const OUTCOME_WORDS: Record<string, string> = {
   unsupported: 'this build does not have that',
   offline: 'offline: nothing was sent',
   timeout: 'no answer in time',
-  not_found: 'not found',
+  not_found: 'it does not know this command; its firmware may be older',
   injection_disabled: 'this build does not take test commands',
   failed: 'it tried and failed',
   refused: 'refused',

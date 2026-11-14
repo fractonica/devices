@@ -191,11 +191,22 @@ describe('the fleet', () => {
     expect(eventWords({ type: 'device.online' })).toBe('came online');
     expect(eventWords({ type: 'status.color' })).toBe('colour changed');
     // the device page's Lately and Activity: a command sent and a stream, in words
-    expect(eventWords({ type: 'op.called', fields: { op: 'command_send', instance: 'flash', command: 'blink', client: 'dashboard' } })).toBe('the dashboard sent blink to flash');
+    expect(eventWords({ type: 'op.called', fields: { op: 'command_send', instance: 'flash', command: 'blink', client: 'dashboard' } })).toBe('the dashboard asked flash to blink');
+    expect(eventWords({ type: 'op.called', fields: { op: 'command_send', command: 'status.set', client: 'dashboard' } })).toBe('the dashboard asked status to change');
+    expect(eventWords({ type: 'op.called', fields: { op: 'command_send', instance: 'status', command: 'toggle', client: 'cli' } })).toBe('the CLI asked status to toggle');
+    expect(eventWords({ type: 'op.called', fields: { op: 'command_send', instance: 'cam', command: 'stream_stop', client: 'dashboard' } })).toBe('the dashboard asked cam to stop its stream');
     expect(eventWords({ type: 'op.called', fields: { op: 'input_simulate', client: 'mcp' } })).toBe('an agent ran input simulate');
     expect(eventWords({ type: 'stream.started', fields: { instance: 'cam' } })).toBe('cam started a stream');
     expect(eventWords({ type: 'cam.stream_ended' })).toBe('cam said its stream ended');
     expect(eventWords({ type: 'stream.ended', fields: { instance: 'cam', reason: 'stopped', records: 949 } })).toBe('cam ended a stream: stopped, 949 frames');
+    // a camera stream names what it was for (its `use`, `to` and `recording`)
+    expect(eventWords({ type: 'stream.started', fields: { instance: 'cam', use: 'view', to: 'hub' } })).toBe('cam started the live view');
+    expect(eventWords({ type: 'stream.ended', fields: { instance: 'cam', use: 'view', reason: 'stopped', records: 38 } })).toBe('cam’s live view ended: stopped, 38 frames');
+    expect(eventWords({ type: 'stream.ended', fields: { instance: 'cam', use: 'photo', reason: 'done', records: 1 } })).toBe('cam took a photo');
+    expect(eventWords({ type: 'stream.ended', fields: { instance: 'cam', use: 'photo', reason: 'error', records: 0 } })).toBe('cam’s photo ended: error, 0 frames');
+    expect(eventWords({ type: 'stream.started', fields: { instance: 'cam', use: 'record', to: 'sd' } })).toBe('cam started a recording to the card');
+    expect(eventWords({ type: 'stream.ended', fields: { instance: 'cam', use: 'record', to: 'both', reason: 'done', records: 100 } })).toBe('cam’s recording to the hub and the card ended: done, 100 frames');
+    expect(eventWords({ type: 'stream.ended', fields: { instance: 'cam', use: 'play', recording: 7, reason: 'done', records: 100 } })).toBe('cam sent recording 7 from the card: done, 100 frames');
     // the hub's own bookkeeping is not a device's last word: when it was last heard instead
     const internal = fleetSummary(devices, { a5: { type: 'op.called', t_hub_us: 9 } });
     expect(internal.rows.find((r) => r.alias === 'bench-analog')!.last).toEqual({ what: 'last heard', at: '2026-10-08T10:00:00Z' });

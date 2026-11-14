@@ -11,6 +11,11 @@ import { type Core, loadCore } from '@fractonica/time';
 import {
   aboutFrames,
   adoptable,
+  boardBusyLine,
+  stateBead,
+  failedViewJob,
+  lastIssuedStream,
+  type ListedJob,
   detailValueText,
   detailWord,
   frameUrl,
@@ -94,6 +99,11 @@ describe('the live view and the panel’s state (§4.3)', () => {
     // no socket: this page's card recording, someone else's stream, a stream to the card
     expect(cameraState(LIVE_OFF, ctx({ running: { stream_id: 9, to: 'sd', started_at: null, seconds: 0, job_id: 'j9' }, ownJob: 'j9' }))).toBe('recording');
     expect(cameraState(LIVE_OFF, ctx({ running: { stream_id: 9, to: 'hub', started_at: null, seconds: 0, job_id: 'j9' } }))).toBe('busy');
+    // another place's live view is a view this page may join, not a busy camera
+    expect(cameraState(LIVE_OFF, ctx({ running: { stream_id: 9, to: 'hub', started_at: null, seconds: 0, job_id: 'j9', use: 'view', subscribers: 1 } }))).toBe('elsewhere');
+    // the board refused a start as busy while the hub runs nothing: said as busy, not as idle (nor as a failed sensor)
+    expect(cameraState(LIVE_OFF, ctx({ boardBusy: true }))).toBe('board-busy');
+    expect(cameraState(LIVE_OFF, ctx({ boardBusy: true, presence: 'offline' }))).toBe('offline');
     expect(cameraState(LIVE_OFF, ctx({ running: { stream_id: 9, to: 'sd', started_at: null, seconds: 0 } }))).toBe('recording');
   });
 
@@ -125,7 +135,7 @@ describe('the live view and the panel’s state (§4.3)', () => {
     expect(stateLine('joined', c)).toBe('A view opened elsewhere.');
     expect(stateLine('recording', { ...c, running: { stream_id: 1, to: 'sd', started_at: null, seconds: 0 } })).toBe('Recording to the card. Frames stay on the card until you play them.');
     expect(stateLine('watching', c)).toBeNull();
-    for (const s of ['offline', 'suspect', 'hub-down', 'idle', 'busy', 'connecting', 'starting', 'stalled', 'joined', 'recording', 'photo', 'busy-hidden', 'paused', 'not-provisioned', 'no-key', 'bad-key', 'old-page', 'reconnecting'] as const) {
+    for (const s of ['offline', 'suspect', 'hub-down', 'idle', 'busy', 'elsewhere', 'board-busy', 'connecting', 'starting', 'stalled', 'joined', 'recording', 'photo', 'busy-hidden', 'paused', 'not-provisioned', 'no-key', 'bad-key', 'old-page', 'reconnecting'] as const) {
       const line = stateLine(s, c);
       expect(line === null || pureSafe(line), s).toBe(true);
     }
@@ -134,6 +144,10 @@ describe('the live view and the panel’s state (§4.3)', () => {
     expect(stateWord('joined', { stream_id: 1, to: 'both', started_at: null, seconds: 0 })).toBe('watching the recording');
     expect(stateWord('photo', null)).toBe('taking a photo');
     expect(stateWord('busy-hidden', null)).toBe('busy');
+    expect(stateWord('elsewhere', null)).toBe('watched in another place');
+    expect(stateBead('elsewhere')).toBe('online');
+    expect(stateLine('elsewhere', c)).toBe('The camera is watched in another place. WATCH shows it here too.');
+    expect([stateWord('board-busy', null), stateBead('board-busy'), stateLine('board-busy', c)]).toEqual(['busy', 'waiting', 'The camera is busy with a stream this hub does not know of.']);
   });
 
   it('says how a stream ended and each op error in the panel’s words', () => {
@@ -314,21 +328,45 @@ describe('what runs is read from the hub; the transport for each state (review f
     expect(hidden.actions[1]!.does).toBe('This recording is not shown live.');
   });
 
-  it('PLAY: STOP WATCHING or WATCH lit; nothing else starts', () => {
-    expect(ids(transport(tIn({ state: 'playing', running: rec({ use: 'play' }), own: { kind: 'play' }, active: true, framesShown: true })))).toEqual(['stop-watching*', 'keep-frame']);
-    expect(ids(transport(tIn({ state: 'playing', running: rec({ use: 'play' }), own: { kind: 'play' } })))).toEqual(['watch*']);
+  it('PLAY: STOP WATCHING or WATCH lit, and STOP PLAYING; nothing else starts', () => {
+    const p = transport(tIn({ state: 'playing', running: rec({ use: 'play' }), own: { kind: 'play' }, active: true, framesShown: true }));
+    expect(ids(p)).toEqual(['stop-watching*', 'stop-play', 'keep-frame']);
+    expect(p.actions[1]!.does).toBe('Stops bringing it; what came so far stays on the hub, and the card keeps the recording.');
+    expect(ids(transport(tIn({ state: 'playing', running: rec({ use: 'play' }), own: { kind: 'play' } })))).toEqual(['watch*', 'stop-play']);
   });
 
   it('another stream runs: STOP THAT STREAM sits beside "stop it first"; another place’s view is watched too, never stopped by a note alone', () => {
     const busy = transport(tIn({ state: 'busy', running: rec({ use: 'photo', live: false }) }));
     expect(ids(busy)).toEqual(['watch*-', 'photo-', 'record-', 'stop-other']);
     expect(busy.lines.find((l) => l.labels.includes('Photo'))!.text).toBe('The camera runs another stream; stop it first, or wait for it to end.');
-    const view = transport(tIn({ state: 'busy', running: rec({ use: 'view', subscribers: 1 }) }));
-    expect(ids(view)).toEqual(['watch*', 'photo-', 'record-', 'stop-other']);
+    // another place's live view: WATCH joins it; nothing here stops someone's view (nothing of it is kept)
+    const view = transport(tIn({ state: 'elsewhere', running: rec({ use: 'view', subscribers: 1 }) }));
+    expect(ids(view)).toEqual(['watch*', 'photo-', 'record-']);
     expect(view.actions[0]!.does).toBe('Shows the camera live here; it is watched in another place too.');
+    expect(view.lines.find((l) => l.labels.includes('Photo'))!.text).toBe('The camera is watched in another place; they wait until that view closes.');
     const noJob = transport(tIn({ state: 'busy', running: rec({ use: 'photo', live: false, job_id: undefined }) }));
     expect(noJob.actions.map((a) => a.id)).not.toContain('stop-other');
     expect(noJob.lines.find((l) => l.labels.includes('Photo'))!.text).toBe('The camera runs another stream; they wait for it to end.');
+  });
+
+  it('a board busy with a stream the hub does not know of: its words, the stream id to stop, the failed view job', () => {
+    expect(boardBusyLine(true)).toBe('The camera is busy with a stream this hub does not know of; it may have gone on after its link was lost. STOP IT ON THE BOARD ends it.');
+    expect(boardBusyLine(false)).toMatch(/Restart the board to end it, then try again\.$/);
+    expect(pureSafe(boardBusyLine(true)) && pureSafe(boardBusyLine(false))).toBe(true);
+    const ring = [
+      { type: 'stream.started', device: 'd1', fields: { instance: 'cam', stream_id: 4 } },
+      { type: 'stream.started', device: 'd2', fields: { instance: 'cam', stream_id: 5 } },
+      { type: 'stream.started', device: 'd1', fields: { instance: 'csi', stream_id: 6 } },
+      { type: 'stream.ended', device: 'd1', fields: { instance: 'cam', stream_id: 4 } },
+    ];
+    expect(lastIssuedStream(ring, 'd1', 'cam')).toBe(4);
+    expect(lastIssuedStream(ring, 'd3', 'cam')).toBeNull();
+    const at = Date.parse('2026-11-14T10:00:00Z');
+    const job = (over: Partial<ListedJob> = {}): ListedJob => ({ kind: 'camera', status: 'failed', origin: 'app', targets: ['d1'], created_at: '2026-11-14T10:00:01Z', error: { code: 'DEVICE_BUSY', message: 'busy: another stream runs on it' }, ...over });
+    expect(failedViewJob([job()], 'd1', at)).toEqual({ code: 'DEVICE_BUSY', message: 'busy: another stream runs on it' });
+    expect(failedViewJob([job({ origin: 'dashboard' }), job({ status: 'completed' }), job({ targets: ['d2'] }), job({ kind: 'csi' })], 'd1', at)).toBeNull();
+    expect(failedViewJob([job({ created_at: '2026-11-14T09:50:00Z' })], 'd1', at)).toBeNull(); // long before this view
+    expect(failedViewJob([job({ error: undefined })], 'd1', at)).toEqual({ code: 'INTERNAL', message: '' });
   });
 
   it('words the detail and the levels (no internal number), PLAY’s end, a recording’s frame URLs', () => {

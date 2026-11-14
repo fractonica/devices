@@ -1,7 +1,8 @@
 // CARD RECORDINGS (DEVICE-SPEC §3.8): a fold over the board's micro-SD card. camera_sd_list runs when it opens and after
 // each recording, play or delete (stream.started / stream.ended invalidate it), never on a poll. One row per
 // recording, newest first: PLAY brings it to the hub and shows it here; DELETE (a quiet word in fault: the loud one is
-// PLAY) asks in place. While a stream runs both wait, and the fold says so once (its aside: STREAMING).
+// PLAY) asks in place. While a stream runs both wait, and the fold says so once (its aside: STREAMING). The recording
+// being played shows PLAY's ring in PLAY's place (its stop is the transport's STOP PLAYING).
 
 import { useState } from 'react';
 
@@ -93,7 +94,6 @@ export function CardRecordings({ deviceId, alias, instance, sd, streaming, offli
               key={r.id}
               id={`recording-${r.id}`}
               name={`recording ${r.id}`}
-              lead={isPlaying ? <StageRing bare size={22} stages={['play']} current={0} fraction={playing.frames > 0 ? Math.min(1, playing.received / playing.frames) : undefined} label={`playing recording ${r.id}`} /> : undefined}
               sub={made !== undefined ? (
                 <span>
                   made here <FTime at={new Date(made)} form="relative" />
@@ -104,9 +104,16 @@ export function CardRecordings({ deviceId, alias, instance, sd, streaming, offli
               earth={`${(r.bytes / 1e6).toFixed(1)} MB`}
               actions={
                 <>
-                  <Button disabled={streaming || offline} busy={starting === r.id} onClick={() => onPlay(r.id, r.frames)} data-action="play" aria-label={`Play recording ${r.id}`}>
-                    Play
-                  </Button>
+                  {isPlaying ? (
+                    // in PLAY's place, so the row keeps its layout; STOP PLAYING is under the view
+                    <span className="cam-card-playing" data-playing="">
+                      <StageRing bare size={22} stages={['play']} current={0} fraction={playing.frames > 0 ? Math.min(1, playing.received / playing.frames) : undefined} label={`playing recording ${r.id}`} />
+                    </span>
+                  ) : (
+                    <Button disabled={streaming || offline} busy={starting === r.id} onClick={() => onPlay(r.id, r.frames)} data-action="play" aria-label={`Play recording ${r.id}`}>
+                      Play
+                    </Button>
+                  )}
                   <Button
                     variant="quiet"
                     data-tone="fault"

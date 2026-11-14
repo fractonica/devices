@@ -1,5 +1,6 @@
 // A device's recent events, from the live store's ring (newest first): the event in words (state/words.ts eventWords:
-// "the dashboard sent blink to flash", "cam ended a stream: stopped, 949 frames"), under a fold its raw type and fields,
+// "the dashboard asked flash to blink", "cam’s live view ended: stopped, 949 frames"); the words open a fold with its raw
+// type and fields,
 // and its time in Fractonica notation (⊕ the clock time in Earth mode); the last 50, all or one instrument's (state/instruments.ts
 // deviceEvents). The full stream, with filters, is on Live.
 
@@ -22,10 +23,10 @@ function EventRow({ e }: { e: HubEvent }) {
   const pairs = fieldPairs(e.fields);
   return (
     <li className="dev-event" data-event={e.type}>
-      <span className="dev-event-type">{eventWords(e)}</span>
       <details className="dev-event-raw">
-        <summary className="ash mono">{e.type}</summary>
+        <summary className="dev-event-type">{eventWords(e)}</summary>
         <span className="dev-event-fields">
+          <span className="ash mono">{e.type}</span>
           {pairs.map(([k, v]) => (
             <span key={k}>
               <span className="ash">{fieldWords(k)}</span> {typeof v === 'number' && impliedUnit(k) ? <UnitValue value={v} unit={impliedUnit(k)} /> : String(v)}

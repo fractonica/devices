@@ -169,6 +169,19 @@ describe('the camera Lens', () => {
     expect(visible(html)).not.toMatch(EARTH);
   });
 
+  it('another place’s live view: STATE says it is watched there, WATCH joins it, and nothing here stops it', () => {
+    seed(status({ streaming: true, stream: { stream_id: 943, to: 'hub', started_at: '2026-11-14T00:00:00.000Z', seconds: 0, interval_ms: 0, frames: 40, dropped: 0, bytes: 1, subscribers: 1, gaps: 0, job_id: 'j3', live: true, use: 'view' } }));
+    const html = render(createElement(camera.CAMERA_PANEL.Lens, props()));
+    expect(html).toContain('data-camera-state="elsewhere"');
+    expect(html).toContain('watched in another place');
+    expect(html).toContain('The camera is watched in another place. WATCH shows it here too.');
+    expect(html).toMatch(/data-action="watch"(?![^>]*disabled)[^>]*data-variant="primary"/);
+    expect(html).not.toContain('data-action="stop-other"');
+    expect(html).not.toContain('busy');
+    // RECORD… says whether its form is open
+    expect(html).toMatch(/data-action="record"[^>]*aria-expanded="false"/);
+  });
+
   it('a recording camera_status shows (started elsewhere, or here before the page was left) is this page’s to stop: STOP RECORDING is the lit action', () => {
     seed(status({ streaming: true, stream: { stream_id: 942, to: 'hub', started_at: '2026-11-14T00:00:00.000Z', seconds: 0, interval_ms: 0, frames: 79, dropped: 0, bytes: 1, subscribers: 0, gaps: 0, job_id: 'j2', live: true, use: 'record', path: '/x/captures/cam-esp32/20261114-000000' } }));
     const html = render(createElement(camera.CAMERA_PANEL.Lens, props()));

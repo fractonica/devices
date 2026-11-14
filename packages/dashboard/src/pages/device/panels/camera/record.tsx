@@ -100,6 +100,8 @@ function lengthLabel(core: Core | null, s: number, earth: boolean): string {
 }
 
 export interface RecordFormProps {
+  /** The form's element id (RECORD…'s aria-controls). */
+  id?: string;
   /** The card is mounted (CARD and HUB AND CARD need it). */
   cardIn: boolean;
   /** The board's largest frame size. */
@@ -113,7 +115,7 @@ export interface RecordFormProps {
   error?: ReactNode;
 }
 
-export function RecordForm({ cardIn, maxFrameSize, busy, disabled, why, onStart, onCancel, error }: RecordFormProps) {
+export function RecordForm({ id, cardIn, maxFrameSize, busy, disabled, why, onStart, onCancel, error }: RecordFormProps) {
   const core = useFractonica();
   const { earth } = useMode();
   const [to, setTo] = useState<RecordTarget>('hub');
@@ -134,7 +136,7 @@ export function RecordForm({ cardIn, maxFrameSize, busy, disabled, why, onStart,
   /** MORE SETTINGS that were changed (the title counts its fields, as a command's form does). */
   const setCount = [maxFrames.trim() !== '', frame !== '', detail !== null].filter(Boolean).length;
   return (
-    <div className="cam-record" ref={ref} data-record-form="">
+    <div className="cam-record" ref={ref} data-record-form="" {...(id ? { id } : {})}>
       <Words
         label="where"
         value={where}

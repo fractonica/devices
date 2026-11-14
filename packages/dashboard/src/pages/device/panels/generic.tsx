@@ -5,7 +5,7 @@
 //    the hub-issued ones (G3), not the test ones.
 // 3. Hub-run commands: a hub-issued command no purpose-built panel covers is said as the hub's way (HubRuns).
 // 4. Simulate: fr.button's gestures and fr.analog_in's value, only on a node whose HELLO says inject is on.
-// 5. Events: the last one, the names, and ALL ITS EVENTS › on Activity.
+// 5. Events: the last one, the kinds it tells of, and ALL ITS EVENTS › on Activity.
 // 6. The foot: EXPERT · ITS OWN COMMANDS › to Engineering, where every raw command is.
 // Builder PAGE owns this file; GENERIC_PANEL is the registry's fallback (panels.ts).
 
@@ -213,11 +213,11 @@ function EventsBlock({ deviceId, alias, inst, names }: { deviceId: string; alias
               <span>{fieldWords(last.member ?? last.type.slice(inst.length + 1))}</span> <FTime at={last.t_hub_us} form="relative" />
             </span>
           ) : (
-            <span className="ash">none yet</span>
+            <span className="ash">none has come yet</span>
           )
         }
-        extra={names.map((n) => fieldWords(n)).join(' · ')}
       />
+      <Row label={names.length === 1 ? 'Kind' : 'Kinds'} value={names.map((n) => fieldWords(n)).join(' · ')} id={`${inst}.event-kinds`} />
     </Section>
   );
 }
