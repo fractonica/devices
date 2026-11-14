@@ -259,7 +259,7 @@ Without `--via wifi` the hub picks the USB route for a board on a USB bridge, an
 | `sd none` in the status | The card is checked at boot only. Insert it, then `fr devices reset cam-esp32`. |
 | "Wrong boot mode detected (0xb)" when flashing over USB | The SD card holds a boot pin high once used. Unplug the board, take the card out, plug it back in, flash, then put the card back. Over Wi-Fi this never happens. |
 | Low frame rate | Use a smaller frame size or more light; check the board's Wi-Fi signal in `fr devices get cam-esp32` (`rssi_ap`). |
-| "BUSY" | One stream at a time: stop the live view (**STOP** on the camera's page), **STOP THAT STREAM** or **STOP RECORDING** there, or `fr jobs cancel <job id>`. |
+| "BUSY" | One stream at a time: stop the live view (**STOP** on the camera's page), **STOP THAT STREAM** or **STOP RECORDING** there (a recording started elsewhere shows there too), or `fr jobs cancel <job id>`. |
 | The free space looks too small | The figure is the card's own (FAT) count; check the card on the Mac. |
 
 ---
@@ -931,28 +931,40 @@ written.
 
 **The camera's page** (`#/devices/cam-esp32/cam`, or **WATCH** on its row, which starts the view at once):
 
-- **WATCH** (the page's one lit button) shows the camera live in the page, through the hub. **STOP** ends it; leaving
-  the page or hiding the tab stops it too (it comes back when the tab does, "Paused while this tab was hidden").
-  **KEEP THIS FRAME** saves the frame you see to this computer.
-- **PHOTO** takes one photo on the hub (with the flash LED when **with the flash** is on); while watching, the view
-  pauses around it. The photo shows under the view with **SAVE** and its path (in pure mode the date in the file name
-  is a ⊕; **COPY PATH** copies it whole).
+- Under the buttons, each one says what it does, or why it waits (`PHOTO · RECORD… The camera is watched in another
+  place too; they wait until that view closes.`). The lit button is the one you most likely want: **WATCH** when
+  nothing runs, **STOP** while you watch, **STOP RECORDING** while a recording runs.
+- **WATCH** shows the camera live in the page, through the hub. **STOP** ends it; leaving the page or hiding the tab
+  stops it too (it comes back when the tab does, "Paused while this tab was hidden"). If the view is stopped from
+  elsewhere (another tab, the CLI) the page goes back to idle and says so. **KEEP THIS FRAME** saves the frame you see
+  to this computer.
+- **PHOTO** takes one photo on the hub (with the flash LED when **with the flash** is on). When nothing was showing,
+  the photo appears in the view itself, captioned *the photo* with **SAVE**; while watching, the view pauses around it
+  and a small copy shows under the buttons. The line under the buttons gives its path (in pure mode from the captures
+  folder, the date in the file name a ⊕; **COPY PATH** copies it whole).
 - **RECORD…** opens the recording settings in place: where (**HUB**, **CARD**, **HUB AND CARD**; the card choices
   need a card mounted at boot), how long (until stopped, or a span), the pace (as fast as it can, or one frame every
   span), whether to show it while it records, and under **MORE SETTINGS** a frame count, frame size and detail.
-  **START RECORDING** starts a hub job: a small ring shows how far it is, **STOP RECORDING** stops it and keeps what
-  came, and the end says how many frames, how it ended and where they are.
+  **START RECORDING** starts a hub job: a small ring shows how far it is, **STOP RECORDING** (lit) stops it and keeps
+  what came, **STOP WATCHING** only hides the view (the recording goes on), and the end says how many frames, how it
+  ended and where they are, with its first and last frame to open. A recording to the card adds its row to **CARD
+  RECORDINGS** at once.
+- **A recording started elsewhere** (another tab, the CLI, an agent, or this page before you left it) shows here as
+  *recording to the hub* with **STOP RECORDING** and **WATCH**, which joins it; leaving the page never stops it.
 - **Now** says its state in words (idle, watching, recording to the card, busy, offline, …), the frame size and
   detail, the rate per Blink, the last frame's size, this stream's counts, how long it has run, where it is watched,
   the card (and room for about how many frames) and the sensor; Earth mode adds frames a second and megabytes.
 - **SENSOR SETTINGS** (kept until the board restarts): frame size (sizes above what its buffers take are off),
   detail from coarse to fine, flip, mirror, brightness, contrast and saturation. Each change is sent once your hand
   rests; while watching, a size or detail change restarts the view. After a restart the fold offers **APPLY AGAIN**.
-- **CARD RECORDINGS** (when a card is in) lists them newest first: **PLAY** brings one to the hub and shows it,
-  **DELETE** asks in place and removes it from the card (copies on the hub stay). While a stream runs, both wait.
-- **One stream at a time.** When the camera is busy with a stream that is not shown (a card recording started from
-  the CLI, say), WATCH says so, starts by itself when it ends, and offers **STOP THAT STREAM**. Engineering ›
-  Commands offers **STOP STREAM <id>** for the running stream too.
+- **CARD RECORDINGS** (when a card is in) lists them newest first: **PLAY** brings one to the hub and shows it (the
+  state reads *playing recording 7 from the card*), **DELETE** (a quiet red word) asks in place and removes it from the
+  card (copies on the hub stay). While a stream runs, both wait (the fold's aside reads STREAMING).
+- **ON THE HUB** lists the camera's recent photos and recordings that came to the hub, each with a small picture (the
+  photo, or a recording's last frame), its first and last frame to open, and its path.
+- **One stream at a time.** When the camera is busy with a stream that is not shown (a photo taken from the CLI, a
+  view in another tab), the buttons that wait say why, and **STOP THAT STREAM** stops it. Engineering › Commands
+  offers **STOP STREAM <id>** for the running stream too.
 
 **Provisioning a board, step by step.**
 
