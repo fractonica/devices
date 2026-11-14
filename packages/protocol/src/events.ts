@@ -262,6 +262,10 @@ export const StreamStartedFields = z.looseObject({
   path: z.string().optional(),
   live: z.boolean(),
   job_id: z.string().optional(),
+  /** A camera stream's purpose (camera_status `use`): an app's live view, a photo, a recording, a card recording fetched. */
+  use: z.enum(['view', 'photo', 'record', 'play']).optional(),
+  /** `use` play: the card's recording. */
+  recording: z.number().int().optional(),
 });
 
 /**
@@ -281,6 +285,10 @@ export const StreamEndedFields = z.looseObject({
   seconds: z.number(),
   path: z.string().optional(),
   job_id: z.string().optional(),
+  /** A camera stream's: where its frames went, and its purpose (as stream.started). */
+  to: z.enum(CAMERA_TARGETS).optional(),
+  use: z.enum(['view', 'photo', 'record', 'play']).optional(),
+  recording: z.number().int().optional(),
 });
 
 /**

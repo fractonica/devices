@@ -781,8 +781,8 @@ describe('camera ops against a fake board, with /app/stream (D11, D12)', { timeo
     expect(w.blocks.map((x) => x.seq)).toEqual([...Array(24).keys()]);
     expect(w.blocks.map((x) => x.index)).toEqual([...Array(25).keys()].filter((i) => i !== 5));
     expect(w.blocks[0]).toMatchObject({ width: 800, height: 600, quality: 12, frameSize: 'svga', flags: 0 });
-    expect(events(b.r, 'stream.started')[0]).toMatchObject({ device: DEV, fields: { kind: 'jpeg', instance: 'cam', stream_id: res.stream_id, format: 'mjpg1', to: 'hub', interval_ms: 40, seconds: 1, path: out, live: true, job_id: job.job_id } });
-    expect(events(b.r, 'stream.ended')[0]).toMatchObject({ device: DEV, fields: { kind: 'jpeg', stream_id: res.stream_id, reason: 'done', records: 24, dropped: 1, blocks: 24, bytes: res.bytes, path: out } });
+    expect(events(b.r, 'stream.started')[0]).toMatchObject({ device: DEV, fields: { kind: 'jpeg', instance: 'cam', stream_id: res.stream_id, format: 'mjpg1', to: 'hub', interval_ms: 40, seconds: 1, path: out, live: true, job_id: job.job_id, use: 'record' } });
+    expect(events(b.r, 'stream.ended')[0]).toMatchObject({ device: DEV, fields: { kind: 'jpeg', stream_id: res.stream_id, reason: 'done', records: 24, dropped: 1, blocks: 24, bytes: res.bytes, path: out, use: 'record', to: 'hub' } });
     expect(liveStreams(b.hub).get(DEV, 'cam')).toBeNull();
     expect((HANDLERS.camera_status({ device: 'cam-esp32' }, b.hub) as CameraStatus).stream).toBeNull();
   });

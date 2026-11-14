@@ -319,7 +319,16 @@ async function streamJob(hub: HubContext, ctx: JobCtx, req: CameraStreamRequest,
   const id = ticket.id;
   const live = liveStreams(hub);
   const expectPost = req.to !== 'sd';
-  const base = { kind: 'jpeg' as const, instance: inst.name, stream_id: id, job_id: ctx.jobId };
+  // what the stream is for and where it goes, on its stream.started and stream.ended (a page names the use in words)
+  const base: StreamBase = {
+    kind: 'jpeg',
+    instance: inst.name,
+    stream_id: id,
+    job_id: ctx.jobId,
+    to: req.to,
+    ...(stream.use ? { use: stream.use } : {}),
+    ...(stream.recording !== undefined ? { recording: stream.recording } : {}),
+  };
   const what = req.fetch ? `sd_fetch ${req.fetch.recording}` : `stream ${id}`;
   let announced = false;
   const announce = () => {
@@ -506,7 +515,18 @@ function sizeOf(d: { width: number; height: number }): CameraFrameSizeName {
 
 /** stream.ended, once per stream and only after its stream.started (a failure after a published end publishes none). */
 const endPublished = new WeakSet<object>();
-function publishEnd(hub: HubContext, dev: Device, base: { kind: 'jpeg'; instance: string; stream_id: number; job_id: string }, e: EndFrame, blocks: number, seconds: number, path: string | undefined): void {
+/** The fields stream.started and stream.ended of a camera stream share. */
+interface StreamBase {
+  kind: 'jpeg';
+  instance: string;
+  stream_id: number;
+  job_id: string;
+  to: CameraStreamRequest['to'];
+  use?: 'view' | 'photo' | 'record' | 'play';
+  recording?: number;
+}
+
+function publishEnd(hub: HubContext, dev: Device, base: StreamBase, e: EndFrame, blocks: number, seconds: number, path: string | undefined): void {
   if (endPublished.has(base)) {
     return;
   }
