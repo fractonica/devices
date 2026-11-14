@@ -13,6 +13,7 @@ import { Link } from '@tanstack/react-router';
 import { useOp } from '../../../../hooks.ts';
 import { rateText, spanText } from '../../../../state/device-units.ts';
 import type { CapPanel, CapPanelProps } from '../../panels.ts';
+import { isAway } from '../generic.tsx';
 import { CameraLens } from './lens.tsx';
 import { engrave, useFractonica } from './ui.ts';
 
@@ -22,8 +23,8 @@ function CameraHeadline({ detail, inst, mirror }: CapPanelProps) {
   const s = status.data?.stream ?? null;
   const sd = status.data?.sd ?? (typeof mirror.sd === 'string' ? mirror.sd : null);
   const fps = typeof mirror.fps_x10 === 'number' ? mirror.fps_x10 / 10 : (status.data?.fps_x10 ?? 0) / 10;
-  if (detail.presence === 'offline') {
-    return <span className="ash">offline</span>;
+  if (isAway(detail.presence)) {
+    return <span className="ash">{detail.presence === 'unknown' ? 'not heard yet' : 'offline'}</span>;
   }
   if (s && s.to === 'sd') {
     return <span>recording to the card</span>;
@@ -46,7 +47,7 @@ function CameraHeadline({ detail, inst, mirror }: CapPanelProps) {
 }
 
 function CameraQuick({ detail, inst }: CapPanelProps) {
-  if (detail.presence === 'offline') {
+  if (isAway(detail.presence)) {
     return (
       <span className="ui-button" data-variant="quiet" aria-disabled="true" data-quick="watch">
         <span className="ui-button-text">{engrave('watch')}</span>

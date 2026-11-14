@@ -853,8 +853,9 @@ button.ui-row:hover .ui-row-name {
 .ui-disclosure-toggle {
   position: relative;
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
-  gap: 10px;
+  gap: 2px 10px;
   min-height: var(--row-min);
   padding: 8px 0;
   border-bottom: var(--hair) solid var(--c-etch1);
@@ -876,6 +877,7 @@ button.ui-row:hover .ui-row-name {
 
 .ui-disclosure-aside {
   margin-left: auto;
+  text-align: right;
 }
 
 .ui-disclosure-body {

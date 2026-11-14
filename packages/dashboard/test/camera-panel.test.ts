@@ -155,6 +155,19 @@ describe('the camera Lens', () => {
     expect(html).toMatch(/data-action="record"[^>]*disabled=""/);
   });
 
+  it('says the board has not been heard since the hub started, and disables everything, when its presence is unknown', () => {
+    seed(status({ sd: null, sd_free_mb: null }));
+    const html = render(createElement(camera.CAMERA_PANEL.Lens, props('unknown')));
+    expect(html).toContain('data-camera-state="offline"');
+    expect(html).toContain('cam-esp32 has not greeted the hub since it started');
+    expect(html).not.toContain('WATCH starts the camera');
+    expect(html).toMatch(/data-action="watch"[^>]*disabled=""/);
+    expect(html).toMatch(/data-action="photo"[^>]*disabled=""/);
+    const headline = render(createElement(camera.CAMERA_PANEL.Headline!, props('unknown')));
+    expect(headline).toContain('not heard yet');
+    expect(headline).not.toContain('idle');
+  });
+
   it('a recording to the card from an older hub (no `use`): STATE says so; WATCH, PHOTO and RECORD… wait and say why, beside STOP THAT STREAM', () => {
     seed(status({ streaming: true, stream: { stream_id: 941, to: 'sd', started_at: '2026-11-14T00:00:00.000Z', seconds: 0, interval_ms: 0, frames: 12, dropped: 0, bytes: 1, subscribers: 0, gaps: 0, job_id: 'j1' } }));
     const html = render(createElement(camera.CAMERA_PANEL.Lens, props()));
@@ -292,5 +305,28 @@ describe('HubRuns', () => {
       ['j2', 'photo', 1, 'captures/cam-esp32/20261114-000000.jpg', null],
       ['j6', 'recording', 12, 'captures/cam-esp32/sd-7/000011.jpg', 'captures/cam-esp32/sd-7/000000.jpg'],
     ]);
+  });
+});
+
+describe('the fr.led headline while its device is away', () => {
+  it('says what the light last was, unlit and marked as last seen, never as now', async () => {
+    const { LED_PANEL } = await import('../src/pages/device/panels/led.tsx');
+    const cap = CATALOG.capabilities.find((c) => c.name === 'fr.led')!;
+    const p = (presence: string) => ({
+      detail: { ...DETAIL, presence } as never,
+      inst: INSTANCES[0]!,
+      cap,
+      members: { properties: [...cap.properties], commands: [...cap.commands], events: [...cap.events] },
+      mirror: { on: true, color: 0x00ff00 },
+      instances: INSTANCES,
+    });
+    const here = render(createElement(LED_PANEL.Headline!, p('online')));
+    expect(here).not.toContain('data-stale');
+    expect(here).not.toContain('as last seen');
+    for (const presence of ['offline', 'unknown']) {
+      const away = render(createElement(LED_PANEL.Headline!, p(presence)));
+      expect(away, presence).toContain('data-stale="true"');
+      expect(away, presence).toContain('as last seen');
+    }
   });
 });

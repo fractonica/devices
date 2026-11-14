@@ -111,6 +111,8 @@ describe('the live view and the panel’s state (§4.3)', () => {
     const watching = run({ t: 'open', own: true, at: 1 }, { t: 'welcome', stream: INFO }, { t: 'frame' });
     expect(cameraState(watching, ctx({ hubDown: true }))).toBe('hub-down');
     expect(cameraState(watching, ctx({ presence: 'offline' }))).toBe('offline');
+    // not heard since the hub started: away, as the rest of the page says it (never "idle" with WATCH greyed and no reason)
+    expect(cameraState(LIVE_OFF, ctx({ presence: 'unknown' }))).toBe('offline');
     expect(cameraState(LIVE_OFF, ctx({ presence: 'suspect' }))).toBe('suspect');
     expect(cameraState(LIVE_OFF, ctx({ hasToken: false }))).toBe('no-key');
     expect(cameraState(run({ t: 'open', own: true, at: 1 }, { t: 'closed', code: 4401, final: true }), ctx())).toBe('bad-key');
@@ -130,6 +132,9 @@ describe('the live view and the panel’s state (§4.3)', () => {
   it('words every state and its STATE row, pure-safe', () => {
     const c = { alias: 'cam-esp32', instance: 'cam', lastWord: '8.4ν', startedAgo: '2ι', running: null };
     expect(stateLine('offline', c)).toBe('cam-esp32 is offline. The camera shows nothing until the board is back on the network.');
+    expect(stateLine('offline', { ...c, unheard: true })).toBe('cam-esp32 has not greeted the hub since it started; it was last heard 8.4ν ago. The camera works once the board is back on the network.');
+    expect(stateLine('offline', { ...c, unheard: true, lastWord: null })).toBe('cam-esp32 has not greeted the hub since it started. The camera works once the board is back on the network.');
+    expect(pureSafe(stateLine('offline', { ...c, unheard: true })!)).toBe(true);
     expect(stateLine('stalled', c)).toBe('No frame came from cam. Its last word was 8.4ν ago; check that it is on the network.');
     expect(stateLine('joined', { ...c, running: { stream_id: 1, to: 'both', started_at: null, seconds: 0 } })).toBe('The recording started 2ι ago.');
     expect(stateLine('joined', c)).toBe('A view opened elsewhere.');

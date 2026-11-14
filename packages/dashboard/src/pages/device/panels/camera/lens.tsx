@@ -526,6 +526,7 @@ export function CameraLens({ detail, inst, cap, mirror, instances }: CapPanelPro
     instance: inst.name,
     lastWord: core && lastSeenUs !== null && Number.isFinite(lastSeenUs) ? spanText(core, lastSeenUs) : null,
     startedAgo: core && stream?.started_at ? spanText(core, (Date.now() - Date.parse(stream.started_at)) * 1000) : null,
+    unheard: presence === 'unknown',
     running: stream,
     viewing: handle.active,
     playing: followed?.kind === 'play' ? (followed.recording ?? null) : null,

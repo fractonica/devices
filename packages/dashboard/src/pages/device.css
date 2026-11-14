@@ -721,6 +721,21 @@ button.dev-group-head {
   gap: var(--sp-2);
 }
 
+/* a light while its device is away: what it last said, unlit, with a note that it is not now */
+.dev-headline[data-stale] .dev-onoff {
+  color: var(--c-ash);
+}
+
+.dev-headline[data-stale] .dev-onoff[data-on] circle {
+  fill: var(--c-void);
+  stroke: var(--c-ash);
+}
+
+.dev-headline-note {
+  font-size: var(--fs-earth);
+  color: var(--c-ash);
+}
+
 .dev-lately-type {
   font-size: var(--fs-data);
 }

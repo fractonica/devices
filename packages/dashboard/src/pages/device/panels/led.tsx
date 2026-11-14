@@ -11,14 +11,17 @@ function LedLens(props: CapPanelProps) {
   return <GenericBody {...props} />;
 }
 
-function LedHeadline({ mirror }: CapPanelProps) {
+function LedHeadline({ detail, mirror }: CapPanelProps) {
   if (typeof mirror.on !== 'boolean') {
     return <span className="ash">not reported yet</span>;
   }
+  // while the device is away the mirror holds what it last said, not what the light does now
+  const away = isAway(detail.presence);
   return (
-    <span className="dev-headline">
+    <span className={away ? 'dev-headline ash' : 'dev-headline'} data-stale={away ? 'true' : undefined}>
       <OnOff value={mirror.on} />
-      {mirror.on && typeof mirror.color === 'number' ? <ColourDisc value={mirror.color} size={10} /> : null}
+      {mirror.on && typeof mirror.color === 'number' && !away ? <ColourDisc value={mirror.color} size={10} /> : null}
+      {away ? <span className="dev-headline-note">as last seen</span> : null}
     </span>
   );
 }

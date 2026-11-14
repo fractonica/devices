@@ -194,7 +194,8 @@ export function cameraState(v: LiveView, c: CameraContext): CameraStateName {
   if (c.hubDown) {
     return 'hub-down';
   }
-  if (c.presence === 'offline') {
+  // "not heard yet" (unknown: no word from it since the hub started) is away too, as everywhere on the page (isAway)
+  if (c.presence === 'offline' || c.presence === 'unknown') {
     return 'offline';
   }
   if (v.closeCode === 4401) {
@@ -330,6 +331,8 @@ export interface StateLineContext {
   lastWord: string | null;
   /** The recording's or the running stream's start, as a span ago ("2ι"), or null. */
   startedAgo: string | null;
+  /** The device has said nothing since the hub started (presence unknown), rather than gone offline. */
+  unheard?: boolean;
   running: RunningStream | null;
   /** A socket is open or opening on the camera (this page shows, or waits for, its frames). */
   viewing?: boolean;
@@ -341,6 +344,9 @@ export interface StateLineContext {
 export function stateLine(s: CameraStateName, c: StateLineContext): string | null {
   switch (s) {
     case 'offline':
+      if (c.unheard) {
+        return `${c.alias} has not greeted the hub since it started${c.lastWord ? `; it was last heard ${c.lastWord} ago` : ''}. The camera works once the board is back on the network.`;
+      }
       return `${c.alias} is offline. The camera shows nothing until the board is back on the network.`;
     case 'suspect':
       return 'Its heartbeats are late; frames may stall.';
