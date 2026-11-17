@@ -101,6 +101,7 @@ describe('loading the committed schema', () => {
       [0x000e, 'fr.haptic', 'Haptic', 'standard'],
       [0x000f, 'fr.storage', 'Storage', 'standard'],
       [0x0010, 'fr.clock', 'Clock', 'standard'],
+      [0x0012, 'fr.stepper', 'Stepper', 'standard'],
       [0x00f0, 'fr.node', 'Node', 'system'],
       [0x00f1, 'fr.ota', 'Ota', 'system'],
       [0x00f2, 'fr.diag', 'Diag', 'system'],

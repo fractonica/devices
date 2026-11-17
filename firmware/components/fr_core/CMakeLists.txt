@@ -12,7 +12,8 @@
 # src/services/battery_service.cpp and haptic_service.cpp (design power-p1 D2-D7) are fr.battery over hal::PowerCell
 # and hal::Settings, and fr.haptic over hal::HapticOutput drawing from an fr.battery; both IDF-free.
 # src/services/storage_service.cpp and clock_service.cpp (design lcd-clock-c1 D5-D8) are fr.storage over hal::FileStore
-# and fr.clock over hal::Rtc; both IDF-free.
+# and fr.clock over hal::Rtc; both IDF-free. src/services/stepper_service.cpp (design stepper-s1 D10-D12) is fr.stepper
+# over hal::Stepper and hal::Settings, IDF-free; its motion core is header-only (fr/motion), the step ISR the driver's.
 idf_component_register(SRCS "src/adc1.cpp"
                             "src/app_desc.cpp"
                             "src/audio/dsp.cpp"
@@ -45,6 +46,7 @@ idf_component_register(SRCS "src/adc1.cpp"
                             "src/services/led_service.cpp"
                             "src/services/radio_tx_service.cpp"
                             "src/services/scale_service.cpp"
+                            "src/services/stepper_service.cpp"
                             "src/services/storage_service.cpp"
                             "src/services/touch_service.cpp"
                             "src/s2_hooks.cpp"

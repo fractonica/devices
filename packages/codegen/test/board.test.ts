@@ -435,7 +435,7 @@ describe('validation', () => {
       y.caps.status.bind = 'leds.status';
     });
     expect(messages(dir)).toEqual([
-      "unknown driver 'button_touch' (known: adc_audio, adc_oneshot, button_gpio, cst816_i2c, ds3231_i2c, dvp_camera, espnow_tx, fixture_gpio, fixture_ws2812_rx, gc9a01_spi, haptic_ledc, hx711_gpio, i2s_amp, i2s_mic, led_gpio, led_ws2812, sdmmc_card, sdspi_card, ssd1306_i2c, st7789_spi, tp4056, tp5000, wifi_csi)",
+      "unknown driver 'button_touch' (known: adc_audio, adc_oneshot, button_gpio, cst816_i2c, drv8833_stepper, ds3231_i2c, dvp_camera, espnow_tx, fixture_gpio, fixture_ws2812_rx, gc9a01_spi, haptic_ledc, hx711_gpio, i2s_amp, i2s_mic, led_gpio, led_ws2812, sdmmc_card, sdspi_card, ssd1306_i2c, st7789_spi, tp4056, tp5000, wifi_csi)",
       "driver led_ws2812 does not accept leds.status of kind 'gpio' (accepts: ws2812)",
     ]);
   });
@@ -463,7 +463,7 @@ describe('validation', () => {
     expect(messages(dir)).toEqual([
       "instance name 'node' is reserved (spec 03 §3.6)",
       "instance name 'Status' must be snake_case, at most 31 characters",
-      'fr.ota has no service in this framework yet (services: fr.button, fr.led, fr.fixture, fr.analog_in, fr.display, fr.touch, fr.audio_in, fr.audio_out, fr.csi, fr.radio_tx, fr.camera, fr.scale, fr.battery, fr.haptic, fr.storage, fr.clock)',
+      'fr.ota has no service in this framework yet (services: fr.button, fr.led, fr.fixture, fr.analog_in, fr.display, fr.touch, fr.audio_in, fr.audio_out, fr.csi, fr.radio_tx, fr.camera, fr.scale, fr.battery, fr.haptic, fr.storage, fr.clock, fr.stepper)',
       'board esp32c6-supermini has no entry leds.nope',
     ]);
   });
@@ -574,12 +574,13 @@ describe('validation', () => {
 describe('driver manifests', () => {
   const drivers = listDrivers(ROOT);
 
-  it('lists the M1 drivers, the M2-C1 fixture drivers, M2-C3\'s adc_oneshot, the M2-C5 panel and touch drivers, A1\'s I2S ones, A2\'s adc_audio, CSI-1\'s radio drivers, CAM-1\'s camera and card, SCALE-1\'s HX711 and ROUND-1\'s panel, and POWER-1\'s chargers and haptic output', () => {
+  it('lists the M1 drivers, the M2-C1 fixture drivers, M2-C3\'s adc_oneshot, the M2-C5 panel and touch drivers, A1\'s I2S ones, A2\'s adc_audio, CSI-1\'s radio drivers, CAM-1\'s camera and card, SCALE-1\'s HX711 and ROUND-1\'s panel, POWER-1\'s chargers and haptic output, and STEPPER-1\'s DRV8833', () => {
     expect(drivers).toEqual([
       'adc_audio',
       'adc_oneshot',
       'button_gpio',
       'cst816_i2c',
+      'drv8833_stepper',
       'ds3231_i2c',
       'dvp_camera',
       'espnow_tx',
@@ -984,6 +985,7 @@ describe('driver sdkconfig (design m2-c1-hil D5)', () => {
 describe('board manifest facts (design m2-c1-hil D5)', () => {
   const FACTS: Record<string, { uart: number; rmtRx: number; en: string | null }> = {
     'esp32c3-oled042': { uart: 21, rmtRx: 2, en: null },
+    'esp32c3-supermini': { uart: 21, rmtRx: 2, en: null },
     'esp32c6-supermini': { uart: 16, rmtRx: 2, en: null },
     'waveshare-esp32s3-lcd19': { uart: 43, rmtRx: 4, en: 'J6-11' },
     'esp32s3-devkitc1-n16r8': { uart: 43, rmtRx: 4, en: 'J1-3' },
@@ -2378,5 +2380,76 @@ describe('LCD-1 and CLOCK-1: the C6-LCD-1.47, its shared SPI2 and a DS3231 (desi
       delete y.sd_cards.card.miso;
     });
     expect(issuesOf(() => gen(dir, 'c6l-lcd', false)).map((i) => `${i.path}`)).toEqual(expect.arrayContaining([expect.stringContaining('sd_cards.card.miso')]));
+  });
+});
+
+describe('STEPPER-1: the C3 Super Mini and a DRV8833 stepper (design stepper-s1 D10, D13)', () => {
+  const STEPPER = 'c3s-stepper';
+  const SUPERMINI = 'hardware/boards/esp32c3-supermini.board.yaml';
+  const messages = (dir: string) => issuesOf(() => gen(dir, STEPPER, false)).map((i) => i.message);
+
+  it('c3s-stepper generates against the committed slots.lock: StepperService on drv8833_stepper, its NVS namespace and sdkconfig', () => {
+    const r = generateFirmware({ sourceDir: ROOT, profile: STEPPER, outDir: join(tmpdir(), 'unused'), write: false, model: MODEL });
+    expect(r.slotsLockChanged).toBe(false);
+    expect(r.slotsLock.content).toBe(readFileSync(join(ROOT, slotsLockFile(STEPPER)), 'utf8'));
+    expect(r.manifest.caps.map((c) => [c.name, c.port, c.cap, c.driver])).toEqual([
+      ['boot', 1, 'fr.button', 'button_gpio'],
+      ['status', 2, 'fr.led', 'led_gpio'],
+      ['motor', 3, 'fr.stepper', 'drv8833_stepper'],
+    ]);
+    expect(r.manifest.test_pin).toBe(0);
+    expect(r.instances.motor.pins).toEqual([6, 5, 10, 20, 7]);
+    expect(r.instances.motor.driverConfig).toEqual({ ain1: 6, ain2: 5, bin1: 10, bin2: 20, sleep: 7, fault: -1, fault_pullup: true, pwm_hz: 25000 });
+    expect(r.manifest.caps[2]).toMatchObject({
+      cap_id: 0x0012,
+      config: { steps_per_rev: 20, step_mode: 'micro8', max_speed_hz: 1600, accel: 8000, coil_ohm: 20, run_ma: 150, hold_pct: 30, supply_mv: 5200 },
+      traits: { microstep: true },
+    });
+    const cpp = file(r, 'fr_board/fr_board.cpp');
+    expect(cpp).toContain('fr::platform::NvsSettings settings{"fr_stepper"};');
+    expect(cpp).toContain('fr::StepperService service{driver, settings, kConfig};');
+    const sdk = file(r, 'sdkconfig.board');
+    for (const line of ['CONFIG_ESP_CONSOLE_USB_SERIAL_JTAG=y', 'CONFIG_FR_WIFI_MAX_TX_POWER_QDBM=34', 'CONFIG_FR_TEST_PIN=0', 'CONFIG_GPTIMER_ISR_CACHE_SAFE=y', 'CONFIG_GPTIMER_CTRL_FUNC_IN_IRAM=y']) {
+      expect(sdk).toContain(`\n${line}\n`);
+    }
+    expect(file(r, 'components.cmake')).toContain('/hardware/drivers/drv8833_stepper"');
+  });
+
+  it('fits the budget exactly: LEDC 4 channels and 1 timer, gptimer 1; one less of each is refused', () => {
+    const dir = fixture();
+    edit(dir, SUPERMINI, (y) => {
+      y.resources = { ...y.resources, ledc_channels: 4, ledc_timers: 1, gptimer: 1 };
+    });
+    expect(gen(dir, STEPPER, false).manifest.caps).toHaveLength(3);
+    edit(dir, SUPERMINI, (y) => {
+      y.resources = { ...y.resources, ledc_channels: 3, ledc_timers: 0, gptimer: 0 };
+    });
+    expect(messages(dir)).toEqual([
+      'gptimer budget exceeded: 1 needed (motor), board esp32c3-supermini has 0',
+      'ledc_channels budget exceeded: 4 needed (motor), board esp32c3-supermini has 3',
+      'ledc_timers budget exceeded: 1 needed (motor), board esp32c3-supermini has 0',
+    ]);
+  });
+
+  it('microstep follows the driver: a GPIO-only driver would report false', () => {
+    const dir = fixture();
+    edit(dir, 'hardware/drivers/drv8833_stepper/driver.yaml', (y) => {
+      y.traits.microstep = false;
+    });
+    expect(gen(dir, STEPPER, false).manifest.caps[2].traits).toEqual({ microstep: false });
+  });
+
+  it('the OLED C3 board cannot carry this wiring: its display holds GPIO5 and 6, GPIO10 is its test pin', () => {
+    const dir = fixture();
+    edit(dir, PROFILE(STEPPER), (y) => {
+      y.board = 'esp32c3-oled042';
+    });
+    const bind = '{ain1: gpio.6, ain2: gpio.5, bin1: gpio.10, bin2: gpio.20, sleep: gpio.7}';
+    expect(messages(dir)).toEqual([
+      `GPIO6 (${bind}) is reserved for display on esp32c3-oled042`,
+      `GPIO5 (${bind}) is reserved for display on esp32c3-oled042`,
+      `test_pin GPIO10 is claimed by 'motor' (${bind})`,
+      'gptimer budget exceeded: 1 needed (motor), board esp32c3-oled042 has 0',
+    ]);
   });
 });

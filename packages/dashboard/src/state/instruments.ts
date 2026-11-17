@@ -22,6 +22,7 @@ const CAP_WORDS: Readonly<Record<string, string>> = {
   'fr.haptic': 'vibration',
   'fr.storage': 'card',
   'fr.clock': 'clock',
+  'fr.stepper': 'stepper',
   'fr.fixture': 'test fixture',
   'fr.node': 'the board',
   'fr.ota': 'updates',

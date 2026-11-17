@@ -1,0 +1,9 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:fractonica:schema:fr.stepper.halt.args",
+  "title": "fr.stepper.halt arguments",
+  "description": "Stops stepping at once and holds (done halted); above start_hz the position becomes unknown.",
+  "type": "object",
+  "properties": {},
+  "additionalProperties": false
+}

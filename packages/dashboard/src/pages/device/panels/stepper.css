@@ -1,0 +1,165 @@
+/*
+ * stepper.css - the fr.stepper panel's Motor block (panels/stepper.tsx). Tokens only. Classes `stepper-`.
+ * The block leads the instrument page, over the generic readings and actions. Desktop: the shaft dial left, the
+ * controls beside it. Phone: the dial over the controls, both full width.
+ */
+
+.stepper-lens {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-5);
+}
+
+.stepper {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--sp-4) var(--sp-5);
+  align-items: flex-start;
+  padding-top: var(--sp-3);
+}
+
+.stepper-controls {
+  display: flex;
+  flex: 1 1 280px;
+  flex-direction: column;
+  gap: var(--sp-4);
+  min-width: 0;
+  max-width: 600px;
+}
+
+.stepper-group {
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-2);
+}
+
+.stepper-label {
+  font-size: var(--fs-label);
+  color: var(--c-ash);
+}
+
+.stepper-goto {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: var(--sp-3);
+}
+
+.stepper-goto > :first-child {
+  flex: 0 1 240px;
+  min-width: 140px;
+}
+
+.stepper-fault-word {
+  color: var(--c-fault);
+}
+
+/* ---- the shaft dial ---- */
+
+.stepper-dial {
+  display: flex;
+  flex: none;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--sp-2);
+  margin: 0;
+}
+
+.stepper-dial svg {
+  display: block;
+  overflow: visible;
+}
+
+.stepper-dial-ring {
+  fill: none;
+  stroke: var(--c-etch2);
+  stroke-width: 0.9;
+}
+
+.stepper-dial-tick {
+  stroke: var(--c-etch3);
+  stroke-width: 0.75;
+}
+
+/* the turn's zero, where position 0 (and every whole turn) points */
+.stepper-dial-tick.zero {
+  stroke: var(--c-ash);
+  stroke-width: 1.1;
+}
+
+.stepper-dial-target {
+  fill: var(--c-void);
+  stroke: var(--c-bone);
+  stroke-width: 1;
+}
+
+.stepper-dial-mark line {
+  stroke: var(--c-lumen);
+  stroke-width: 1.2;
+  stroke-linecap: round;
+}
+
+.stepper-dial-mark circle {
+  fill: var(--c-lumen);
+  filter: drop-shadow(0 0 var(--glow-sigma-desktop) var(--c-glow-lumen));
+}
+
+/* a position not known: the mark is where the count says, not where the shaft is sure to be */
+.stepper-dial[data-known='false'] .stepper-dial-mark line {
+  stroke: var(--c-ash);
+}
+
+.stepper-dial[data-known='false'] .stepper-dial-mark circle {
+  fill: var(--c-void);
+  stroke: var(--c-ash);
+  filter: none;
+}
+
+.stepper-dial[data-motion='fault'] .stepper-dial-ring {
+  stroke: var(--c-fault);
+}
+
+.stepper-dial-reading {
+  font-family: var(--font-reading);
+  font-weight: var(--w-value);
+  font-variant-numeric: tabular-nums;
+  font-size: var(--fs-title);
+  fill: var(--c-bone);
+  text-anchor: middle;
+  dominant-baseline: middle;
+}
+
+.stepper-dial-sub {
+  font-family: var(--font-caps);
+  font-weight: var(--w-caps);
+  letter-spacing: var(--track-caps);
+  font-size: var(--fs-micro);
+  fill: var(--c-ash);
+  text-anchor: middle;
+  dominant-baseline: middle;
+}
+
+.stepper-dial-word {
+  font-size: var(--fs-label);
+  color: var(--c-bone);
+}
+
+.stepper-dial[data-motion='moving'] .stepper-dial-word,
+.stepper-dial[data-motion='stopping'] .stepper-dial-word {
+  color: var(--c-lumen);
+}
+
+.stepper-dial[data-motion='released'] .stepper-dial-word {
+  color: var(--c-ash);
+}
+
+.stepper-dial[data-motion='fault'] .stepper-dial-word {
+  color: var(--c-fault);
+}
+
+@media (max-width: 599.98px) {
+  .stepper {
+    flex-direction: column;
+    align-items: stretch;
+  }
+}

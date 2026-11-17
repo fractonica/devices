@@ -117,6 +117,7 @@ node tools/host-test.mjs --fleet                                    # once: buil
 pnpm -C packages/dashboard build                                    # after each change (or `watch`)
 node --conditions=@fractonica/source tools/dash-dev.ts --url-file /tmp/hub.url   # a scratch hub + fleet; Ctrl-C ends it
 #   add --camera for a fake ESP32-CAM (cam-esp32: live frames, a card; --no-card empties the slot; SIGUSR2 takes it offline and back)
+#   add --stepper for a fake stepper board (stepper-c3: c3s-stepper's motor moving in time, done events; SIGUSR1 raises a driver fault)
 node tools/dash-shoot.mjs --url "$(cat /tmp/hub.url)" --out <dir> /=hub /devices=devices   # PNGs at 1440 and 390
 ```
 

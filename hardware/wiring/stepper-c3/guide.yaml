@@ -1,0 +1,80 @@
+schema: fractonica/wiring@1
+id: stepper-c3
+title: Micro stepper on a DRV8833, ESP32-C3 Super Mini
+summary: >-
+  A 10 mm two-coil micro stepper on a DRV8833 dual H-bridge module (TB6612-style pinout), driven from an ESP32-C3
+  Super Mini: AIN2, AIN1, STBY, BIN1 and BIN2 on GPIO5, 6, 7, 10 and 20, the motor supply from the board's 5V (USB).
+  The module has no fault pin.
+board: esp32c3-supermini
+profile: c3s-stepper
+device: stepper-c3
+design: docs/design/stepper-s1.md
+covers: [motor]
+safety:
+  - "Unplug the board's USB before connecting or moving any wire."
+  - "Never plug or unplug the motor while the module has power: the coil's energy arcs on the pins."
+  - "The module has no current limit of its own: the firmware's power cap (the coil resistance and run current it is configured with) is the limit. Measure the coil before the first run."
+  - "VM comes straight from USB 5 V: keep the motor's wires away from the board's pins; a short on VM is a short on the Mac's port."
+  - "No GPIO goes to STBY before the pull-up check: a module that pulls it to VM puts 5 V on a 3.3 V pin."
+bom:
+  - { part: esp32c3-supermini-board, qty: 1, note: stepper-c3 }
+  - { part: drv8833-module, qty: 1 }
+  - { part: micro-stepper-10mm, qty: 1, note: "pins 1–4: A1 B1 A2 B2" }
+  - { part: capacitor-electrolytic, value: "100 µF", qty: 1, note: "optional: across VM and the GND beside it, at the module; 10 V or more" }
+diagrams:
+  - { id: map, title: "The C3 Super Mini, the DRV8833 and the motor", file: map.svg }
+connections:
+  - { pin: gpio.5, instance: motor, bind: ain2, to: "DRV8833 AIN2" }
+  - { pin: gpio.6, instance: motor, bind: ain1, to: "DRV8833 AIN1" }
+  - { pin: gpio.7, instance: motor, bind: sleep, to: "DRV8833 STBY (nSLEEP)", via: "high = awake" }
+  - { pin: gpio.10, instance: motor, bind: bin1, to: "DRV8833 BIN1" }
+  - { pin: gpio.20, instance: motor, bind: bin2, to: "DRV8833 BIN2" }
+  - { pin: 5v, to: "DRV8833 VM", via: "optional 100 µF electrolytic across VM and GND" }
+  - { pin: gnd, to: "DRV8833 GND" }
+sections:
+  - id: check
+    title: Before wiring
+    diagram: map
+    steps:
+      - id: coils
+        text: "Multimeter on Ω, probe to probe across the motor's pins (not to ground). Number the pins 1 to 4 along the motor. On this motor the coils alternate: pins 1 and 3 are coil A (A1, A2), pins 2 and 4 are coil B (B1, B2), each about 20 Ω; neighbouring pins read open."
+        check: "1–3 and 2–4 read within a tenth of each other (about 20 Ω); 1–2, 2–3, 3–4 and 1–4 read open. Write the value down: it becomes coil_ohm."
+        note: "Another motor may pair its pins differently: trust the meter, not the order. These motors are often sold two on one cable: trace which four wires go to the motor you mount."
+  - id: power
+    title: Motor supply
+    diagram: map
+    steps:
+      - id: vm
+        text: "USB unplugged. The Super Mini's 5V to the module's VM, GND to the module's GND. A 100 µF across VM and the GND beside it steadies VM (optional), the stripe (−) to GND. Nothing else yet: no GPIO wire and no motor."
+        pins: [5v, gnd]
+        check: "With USB plugged in: VM to GND reads 4.6–5.3 V."
+      - id: module-pullups
+        text: "Still only VM and GND connected, USB plugged in: measure STBY to GND."
+        check: "STBY reads about 0 V. About 5 V means the module pulls it up to VM: stop here and do not connect GPIO7."
+        note: "STBY at 5 V: cut the module's STBY jumper or remove its pull-up resistor, or the bridge is awake from power-up and GPIO7 fights 5 V. Unplug USB while you work on the module, then measure again."
+  - id: logic
+    title: Inputs and standby
+    diagram: map
+    steps:
+      - id: inputs
+        text: "USB unplugged. GPIO5 to AIN2, GPIO6 to AIN1, GPIO10 to BIN1, GPIO20 to BIN2. Keep the four wires short and together."
+        pins: [gpio.5, gpio.6, gpio.10, gpio.20]
+      - id: sleep-fault
+        text: "Only after the pull-up check passed: GPIO7 to STBY. GPIO8 (the LED) and GPIO9 (BOOT) stay free, and GPIO3 and GPIO4 are free for a limit switch."
+        pins: [gpio.7]
+        check: "After flashing c3s-stepper, before the motor: fr devices get stepper-c3 shows motor.motion released. Press the board's reset a few times while measuring AO1 to AO2: it stays at 0 V."
+        note: "AO1 to AO2 jumps at reset? A 4.7 kΩ from GPIO7 to GND holds the driver asleep while the C3 boots (not 10 kΩ: too weak)."
+  - id: motor
+    title: The motor
+    diagram: map
+    steps:
+      - id: coils-out
+        text: "USB unplugged. Motor pin 1 (A1) to AO1, pin 3 (A2) to AO2, pin 2 (B1) to BO1, pin 4 (B2) to BO2. On the module the outputs run AO1, AO2, BO2, BO1 down its right side, so the B wires cross."
+        note: "Turning the wrong way later? Swap A1 and A2, or configure invert."
+      - id: first-hold
+        text: "Plug in USB. The profile starts from a cautious current for a 20 Ω coil on 5.2 V; for another coil, set the resistance you measured with motor.configure, as step 3 of the user manual's stepper first run shows. Then fr send stepper-c3 motor.hold."
+        check: "The shaft resists turning by hand; fr send stepper-c3 motor.release lets it go."
+        note: "The coils warm but the shaft turns as freely as with no power, and never snaps to a step? The motor is faulty (its rotor slips on the shaft): no setting helps, fit another one. Check first that the warm motor is the one you watch."
+      - id: first-turn
+        text: "fr send stepper-c3 motor.move_by '{\"steps\": 160}' turns one revolution at eighth steps (20 full steps of 18°)."
+        check: "The pinion turns exactly once and stops on its mark; motor.done says reached."

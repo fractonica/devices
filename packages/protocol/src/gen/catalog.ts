@@ -4340,6 +4340,757 @@ export const CATALOG: Catalog = {
       ]
     },
     {
+      "id": 18,
+      "name": "fr.stepper",
+      "version": "1.0",
+      "section": "standard",
+      "summary": "A two-coil stepper motor on an H-bridge driver. It moves to positions smoothly, spins, holds and lets go.",
+      "doc": "One bipolar stepper motor (two coils, four wires) on a dual H-bridge such as the DRV8833 (design stepper-s1).\nThe node counts the position in steps. A step is a full step divided by `step_mode` (micro8: an eighth), so one\nturn is steps_per_rev x the microsteps. Positive steps turn it forward; `invert` swaps the direction.\n\nMotion runs on the node. A move accelerates at `accel`, cruises at no more than `max_speed_hz` and decelerates to\nrest exactly on its target. move_to, move_by and jog answer OK at once, and `done` ends the motion. A newer move or\njog replaces the running one without stopping (no `done` for the replaced one) and reverses through zero speed\nwhen it must. `stop` decelerates; `halt` stops at once (fast motion may lose steps); `release` turns the coils off.\n\nPower: the coils are driven by PWM with no current sensing. While moving, the coil drive is capped at\nrun_ma x coil_ohm / supply_mv of full duty. At rest it is hold_pct of that. The coils go off release_ms after the\nlast motion ends. Measure one coil's resistance and set coil_ohm and run_ma with `configure` (kept across reboots).\n\nAt boot the coils are off, the position is 0 and position_known is false until `zero`. A driver fault (nFAULT:\nover-current or over-heat) turns the coils off at once and emits `fault`. A second later, `hold` or a new move\nclears it. A motor supply that sags below the driver's under-voltage lockout is not reported: the bridge stops\ndriving and resumes by itself, and steps it missed meanwhile stay counted. A move or jog started from a hub session\ndecelerates to a stop 10 s after that hub falls silent.\n",
+      "types": {
+        "StepMode": {
+          "full": 0,
+          "half": 1,
+          "micro4": 2,
+          "micro8": 3,
+          "micro16": 4,
+          "micro32": 5
+        },
+        "Motion": {
+          "released": 0,
+          "holding": 1,
+          "moving": 2,
+          "stopping": 3,
+          "fault": 4
+        },
+        "DoneReason": {
+          "reached": 0,
+          "stopped": 1,
+          "halted": 2,
+          "released": 3,
+          "limit": 4,
+          "fault": 5,
+          "hub_lost": 6,
+          "elapsed": 7
+        },
+        "FaultCause": {
+          "driver": 0,
+          "injected": 1
+        }
+      },
+      "traits": [
+        {
+          "name": "microstep",
+          "id": 1,
+          "type": "bool",
+          "doc": "the driver drives the coils with PWM (micro4 to micro32); else full and half steps only"
+        }
+      ],
+      "config": [
+        {
+          "name": "steps_per_rev",
+          "type": "u16",
+          "default": 20,
+          "range": [
+            4,
+            10000
+          ],
+          "doc": "full steps per turn of the shaft (18 degrees a step: 20)"
+        },
+        {
+          "name": "step_mode",
+          "type": "StepMode",
+          "default": "micro8"
+        },
+        {
+          "name": "max_speed_hz",
+          "type": "u16",
+          "default": 1600,
+          "range": [
+            1,
+            10000
+          ],
+          "unit": "Hz",
+          "doc": "the fastest speed, steps a second; a move's speed_hz may not exceed it"
+        },
+        {
+          "name": "accel",
+          "type": "u32",
+          "default": 8000,
+          "range": [
+            10,
+            200000
+          ],
+          "unit": "Hz/s",
+          "doc": "acceleration and deceleration, steps a second per second; a move's accel may not exceed it"
+        },
+        {
+          "name": "start_hz",
+          "type": "u16",
+          "default": 80,
+          "range": [
+            1,
+            10000
+          ],
+          "unit": "Hz",
+          "doc": "the fastest speed the motor stops at without a ramp; a halt or fault above it makes position_known false"
+        },
+        {
+          "name": "coil_ohm",
+          "type": "u16",
+          "default": 10,
+          "range": [
+            1,
+            1000
+          ],
+          "unit": "ohm",
+          "doc": "one coil's resistance as measured; too low is the safe side"
+        },
+        {
+          "name": "run_ma",
+          "type": "u16",
+          "default": 100,
+          "range": [
+            1,
+            1500
+          ],
+          "unit": "mA",
+          "doc": "the coil current to aim at while moving (the motor's rated current, or less)"
+        },
+        {
+          "name": "hold_pct",
+          "type": "u8",
+          "default": 30,
+          "range": [
+            1,
+            100
+          ],
+          "doc": "the current at rest, per cent of run_ma"
+        },
+        {
+          "name": "release_ms",
+          "type": "u16",
+          "default": 1000,
+          "unit": "ms",
+          "doc": "time at rest after a motion before the coils go off; 0 = never"
+        },
+        {
+          "name": "supply_mv",
+          "type": "u16",
+          "default": 5000,
+          "range": [
+            2700,
+            10800
+          ],
+          "unit": "mV",
+          "doc": "the highest VM the driver will see; too high is the safe side"
+        },
+        {
+          "name": "invert",
+          "type": "bool",
+          "default": false,
+          "doc": "turn the other way for positive steps (as swapping one coil's wires)"
+        },
+        {
+          "name": "limits",
+          "type": "bool",
+          "default": false,
+          "doc": "keep the position within limit_min..limit_max (needs a known position)"
+        },
+        {
+          "name": "limit_min",
+          "type": "i32",
+          "default": -1000000000,
+          "range": [
+            -1000000000,
+            1000000000
+          ]
+        },
+        {
+          "name": "limit_max",
+          "type": "i32",
+          "default": 1000000000,
+          "range": [
+            -1000000000,
+            1000000000
+          ]
+        },
+        {
+          "name": "report_hz",
+          "type": "u8",
+          "default": 10,
+          "range": [
+            1,
+            50
+          ],
+          "unit": "Hz",
+          "doc": "position and speed reports a second while moving"
+        }
+      ],
+      "properties": [
+        {
+          "name": "position",
+          "id": 1,
+          "type": "i32",
+          "range": [
+            -1000000000,
+            1000000000
+          ],
+          "doc": "steps, counted from zero at boot or from the last zero"
+        },
+        {
+          "name": "target",
+          "id": 2,
+          "type": "i32",
+          "range": [
+            -1000000000,
+            1000000000
+          ],
+          "doc": "where the running move ends (the position at rest)"
+        },
+        {
+          "name": "speed_hz",
+          "id": 3,
+          "type": "i32",
+          "range": [
+            -10000,
+            10000
+          ],
+          "unit": "Hz",
+          "doc": "steps a second now; negative while turning backward"
+        },
+        {
+          "name": "motion",
+          "id": 4,
+          "type": "Motion"
+        },
+        {
+          "name": "position_known",
+          "id": 5,
+          "type": "bool",
+          "doc": "true after zero; false at boot and after a halt or fault at speed"
+        },
+        {
+          "name": "step_mode",
+          "id": 6,
+          "type": "StepMode"
+        },
+        {
+          "name": "max_speed_hz",
+          "id": 7,
+          "type": "u16",
+          "unit": "Hz"
+        },
+        {
+          "name": "accel",
+          "id": 8,
+          "type": "u32",
+          "unit": "Hz/s"
+        },
+        {
+          "name": "start_hz",
+          "id": 9,
+          "type": "u16",
+          "unit": "Hz"
+        },
+        {
+          "name": "coil_ohm",
+          "id": 10,
+          "type": "u16",
+          "unit": "ohm"
+        },
+        {
+          "name": "run_ma",
+          "id": 11,
+          "type": "u16",
+          "unit": "mA"
+        },
+        {
+          "name": "hold_pct",
+          "id": 12,
+          "type": "u8"
+        },
+        {
+          "name": "release_ms",
+          "id": 13,
+          "type": "u16",
+          "unit": "ms"
+        },
+        {
+          "name": "supply_mv",
+          "id": 14,
+          "type": "u16",
+          "unit": "mV"
+        },
+        {
+          "name": "invert",
+          "id": 15,
+          "type": "bool"
+        },
+        {
+          "name": "limits",
+          "id": 16,
+          "type": "bool"
+        },
+        {
+          "name": "limit_min",
+          "id": 17,
+          "type": "i32"
+        },
+        {
+          "name": "limit_max",
+          "id": 18,
+          "type": "i32"
+        },
+        {
+          "name": "run_duty_pct",
+          "id": 19,
+          "type": "u8",
+          "doc": "the PWM duty the run current needs, per cent of full: run_ma x coil_ohm / supply_mv, at most 100"
+        },
+        {
+          "name": "steps_per_rev",
+          "id": 20,
+          "type": "u16",
+          "doc": "full steps per turn (the build's configuration)"
+        }
+      ],
+      "commands": [
+        {
+          "name": "move_to",
+          "id": 1,
+          "delivery": "reliable",
+          "idempotent": true,
+          "visibility": "public",
+          "doc": "Moves to `position`, replacing any running move or jog without stopping. OK at once; done (reached) at the end. INVALID_ARGS beyond the limits or above max_speed_hz or accel; BUSY in a fault's back-off, or with limits on and position_known false.",
+          "fields": [
+            {
+              "name": "position",
+              "id": 1,
+              "type": "i32",
+              "range": [
+                -1000000000,
+                1000000000
+              ]
+            },
+            {
+              "name": "speed_hz",
+              "id": 2,
+              "type": "u16",
+              "optional": true,
+              "range": [
+                1,
+                10000
+              ],
+              "unit": "Hz",
+              "doc": "absent: max_speed_hz"
+            },
+            {
+              "name": "accel",
+              "id": 3,
+              "type": "u32",
+              "optional": true,
+              "range": [
+                10,
+                200000
+              ],
+              "unit": "Hz/s",
+              "doc": "absent: the configured accel"
+            }
+          ],
+          "examples": [
+            {
+              "position": 160
+            },
+            {
+              "position": -800,
+              "speed_hz": 400,
+              "accel": 2000
+            }
+          ]
+        },
+        {
+          "name": "move_by",
+          "id": 2,
+          "delivery": "reliable",
+          "idempotent": false,
+          "visibility": "public",
+          "doc": "Moves by `steps` from the running move's target, or from the position when no move runs. move_to's answers; 0 steps at rest is done (reached) at once.",
+          "fields": [
+            {
+              "name": "steps",
+              "id": 1,
+              "type": "i32",
+              "range": [
+                -1000000000,
+                1000000000
+              ]
+            },
+            {
+              "name": "speed_hz",
+              "id": 2,
+              "type": "u16",
+              "optional": true,
+              "range": [
+                1,
+                10000
+              ],
+              "unit": "Hz",
+              "doc": "absent: max_speed_hz"
+            },
+            {
+              "name": "accel",
+              "id": 3,
+              "type": "u32",
+              "optional": true,
+              "range": [
+                10,
+                200000
+              ],
+              "unit": "Hz/s",
+              "doc": "absent: the configured accel"
+            }
+          ],
+          "examples": [
+            {
+              "steps": 160
+            },
+            {
+              "steps": -20,
+              "speed_hz": 200
+            }
+          ]
+        },
+        {
+          "name": "jog",
+          "id": 3,
+          "delivery": "reliable",
+          "idempotent": true,
+          "visibility": "public",
+          "doc": "Turns at `speed_hz` (negative: backward) until stop, another move, a limit, the hub's silence or `seconds` (done elapsed). Speed 0 decelerates to rest, like stop. Answers as move_to.",
+          "fields": [
+            {
+              "name": "speed_hz",
+              "id": 1,
+              "type": "i32",
+              "range": [
+                -10000,
+                10000
+              ],
+              "unit": "Hz"
+            },
+            {
+              "name": "accel",
+              "id": 2,
+              "type": "u32",
+              "optional": true,
+              "range": [
+                10,
+                200000
+              ],
+              "unit": "Hz/s",
+              "doc": "absent: the configured accel"
+            },
+            {
+              "name": "seconds",
+              "id": 3,
+              "type": "u16",
+              "default": 0,
+              "doc": "0: until stopped"
+            }
+          ],
+          "examples": [
+            {
+              "speed_hz": 400
+            },
+            {
+              "speed_hz": -800,
+              "seconds": 5
+            }
+          ]
+        },
+        {
+          "name": "stop",
+          "id": 4,
+          "delivery": "reliable",
+          "idempotent": true,
+          "visibility": "public",
+          "doc": "Decelerates to rest (done stopped); OK when nothing moves.",
+          "fields": []
+        },
+        {
+          "name": "halt",
+          "id": 5,
+          "delivery": "reliable",
+          "idempotent": true,
+          "visibility": "public",
+          "doc": "Stops stepping at once and holds (done halted); above start_hz the position becomes unknown.",
+          "fields": []
+        },
+        {
+          "name": "hold",
+          "id": 6,
+          "delivery": "reliable",
+          "idempotent": true,
+          "visibility": "public",
+          "doc": "Energises the coils at hold power where the position says, until release or the next motion's end; clears a fault (BUSY in its back-off).",
+          "fields": []
+        },
+        {
+          "name": "release",
+          "id": 7,
+          "delivery": "reliable",
+          "idempotent": true,
+          "visibility": "public",
+          "doc": "Coils off and the driver asleep at once; a running motion ends (done released).",
+          "fields": []
+        },
+        {
+          "name": "zero",
+          "id": 8,
+          "delivery": "reliable",
+          "idempotent": true,
+          "visibility": "public",
+          "doc": "Calls where the shaft is now `position` (0 by default) without moving it; position_known becomes true. BUSY while moving.",
+          "fields": [
+            {
+              "name": "position",
+              "id": 1,
+              "type": "i32",
+              "default": 0,
+              "range": [
+                -1000000000,
+                1000000000
+              ]
+            }
+          ],
+          "examples": [
+            {
+              "position": 100
+            }
+          ]
+        },
+        {
+          "name": "configure",
+          "id": 9,
+          "delivery": "reliable",
+          "idempotent": true,
+          "visibility": "public",
+          "doc": "Changes the settings given and keeps them across reboots; absent fields stay. BUSY while moving, and for step_mode unless released. A new step_mode rescales the position, the limits and the speeds not given in the same call. INVALID_ARGS for limit_min >= limit_max, or a step_mode the driver cannot do.",
+          "fields": [
+            {
+              "name": "step_mode",
+              "id": 1,
+              "type": "StepMode",
+              "optional": true
+            },
+            {
+              "name": "max_speed_hz",
+              "id": 2,
+              "type": "u16",
+              "optional": true,
+              "range": [
+                1,
+                10000
+              ],
+              "unit": "Hz"
+            },
+            {
+              "name": "accel",
+              "id": 3,
+              "type": "u32",
+              "optional": true,
+              "range": [
+                10,
+                200000
+              ],
+              "unit": "Hz/s"
+            },
+            {
+              "name": "start_hz",
+              "id": 4,
+              "type": "u16",
+              "optional": true,
+              "range": [
+                1,
+                10000
+              ],
+              "unit": "Hz"
+            },
+            {
+              "name": "coil_ohm",
+              "id": 5,
+              "type": "u16",
+              "optional": true,
+              "range": [
+                1,
+                1000
+              ],
+              "unit": "ohm"
+            },
+            {
+              "name": "run_ma",
+              "id": 6,
+              "type": "u16",
+              "optional": true,
+              "range": [
+                1,
+                1500
+              ],
+              "unit": "mA"
+            },
+            {
+              "name": "hold_pct",
+              "id": 7,
+              "type": "u8",
+              "optional": true,
+              "range": [
+                1,
+                100
+              ]
+            },
+            {
+              "name": "release_ms",
+              "id": 8,
+              "type": "u16",
+              "optional": true,
+              "unit": "ms"
+            },
+            {
+              "name": "supply_mv",
+              "id": 9,
+              "type": "u16",
+              "optional": true,
+              "range": [
+                2700,
+                10800
+              ],
+              "unit": "mV"
+            },
+            {
+              "name": "invert",
+              "id": 10,
+              "type": "bool",
+              "optional": true
+            },
+            {
+              "name": "limits",
+              "id": 11,
+              "type": "bool",
+              "optional": true
+            },
+            {
+              "name": "limit_min",
+              "id": 12,
+              "type": "i32",
+              "optional": true,
+              "range": [
+                -1000000000,
+                1000000000
+              ]
+            },
+            {
+              "name": "limit_max",
+              "id": 13,
+              "type": "i32",
+              "optional": true,
+              "range": [
+                -1000000000,
+                1000000000
+              ]
+            }
+          ],
+          "examples": [
+            {
+              "coil_ohm": 20,
+              "run_ma": 90
+            },
+            {
+              "step_mode": "micro16",
+              "max_speed_hz": 3200,
+              "accel": 16000
+            },
+            {
+              "invert": true
+            }
+          ]
+        },
+        {
+          "name": "reset_settings",
+          "id": 10,
+          "delivery": "reliable",
+          "idempotent": true,
+          "visibility": "public",
+          "doc": "Forgets what configure kept; the build's configuration applies again. BUSY unless released.",
+          "fields": []
+        },
+        {
+          "name": "inject_fault",
+          "id": 11,
+          "delivery": "reliable",
+          "idempotent": false,
+          "visibility": "test",
+          "doc": "Runs the fault path as if nFAULT fell (fault injected).",
+          "fields": []
+        }
+      ],
+      "events": [
+        {
+          "name": "done",
+          "id": 1,
+          "priority": "normal",
+          "doc": "A motion came to rest or was ended. A motion replaced by a newer move or jog has no done.",
+          "fields": [
+            {
+              "name": "reason",
+              "id": 1,
+              "type": "DoneReason"
+            },
+            {
+              "name": "position",
+              "id": 2,
+              "type": "i32"
+            },
+            {
+              "name": "target",
+              "id": 3,
+              "type": "i32",
+              "doc": "the target it had (reached: equal to position)"
+            },
+            {
+              "name": "slips",
+              "id": 4,
+              "type": "u16",
+              "doc": "times the step timer ran late and the ramp restarted from rest; 0 normally"
+            }
+          ]
+        },
+        {
+          "name": "fault",
+          "id": 2,
+          "priority": "normal",
+          "doc": "The driver reported a fault (or one was injected). The coils are off and motion is fault.",
+          "fields": [
+            {
+              "name": "cause",
+              "id": 1,
+              "type": "FaultCause"
+            },
+            {
+              "name": "position",
+              "id": 2,
+              "type": "i32"
+            },
+            {
+              "name": "recent",
+              "id": 3,
+              "type": "u8",
+              "doc": "faults in the last minute, this one included; at 3 the node refuses to energise for a minute"
+            }
+          ]
+        }
+      ]
+    },
+    {
       "id": 240,
       "name": "fr.node",
       "version": "1.0",
@@ -4718,4 +5469,4 @@ export const CATALOG: Catalog = {
   ]
 };
 
-export const CATALOG_HASH = 0x95782421;
+export const CATALOG_HASH = 0x616bf0f2;

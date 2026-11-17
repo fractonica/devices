@@ -122,15 +122,19 @@ export function earthDuration(core: Core, us: number): string {
   return core.frc.formatDuration(BigInt(Math.round(us)), 2);
 }
 
-/** A rate in Hz as cycles per Blink, the core's words ("7 pB", "1 per 3 Blinks"). */
+/**
+ * A rate in Hz as cycles per Blink, the core's words ("7 pB", "1 per 3 Blinks"). A negative rate (a stepper spinning
+ * back) is the same words after a minus sign, as spanText writes a negative span: the core takes magnitudes only.
+ */
 export function rateText(core: Core, hz: number, now: bigint = core.frc.now()): string {
   const blinkUs = blinkMicros(core, now);
   if (!Number.isFinite(hz) || !Number.isFinite(blinkUs)) {
     return '—';
   }
-  // cycles per Blink = hz × blinkUs / 10⁶, given to the core as an exact ratio
-  const num = BigInt(Math.round(hz * blinkUs * 1000));
-  return core.frc.formatPerBlink(num, 1_000_000_000n);
+  // cycles per Blink = |hz| × blinkUs / 10⁶, given to the core as an exact ratio
+  const num = BigInt(Math.round(Math.abs(hz) * blinkUs * 1000));
+  const text = core.frc.formatPerBlink(num, 1_000_000_000n);
+  return hz < 0 && num > 0n ? `−${text}` : text;
 }
 
 /** An integer grouped as the core groups counts ("58 500", "−3"); other numbers as they are. */

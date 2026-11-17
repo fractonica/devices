@@ -34,6 +34,7 @@
 #include "haptic.hpp"
 #include "storage.hpp"
 #include "clock.hpp"
+#include "stepper.hpp"
 #include "node.hpp"
 #include "ota.hpp"
 #include "diag.hpp"
@@ -47,7 +48,7 @@ inline std::expected<fr::wire::SerialFrame, fr::wire::DecodeErr> decode_serial(s
     return fr::wire::decode_line({reinterpret_cast<const char *>(in.data()), in.size()}, scratch);
 }
 
-inline constexpr size_t kCount = 974;
+inline constexpr size_t kCount = 1086;
 
 template <class V>
 void for_each(V &&v)
@@ -9264,6 +9265,785 @@ void for_each(V &&v)
         int32_t x = 0;
         x = (-2147483647 - 1);
         v.value("fr.clock.offset_ms.state.min", "fr.clock.offset_ms.state", x, fr::cap::encode_clock_offset_ms_state, fr::cap::decode_clock_offset_ms_state, "08ffffffff0f", true);
+    }
+    // fr.stepper.traits.defaults (cap fr.stepper.traits)
+    {
+        fr::cap::StepperTraits x{};
+        x.microstep = false;
+        v.value("fr.stepper.traits.defaults", "fr.stepper.traits", x, enc, fr::cap::decode_stepper_traits, "", true);
+    }
+    // fr.stepper.traits.sample (cap fr.stepper.traits)
+    {
+        fr::cap::StepperTraits x{};
+        x.microstep = true;
+        v.value("fr.stepper.traits.sample", "fr.stepper.traits", x, enc, fr::cap::decode_stepper_traits, "0801", true);
+    }
+    // fr.stepper.traits.max (cap fr.stepper.traits)
+    {
+        fr::cap::StepperTraits x{};
+        x.microstep = true;
+        v.value("fr.stepper.traits.max", "fr.stepper.traits", x, enc, fr::cap::decode_stepper_traits, "0801", true);
+    }
+    // fr.stepper.move_to.args.defaults (cap fr.stepper.move_to.args)
+    {
+        fr::cap::StepperMoveToArgs x{};
+        x.position = 0;
+        v.value("fr.stepper.move_to.args.defaults", "fr.stepper.move_to.args", x, enc, fr::cap::decode_stepper_move_to_args, "", true);
+    }
+    // fr.stepper.move_to.args.sample (cap fr.stepper.move_to.args)
+    {
+        fr::cap::StepperMoveToArgs x{};
+        x.position = -345564240;
+        x.has_speed_hz = true;
+        x.speed_hz = 1523;
+        x.has_accel = true;
+        x.accel = 65655;
+        v.value("fr.stepper.move_to.args.sample", "fr.stepper.move_to.args", x, enc, fr::cap::decode_stepper_move_to_args, "089f91c7c90210f30b18f78004", true);
+    }
+    // fr.stepper.move_to.args.max (cap fr.stepper.move_to.args)
+    {
+        fr::cap::StepperMoveToArgs x{};
+        x.position = 1000000000;
+        x.has_speed_hz = true;
+        x.speed_hz = 10000;
+        x.has_accel = true;
+        x.accel = 200000;
+        v.value("fr.stepper.move_to.args.max", "fr.stepper.move_to.args", x, enc, fr::cap::decode_stepper_move_to_args, "0880a8d6b90710904e18c09a0c", true);
+    }
+    // fr.stepper.move_to.args.min (cap fr.stepper.move_to.args)
+    {
+        fr::cap::StepperMoveToArgs x{};
+        x.position = -1000000000;
+        v.value("fr.stepper.move_to.args.min", "fr.stepper.move_to.args", x, enc, fr::cap::decode_stepper_move_to_args, "08ffa7d6b907", true);
+    }
+    // fr.stepper.move_to.args.example_0 (cap fr.stepper.move_to.args)
+    {
+        fr::cap::StepperMoveToArgs x{};
+        x.position = 160;
+        v.value("fr.stepper.move_to.args.example_0", "fr.stepper.move_to.args", x, enc, fr::cap::decode_stepper_move_to_args, "08c002", true);
+    }
+    // fr.stepper.move_to.args.example_1 (cap fr.stepper.move_to.args)
+    {
+        fr::cap::StepperMoveToArgs x{};
+        x.position = -800;
+        x.has_speed_hz = true;
+        x.speed_hz = 400;
+        x.has_accel = true;
+        x.accel = 2000;
+        v.value("fr.stepper.move_to.args.example_1", "fr.stepper.move_to.args", x, enc, fr::cap::decode_stepper_move_to_args, "08bf0c10900318d00f", true);
+    }
+    // fr.stepper.move_by.args.defaults (cap fr.stepper.move_by.args)
+    {
+        fr::cap::StepperMoveByArgs x{};
+        x.steps = 0;
+        v.value("fr.stepper.move_by.args.defaults", "fr.stepper.move_by.args", x, enc, fr::cap::decode_stepper_move_by_args, "", true);
+    }
+    // fr.stepper.move_by.args.sample (cap fr.stepper.move_by.args)
+    {
+        fr::cap::StepperMoveByArgs x{};
+        x.steps = -345564240;
+        x.has_speed_hz = true;
+        x.speed_hz = 1523;
+        x.has_accel = true;
+        x.accel = 65655;
+        v.value("fr.stepper.move_by.args.sample", "fr.stepper.move_by.args", x, enc, fr::cap::decode_stepper_move_by_args, "089f91c7c90210f30b18f78004", true);
+    }
+    // fr.stepper.move_by.args.max (cap fr.stepper.move_by.args)
+    {
+        fr::cap::StepperMoveByArgs x{};
+        x.steps = 1000000000;
+        x.has_speed_hz = true;
+        x.speed_hz = 10000;
+        x.has_accel = true;
+        x.accel = 200000;
+        v.value("fr.stepper.move_by.args.max", "fr.stepper.move_by.args", x, enc, fr::cap::decode_stepper_move_by_args, "0880a8d6b90710904e18c09a0c", true);
+    }
+    // fr.stepper.move_by.args.min (cap fr.stepper.move_by.args)
+    {
+        fr::cap::StepperMoveByArgs x{};
+        x.steps = -1000000000;
+        v.value("fr.stepper.move_by.args.min", "fr.stepper.move_by.args", x, enc, fr::cap::decode_stepper_move_by_args, "08ffa7d6b907", true);
+    }
+    // fr.stepper.move_by.args.example_0 (cap fr.stepper.move_by.args)
+    {
+        fr::cap::StepperMoveByArgs x{};
+        x.steps = 160;
+        v.value("fr.stepper.move_by.args.example_0", "fr.stepper.move_by.args", x, enc, fr::cap::decode_stepper_move_by_args, "08c002", true);
+    }
+    // fr.stepper.move_by.args.example_1 (cap fr.stepper.move_by.args)
+    {
+        fr::cap::StepperMoveByArgs x{};
+        x.steps = -20;
+        x.has_speed_hz = true;
+        x.speed_hz = 200;
+        v.value("fr.stepper.move_by.args.example_1", "fr.stepper.move_by.args", x, enc, fr::cap::decode_stepper_move_by_args, "082710c801", true);
+    }
+    // fr.stepper.jog.args.defaults (cap fr.stepper.jog.args)
+    {
+        fr::cap::StepperJogArgs x{};
+        x.speed_hz = 0;
+        x.seconds = 0;
+        v.value("fr.stepper.jog.args.defaults", "fr.stepper.jog.args", x, enc, fr::cap::decode_stepper_jog_args, "", true);
+    }
+    // fr.stepper.jog.args.sample (cap fr.stepper.jog.args)
+    {
+        fr::cap::StepperJogArgs x{};
+        x.speed_hz = -6954;
+        x.has_accel = true;
+        x.accel = 110437;
+        x.seconds = 27923;
+        v.value("fr.stepper.jog.args.sample", "fr.stepper.jog.args", x, enc, fr::cap::decode_stepper_jog_args, "08d36c10e5de061893da01", true);
+    }
+    // fr.stepper.jog.args.max (cap fr.stepper.jog.args)
+    {
+        fr::cap::StepperJogArgs x{};
+        x.speed_hz = 10000;
+        x.has_accel = true;
+        x.accel = 200000;
+        x.seconds = 65535;
+        v.value("fr.stepper.jog.args.max", "fr.stepper.jog.args", x, enc, fr::cap::decode_stepper_jog_args, "08a09c0110c09a0c18ffff03", true);
+    }
+    // fr.stepper.jog.args.min (cap fr.stepper.jog.args)
+    {
+        fr::cap::StepperJogArgs x{};
+        x.speed_hz = -10000;
+        x.seconds = 0;
+        v.value("fr.stepper.jog.args.min", "fr.stepper.jog.args", x, enc, fr::cap::decode_stepper_jog_args, "089f9c01", true);
+    }
+    // fr.stepper.jog.args.example_0 (cap fr.stepper.jog.args)
+    {
+        fr::cap::StepperJogArgs x{};
+        x.speed_hz = 400;
+        x.seconds = 0;
+        v.value("fr.stepper.jog.args.example_0", "fr.stepper.jog.args", x, enc, fr::cap::decode_stepper_jog_args, "08a006", true);
+    }
+    // fr.stepper.jog.args.example_1 (cap fr.stepper.jog.args)
+    {
+        fr::cap::StepperJogArgs x{};
+        x.speed_hz = -800;
+        x.seconds = 5;
+        v.value("fr.stepper.jog.args.example_1", "fr.stepper.jog.args", x, enc, fr::cap::decode_stepper_jog_args, "08bf0c1805", true);
+    }
+    // fr.stepper.stop.args.empty (cap fr.stepper.stop.args)
+    {
+        fr::proto::Empty x{};
+        v.value("fr.stepper.stop.args.empty", "fr.stepper.stop.args", x, enc, fr::proto::decode_empty, "", true);
+    }
+    // fr.stepper.halt.args.empty (cap fr.stepper.halt.args)
+    {
+        fr::proto::Empty x{};
+        v.value("fr.stepper.halt.args.empty", "fr.stepper.halt.args", x, enc, fr::proto::decode_empty, "", true);
+    }
+    // fr.stepper.hold.args.empty (cap fr.stepper.hold.args)
+    {
+        fr::proto::Empty x{};
+        v.value("fr.stepper.hold.args.empty", "fr.stepper.hold.args", x, enc, fr::proto::decode_empty, "", true);
+    }
+    // fr.stepper.release.args.empty (cap fr.stepper.release.args)
+    {
+        fr::proto::Empty x{};
+        v.value("fr.stepper.release.args.empty", "fr.stepper.release.args", x, enc, fr::proto::decode_empty, "", true);
+    }
+    // fr.stepper.zero.args.defaults (cap fr.stepper.zero.args)
+    {
+        fr::cap::StepperZeroArgs x{};
+        x.position = 0;
+        v.value("fr.stepper.zero.args.defaults", "fr.stepper.zero.args", x, enc, fr::cap::decode_stepper_zero_args, "", true);
+    }
+    // fr.stepper.zero.args.sample (cap fr.stepper.zero.args)
+    {
+        fr::cap::StepperZeroArgs x{};
+        x.position = -345564240;
+        v.value("fr.stepper.zero.args.sample", "fr.stepper.zero.args", x, enc, fr::cap::decode_stepper_zero_args, "089f91c7c902", true);
+    }
+    // fr.stepper.zero.args.max (cap fr.stepper.zero.args)
+    {
+        fr::cap::StepperZeroArgs x{};
+        x.position = 1000000000;
+        v.value("fr.stepper.zero.args.max", "fr.stepper.zero.args", x, enc, fr::cap::decode_stepper_zero_args, "0880a8d6b907", true);
+    }
+    // fr.stepper.zero.args.min (cap fr.stepper.zero.args)
+    {
+        fr::cap::StepperZeroArgs x{};
+        x.position = -1000000000;
+        v.value("fr.stepper.zero.args.min", "fr.stepper.zero.args", x, enc, fr::cap::decode_stepper_zero_args, "08ffa7d6b907", true);
+    }
+    // fr.stepper.zero.args.example_0 (cap fr.stepper.zero.args)
+    {
+        fr::cap::StepperZeroArgs x{};
+        x.position = 100;
+        v.value("fr.stepper.zero.args.example_0", "fr.stepper.zero.args", x, enc, fr::cap::decode_stepper_zero_args, "08c801", true);
+    }
+    // fr.stepper.configure.args.defaults (cap fr.stepper.configure.args)
+    {
+        fr::cap::StepperConfigureArgs x{};
+        v.value("fr.stepper.configure.args.defaults", "fr.stepper.configure.args", x, enc, fr::cap::decode_stepper_configure_args, "", true);
+    }
+    // fr.stepper.configure.args.sample (cap fr.stepper.configure.args)
+    {
+        fr::cap::StepperConfigureArgs x{};
+        x.has_step_mode = true;
+        x.step_mode = StepperStepMode::micro4;
+        x.has_max_speed_hz = true;
+        x.max_speed_hz = 1523;
+        x.has_accel = true;
+        x.accel = 65655;
+        x.has_start_hz = true;
+        x.start_hz = 3045;
+        x.has_coil_ohm = true;
+        x.coil_ohm = 806;
+        x.has_run_ma = true;
+        x.run_ma = 67;
+        x.has_hold_pct = true;
+        x.hold_pct = 28;
+        x.has_release_ms = true;
+        x.release_ms = 52616;
+        x.has_supply_mv = true;
+        x.supply_mv = 10741;
+        x.has_invert = true;
+        x.invert = true;
+        x.has_limits = true;
+        x.limits = true;
+        x.has_limit_min = true;
+        x.limit_min = 853229117;
+        x.has_limit_max = true;
+        x.limit_max = -492335124;
+        v.value("fr.stepper.configure.args.sample", "fr.stepper.configure.args", x, enc, fr::cap::decode_stepper_configure_args, "080210f30b18f7800420e51728a6063043381c40889b0348f5535001580160faf8d9ad0668a7c0c3d503", true);
+    }
+    // fr.stepper.configure.args.max (cap fr.stepper.configure.args)
+    {
+        fr::cap::StepperConfigureArgs x{};
+        x.has_step_mode = true;
+        x.step_mode = StepperStepMode::micro32;
+        x.has_max_speed_hz = true;
+        x.max_speed_hz = 10000;
+        x.has_accel = true;
+        x.accel = 200000;
+        x.has_start_hz = true;
+        x.start_hz = 10000;
+        x.has_coil_ohm = true;
+        x.coil_ohm = 1000;
+        x.has_run_ma = true;
+        x.run_ma = 1500;
+        x.has_hold_pct = true;
+        x.hold_pct = 100;
+        x.has_release_ms = true;
+        x.release_ms = 65535;
+        x.has_supply_mv = true;
+        x.supply_mv = 10800;
+        x.has_invert = true;
+        x.invert = true;
+        x.has_limits = true;
+        x.limits = true;
+        x.has_limit_min = true;
+        x.limit_min = 1000000000;
+        x.has_limit_max = true;
+        x.limit_max = 1000000000;
+        v.value("fr.stepper.configure.args.max", "fr.stepper.configure.args", x, enc, fr::cap::decode_stepper_configure_args, "080510904e18c09a0c20904e28e80730dc0b386440ffff0348b054500158016080a8d6b9076880a8d6b907", true);
+    }
+    // fr.stepper.configure.args.min (cap fr.stepper.configure.args)
+    {
+        fr::cap::StepperConfigureArgs x{};
+        x.has_limit_min = true;
+        x.limit_min = -1000000000;
+        x.has_limit_max = true;
+        x.limit_max = -1000000000;
+        v.value("fr.stepper.configure.args.min", "fr.stepper.configure.args", x, enc, fr::cap::decode_stepper_configure_args, "60ffa7d6b90768ffa7d6b907", true);
+    }
+    // fr.stepper.configure.args.example_0 (cap fr.stepper.configure.args)
+    {
+        fr::cap::StepperConfigureArgs x{};
+        x.has_coil_ohm = true;
+        x.coil_ohm = 20;
+        x.has_run_ma = true;
+        x.run_ma = 90;
+        v.value("fr.stepper.configure.args.example_0", "fr.stepper.configure.args", x, enc, fr::cap::decode_stepper_configure_args, "2814305a", true);
+    }
+    // fr.stepper.configure.args.example_1 (cap fr.stepper.configure.args)
+    {
+        fr::cap::StepperConfigureArgs x{};
+        x.has_step_mode = true;
+        x.step_mode = StepperStepMode::micro16;
+        x.has_max_speed_hz = true;
+        x.max_speed_hz = 3200;
+        x.has_accel = true;
+        x.accel = 16000;
+        v.value("fr.stepper.configure.args.example_1", "fr.stepper.configure.args", x, enc, fr::cap::decode_stepper_configure_args, "080410801918807d", true);
+    }
+    // fr.stepper.configure.args.example_2 (cap fr.stepper.configure.args)
+    {
+        fr::cap::StepperConfigureArgs x{};
+        x.has_invert = true;
+        x.invert = true;
+        v.value("fr.stepper.configure.args.example_2", "fr.stepper.configure.args", x, enc, fr::cap::decode_stepper_configure_args, "5001", true);
+    }
+    // fr.stepper.reset_settings.args.empty (cap fr.stepper.reset_settings.args)
+    {
+        fr::proto::Empty x{};
+        v.value("fr.stepper.reset_settings.args.empty", "fr.stepper.reset_settings.args", x, enc, fr::proto::decode_empty, "", true);
+    }
+    // fr.stepper.inject_fault.args.empty (cap fr.stepper.inject_fault.args)
+    {
+        fr::proto::Empty x{};
+        v.value("fr.stepper.inject_fault.args.empty", "fr.stepper.inject_fault.args", x, enc, fr::proto::decode_empty, "", true);
+    }
+    // fr.stepper.done.event.defaults (cap fr.stepper.done.event)
+    {
+        fr::cap::StepperDone x{};
+        x.reason = StepperDoneReason::reached;
+        x.position = 0;
+        x.target = 0;
+        x.slips = 0;
+        v.value("fr.stepper.done.event.defaults", "fr.stepper.done.event", x, enc, fr::cap::decode_stepper_done, "", true);
+    }
+    // fr.stepper.done.event.sample (cap fr.stepper.done.event)
+    {
+        fr::cap::StepperDone x{};
+        x.reason = StepperDoneReason::halted;
+        x.position = -1133579422;
+        x.target = 1520856339;
+        x.slips = 59076;
+        v.value("fr.stepper.done.event.sample", "fr.stepper.done.event", x, enc, fr::cap::decode_stepper_done, "080210bbb288b90818a6b4b3aa0b20c4cd03", true);
+    }
+    // fr.stepper.done.event.max (cap fr.stepper.done.event)
+    {
+        fr::cap::StepperDone x{};
+        x.reason = StepperDoneReason::elapsed;
+        x.position = 2147483647;
+        x.target = 2147483647;
+        x.slips = 65535;
+        v.value("fr.stepper.done.event.max", "fr.stepper.done.event", x, enc, fr::cap::decode_stepper_done, "080710feffffff0f18feffffff0f20ffff03", true);
+    }
+    // fr.stepper.done.event.min (cap fr.stepper.done.event)
+    {
+        fr::cap::StepperDone x{};
+        x.reason = StepperDoneReason::reached;
+        x.position = (-2147483647 - 1);
+        x.target = (-2147483647 - 1);
+        x.slips = 0;
+        v.value("fr.stepper.done.event.min", "fr.stepper.done.event", x, enc, fr::cap::decode_stepper_done, "10ffffffff0f18ffffffff0f", true);
+    }
+    // fr.stepper.fault.event.defaults (cap fr.stepper.fault.event)
+    {
+        fr::cap::StepperFault x{};
+        x.cause = StepperFaultCause::driver;
+        x.position = 0;
+        x.recent = 0;
+        v.value("fr.stepper.fault.event.defaults", "fr.stepper.fault.event", x, enc, fr::cap::decode_stepper_fault, "", true);
+    }
+    // fr.stepper.fault.event.sample (cap fr.stepper.fault.event)
+    {
+        fr::cap::StepperFault x{};
+        x.cause = StepperFaultCause::injected;
+        x.position = -1133579422;
+        x.recent = 19;
+        v.value("fr.stepper.fault.event.sample", "fr.stepper.fault.event", x, enc, fr::cap::decode_stepper_fault, "080110bbb288b9081813", true);
+    }
+    // fr.stepper.fault.event.max (cap fr.stepper.fault.event)
+    {
+        fr::cap::StepperFault x{};
+        x.cause = StepperFaultCause::injected;
+        x.position = 2147483647;
+        x.recent = 255;
+        v.value("fr.stepper.fault.event.max", "fr.stepper.fault.event", x, enc, fr::cap::decode_stepper_fault, "080110feffffff0f18ff01", true);
+    }
+    // fr.stepper.fault.event.min (cap fr.stepper.fault.event)
+    {
+        fr::cap::StepperFault x{};
+        x.cause = StepperFaultCause::driver;
+        x.position = (-2147483647 - 1);
+        x.recent = 0;
+        v.value("fr.stepper.fault.event.min", "fr.stepper.fault.event", x, enc, fr::cap::decode_stepper_fault, "10ffffffff0f", true);
+    }
+    // fr.stepper.position.state.defaults (cap fr.stepper.position.state)
+    {
+        int32_t x = 0;
+        x = 0;
+        v.value("fr.stepper.position.state.defaults", "fr.stepper.position.state", x, fr::cap::encode_stepper_position_state, fr::cap::decode_stepper_position_state, "", true);
+    }
+    // fr.stepper.position.state.sample (cap fr.stepper.position.state)
+    {
+        int32_t x = 0;
+        x = -345564240;
+        v.value("fr.stepper.position.state.sample", "fr.stepper.position.state", x, fr::cap::encode_stepper_position_state, fr::cap::decode_stepper_position_state, "089f91c7c902", true);
+    }
+    // fr.stepper.position.state.max (cap fr.stepper.position.state)
+    {
+        int32_t x = 0;
+        x = 1000000000;
+        v.value("fr.stepper.position.state.max", "fr.stepper.position.state", x, fr::cap::encode_stepper_position_state, fr::cap::decode_stepper_position_state, "0880a8d6b907", true);
+    }
+    // fr.stepper.position.state.min (cap fr.stepper.position.state)
+    {
+        int32_t x = 0;
+        x = -1000000000;
+        v.value("fr.stepper.position.state.min", "fr.stepper.position.state", x, fr::cap::encode_stepper_position_state, fr::cap::decode_stepper_position_state, "08ffa7d6b907", true);
+    }
+    // fr.stepper.target.state.defaults (cap fr.stepper.target.state)
+    {
+        int32_t x = 0;
+        x = 0;
+        v.value("fr.stepper.target.state.defaults", "fr.stepper.target.state", x, fr::cap::encode_stepper_target_state, fr::cap::decode_stepper_target_state, "", true);
+    }
+    // fr.stepper.target.state.sample (cap fr.stepper.target.state)
+    {
+        int32_t x = 0;
+        x = -345564240;
+        v.value("fr.stepper.target.state.sample", "fr.stepper.target.state", x, fr::cap::encode_stepper_target_state, fr::cap::decode_stepper_target_state, "089f91c7c902", true);
+    }
+    // fr.stepper.target.state.max (cap fr.stepper.target.state)
+    {
+        int32_t x = 0;
+        x = 1000000000;
+        v.value("fr.stepper.target.state.max", "fr.stepper.target.state", x, fr::cap::encode_stepper_target_state, fr::cap::decode_stepper_target_state, "0880a8d6b907", true);
+    }
+    // fr.stepper.target.state.min (cap fr.stepper.target.state)
+    {
+        int32_t x = 0;
+        x = -1000000000;
+        v.value("fr.stepper.target.state.min", "fr.stepper.target.state", x, fr::cap::encode_stepper_target_state, fr::cap::decode_stepper_target_state, "08ffa7d6b907", true);
+    }
+    // fr.stepper.speed_hz.state.defaults (cap fr.stepper.speed_hz.state)
+    {
+        int32_t x = 0;
+        x = 0;
+        v.value("fr.stepper.speed_hz.state.defaults", "fr.stepper.speed_hz.state", x, fr::cap::encode_stepper_speed_hz_state, fr::cap::decode_stepper_speed_hz_state, "", true);
+    }
+    // fr.stepper.speed_hz.state.sample (cap fr.stepper.speed_hz.state)
+    {
+        int32_t x = 0;
+        x = -6954;
+        v.value("fr.stepper.speed_hz.state.sample", "fr.stepper.speed_hz.state", x, fr::cap::encode_stepper_speed_hz_state, fr::cap::decode_stepper_speed_hz_state, "08d36c", true);
+    }
+    // fr.stepper.speed_hz.state.max (cap fr.stepper.speed_hz.state)
+    {
+        int32_t x = 0;
+        x = 10000;
+        v.value("fr.stepper.speed_hz.state.max", "fr.stepper.speed_hz.state", x, fr::cap::encode_stepper_speed_hz_state, fr::cap::decode_stepper_speed_hz_state, "08a09c01", true);
+    }
+    // fr.stepper.speed_hz.state.min (cap fr.stepper.speed_hz.state)
+    {
+        int32_t x = 0;
+        x = -10000;
+        v.value("fr.stepper.speed_hz.state.min", "fr.stepper.speed_hz.state", x, fr::cap::encode_stepper_speed_hz_state, fr::cap::decode_stepper_speed_hz_state, "089f9c01", true);
+    }
+    // fr.stepper.motion.state.defaults (cap fr.stepper.motion.state)
+    {
+        StepperMotion x = StepperMotion::released;
+        x = StepperMotion::released;
+        v.value("fr.stepper.motion.state.defaults", "fr.stepper.motion.state", x, fr::cap::encode_stepper_motion_state, fr::cap::decode_stepper_motion_state, "", true);
+    }
+    // fr.stepper.motion.state.sample (cap fr.stepper.motion.state)
+    {
+        StepperMotion x = StepperMotion::released;
+        x = StepperMotion::moving;
+        v.value("fr.stepper.motion.state.sample", "fr.stepper.motion.state", x, fr::cap::encode_stepper_motion_state, fr::cap::decode_stepper_motion_state, "0802", true);
+    }
+    // fr.stepper.motion.state.max (cap fr.stepper.motion.state)
+    {
+        StepperMotion x = StepperMotion::released;
+        x = StepperMotion::fault;
+        v.value("fr.stepper.motion.state.max", "fr.stepper.motion.state", x, fr::cap::encode_stepper_motion_state, fr::cap::decode_stepper_motion_state, "0804", true);
+    }
+    // fr.stepper.position_known.state.defaults (cap fr.stepper.position_known.state)
+    {
+        bool x = false;
+        x = false;
+        v.value("fr.stepper.position_known.state.defaults", "fr.stepper.position_known.state", x, fr::cap::encode_stepper_position_known_state, fr::cap::decode_stepper_position_known_state, "", true);
+    }
+    // fr.stepper.position_known.state.sample (cap fr.stepper.position_known.state)
+    {
+        bool x = false;
+        x = true;
+        v.value("fr.stepper.position_known.state.sample", "fr.stepper.position_known.state", x, fr::cap::encode_stepper_position_known_state, fr::cap::decode_stepper_position_known_state, "0801", true);
+    }
+    // fr.stepper.position_known.state.max (cap fr.stepper.position_known.state)
+    {
+        bool x = false;
+        x = true;
+        v.value("fr.stepper.position_known.state.max", "fr.stepper.position_known.state", x, fr::cap::encode_stepper_position_known_state, fr::cap::decode_stepper_position_known_state, "0801", true);
+    }
+    // fr.stepper.step_mode.state.defaults (cap fr.stepper.step_mode.state)
+    {
+        StepperStepMode x = StepperStepMode::full;
+        x = StepperStepMode::full;
+        v.value("fr.stepper.step_mode.state.defaults", "fr.stepper.step_mode.state", x, fr::cap::encode_stepper_step_mode_state, fr::cap::decode_stepper_step_mode_state, "", true);
+    }
+    // fr.stepper.step_mode.state.sample (cap fr.stepper.step_mode.state)
+    {
+        StepperStepMode x = StepperStepMode::full;
+        x = StepperStepMode::micro4;
+        v.value("fr.stepper.step_mode.state.sample", "fr.stepper.step_mode.state", x, fr::cap::encode_stepper_step_mode_state, fr::cap::decode_stepper_step_mode_state, "0802", true);
+    }
+    // fr.stepper.step_mode.state.max (cap fr.stepper.step_mode.state)
+    {
+        StepperStepMode x = StepperStepMode::full;
+        x = StepperStepMode::micro32;
+        v.value("fr.stepper.step_mode.state.max", "fr.stepper.step_mode.state", x, fr::cap::encode_stepper_step_mode_state, fr::cap::decode_stepper_step_mode_state, "0805", true);
+    }
+    // fr.stepper.max_speed_hz.state.defaults (cap fr.stepper.max_speed_hz.state)
+    {
+        uint16_t x = 0;
+        x = 0;
+        v.value("fr.stepper.max_speed_hz.state.defaults", "fr.stepper.max_speed_hz.state", x, fr::cap::encode_stepper_max_speed_hz_state, fr::cap::decode_stepper_max_speed_hz_state, "", true);
+    }
+    // fr.stepper.max_speed_hz.state.sample (cap fr.stepper.max_speed_hz.state)
+    {
+        uint16_t x = 0;
+        x = 31153;
+        v.value("fr.stepper.max_speed_hz.state.sample", "fr.stepper.max_speed_hz.state", x, fr::cap::encode_stepper_max_speed_hz_state, fr::cap::decode_stepper_max_speed_hz_state, "08b1f301", true);
+    }
+    // fr.stepper.max_speed_hz.state.max (cap fr.stepper.max_speed_hz.state)
+    {
+        uint16_t x = 0;
+        x = 65535;
+        v.value("fr.stepper.max_speed_hz.state.max", "fr.stepper.max_speed_hz.state", x, fr::cap::encode_stepper_max_speed_hz_state, fr::cap::decode_stepper_max_speed_hz_state, "08ffff03", true);
+    }
+    // fr.stepper.accel.state.defaults (cap fr.stepper.accel.state)
+    {
+        uint32_t x = 0;
+        x = 0;
+        v.value("fr.stepper.accel.state.defaults", "fr.stepper.accel.state", x, fr::cap::encode_stepper_accel_state, fr::cap::decode_stepper_accel_state, "", true);
+    }
+    // fr.stepper.accel.state.sample (cap fr.stepper.accel.state)
+    {
+        uint32_t x = 0;
+        x = 2654435761u;
+        v.value("fr.stepper.accel.state.sample", "fr.stepper.accel.state", x, fr::cap::encode_stepper_accel_state, fr::cap::decode_stepper_accel_state, "08b1f3ddf109", true);
+    }
+    // fr.stepper.accel.state.max (cap fr.stepper.accel.state)
+    {
+        uint32_t x = 0;
+        x = 4294967295u;
+        v.value("fr.stepper.accel.state.max", "fr.stepper.accel.state", x, fr::cap::encode_stepper_accel_state, fr::cap::decode_stepper_accel_state, "08ffffffff0f", true);
+    }
+    // fr.stepper.start_hz.state.defaults (cap fr.stepper.start_hz.state)
+    {
+        uint16_t x = 0;
+        x = 0;
+        v.value("fr.stepper.start_hz.state.defaults", "fr.stepper.start_hz.state", x, fr::cap::encode_stepper_start_hz_state, fr::cap::decode_stepper_start_hz_state, "", true);
+    }
+    // fr.stepper.start_hz.state.sample (cap fr.stepper.start_hz.state)
+    {
+        uint16_t x = 0;
+        x = 31153;
+        v.value("fr.stepper.start_hz.state.sample", "fr.stepper.start_hz.state", x, fr::cap::encode_stepper_start_hz_state, fr::cap::decode_stepper_start_hz_state, "08b1f301", true);
+    }
+    // fr.stepper.start_hz.state.max (cap fr.stepper.start_hz.state)
+    {
+        uint16_t x = 0;
+        x = 65535;
+        v.value("fr.stepper.start_hz.state.max", "fr.stepper.start_hz.state", x, fr::cap::encode_stepper_start_hz_state, fr::cap::decode_stepper_start_hz_state, "08ffff03", true);
+    }
+    // fr.stepper.coil_ohm.state.defaults (cap fr.stepper.coil_ohm.state)
+    {
+        uint16_t x = 0;
+        x = 0;
+        v.value("fr.stepper.coil_ohm.state.defaults", "fr.stepper.coil_ohm.state", x, fr::cap::encode_stepper_coil_ohm_state, fr::cap::decode_stepper_coil_ohm_state, "", true);
+    }
+    // fr.stepper.coil_ohm.state.sample (cap fr.stepper.coil_ohm.state)
+    {
+        uint16_t x = 0;
+        x = 31153;
+        v.value("fr.stepper.coil_ohm.state.sample", "fr.stepper.coil_ohm.state", x, fr::cap::encode_stepper_coil_ohm_state, fr::cap::decode_stepper_coil_ohm_state, "08b1f301", true);
+    }
+    // fr.stepper.coil_ohm.state.max (cap fr.stepper.coil_ohm.state)
+    {
+        uint16_t x = 0;
+        x = 65535;
+        v.value("fr.stepper.coil_ohm.state.max", "fr.stepper.coil_ohm.state", x, fr::cap::encode_stepper_coil_ohm_state, fr::cap::decode_stepper_coil_ohm_state, "08ffff03", true);
+    }
+    // fr.stepper.run_ma.state.defaults (cap fr.stepper.run_ma.state)
+    {
+        uint16_t x = 0;
+        x = 0;
+        v.value("fr.stepper.run_ma.state.defaults", "fr.stepper.run_ma.state", x, fr::cap::encode_stepper_run_ma_state, fr::cap::decode_stepper_run_ma_state, "", true);
+    }
+    // fr.stepper.run_ma.state.sample (cap fr.stepper.run_ma.state)
+    {
+        uint16_t x = 0;
+        x = 31153;
+        v.value("fr.stepper.run_ma.state.sample", "fr.stepper.run_ma.state", x, fr::cap::encode_stepper_run_ma_state, fr::cap::decode_stepper_run_ma_state, "08b1f301", true);
+    }
+    // fr.stepper.run_ma.state.max (cap fr.stepper.run_ma.state)
+    {
+        uint16_t x = 0;
+        x = 65535;
+        v.value("fr.stepper.run_ma.state.max", "fr.stepper.run_ma.state", x, fr::cap::encode_stepper_run_ma_state, fr::cap::decode_stepper_run_ma_state, "08ffff03", true);
+    }
+    // fr.stepper.hold_pct.state.defaults (cap fr.stepper.hold_pct.state)
+    {
+        uint8_t x = 0;
+        x = 0;
+        v.value("fr.stepper.hold_pct.state.defaults", "fr.stepper.hold_pct.state", x, fr::cap::encode_stepper_hold_pct_state, fr::cap::decode_stepper_hold_pct_state, "", true);
+    }
+    // fr.stepper.hold_pct.state.sample (cap fr.stepper.hold_pct.state)
+    {
+        uint8_t x = 0;
+        x = 177;
+        v.value("fr.stepper.hold_pct.state.sample", "fr.stepper.hold_pct.state", x, fr::cap::encode_stepper_hold_pct_state, fr::cap::decode_stepper_hold_pct_state, "08b101", true);
+    }
+    // fr.stepper.hold_pct.state.max (cap fr.stepper.hold_pct.state)
+    {
+        uint8_t x = 0;
+        x = 255;
+        v.value("fr.stepper.hold_pct.state.max", "fr.stepper.hold_pct.state", x, fr::cap::encode_stepper_hold_pct_state, fr::cap::decode_stepper_hold_pct_state, "08ff01", true);
+    }
+    // fr.stepper.release_ms.state.defaults (cap fr.stepper.release_ms.state)
+    {
+        uint16_t x = 0;
+        x = 0;
+        v.value("fr.stepper.release_ms.state.defaults", "fr.stepper.release_ms.state", x, fr::cap::encode_stepper_release_ms_state, fr::cap::decode_stepper_release_ms_state, "", true);
+    }
+    // fr.stepper.release_ms.state.sample (cap fr.stepper.release_ms.state)
+    {
+        uint16_t x = 0;
+        x = 31153;
+        v.value("fr.stepper.release_ms.state.sample", "fr.stepper.release_ms.state", x, fr::cap::encode_stepper_release_ms_state, fr::cap::decode_stepper_release_ms_state, "08b1f301", true);
+    }
+    // fr.stepper.release_ms.state.max (cap fr.stepper.release_ms.state)
+    {
+        uint16_t x = 0;
+        x = 65535;
+        v.value("fr.stepper.release_ms.state.max", "fr.stepper.release_ms.state", x, fr::cap::encode_stepper_release_ms_state, fr::cap::decode_stepper_release_ms_state, "08ffff03", true);
+    }
+    // fr.stepper.supply_mv.state.defaults (cap fr.stepper.supply_mv.state)
+    {
+        uint16_t x = 0;
+        x = 0;
+        v.value("fr.stepper.supply_mv.state.defaults", "fr.stepper.supply_mv.state", x, fr::cap::encode_stepper_supply_mv_state, fr::cap::decode_stepper_supply_mv_state, "", true);
+    }
+    // fr.stepper.supply_mv.state.sample (cap fr.stepper.supply_mv.state)
+    {
+        uint16_t x = 0;
+        x = 31153;
+        v.value("fr.stepper.supply_mv.state.sample", "fr.stepper.supply_mv.state", x, fr::cap::encode_stepper_supply_mv_state, fr::cap::decode_stepper_supply_mv_state, "08b1f301", true);
+    }
+    // fr.stepper.supply_mv.state.max (cap fr.stepper.supply_mv.state)
+    {
+        uint16_t x = 0;
+        x = 65535;
+        v.value("fr.stepper.supply_mv.state.max", "fr.stepper.supply_mv.state", x, fr::cap::encode_stepper_supply_mv_state, fr::cap::decode_stepper_supply_mv_state, "08ffff03", true);
+    }
+    // fr.stepper.invert.state.defaults (cap fr.stepper.invert.state)
+    {
+        bool x = false;
+        x = false;
+        v.value("fr.stepper.invert.state.defaults", "fr.stepper.invert.state", x, fr::cap::encode_stepper_invert_state, fr::cap::decode_stepper_invert_state, "", true);
+    }
+    // fr.stepper.invert.state.sample (cap fr.stepper.invert.state)
+    {
+        bool x = false;
+        x = true;
+        v.value("fr.stepper.invert.state.sample", "fr.stepper.invert.state", x, fr::cap::encode_stepper_invert_state, fr::cap::decode_stepper_invert_state, "0801", true);
+    }
+    // fr.stepper.invert.state.max (cap fr.stepper.invert.state)
+    {
+        bool x = false;
+        x = true;
+        v.value("fr.stepper.invert.state.max", "fr.stepper.invert.state", x, fr::cap::encode_stepper_invert_state, fr::cap::decode_stepper_invert_state, "0801", true);
+    }
+    // fr.stepper.limits.state.defaults (cap fr.stepper.limits.state)
+    {
+        bool x = false;
+        x = false;
+        v.value("fr.stepper.limits.state.defaults", "fr.stepper.limits.state", x, fr::cap::encode_stepper_limits_state, fr::cap::decode_stepper_limits_state, "", true);
+    }
+    // fr.stepper.limits.state.sample (cap fr.stepper.limits.state)
+    {
+        bool x = false;
+        x = true;
+        v.value("fr.stepper.limits.state.sample", "fr.stepper.limits.state", x, fr::cap::encode_stepper_limits_state, fr::cap::decode_stepper_limits_state, "0801", true);
+    }
+    // fr.stepper.limits.state.max (cap fr.stepper.limits.state)
+    {
+        bool x = false;
+        x = true;
+        v.value("fr.stepper.limits.state.max", "fr.stepper.limits.state", x, fr::cap::encode_stepper_limits_state, fr::cap::decode_stepper_limits_state, "0801", true);
+    }
+    // fr.stepper.limit_min.state.defaults (cap fr.stepper.limit_min.state)
+    {
+        int32_t x = 0;
+        x = 0;
+        v.value("fr.stepper.limit_min.state.defaults", "fr.stepper.limit_min.state", x, fr::cap::encode_stepper_limit_min_state, fr::cap::decode_stepper_limit_min_state, "", true);
+    }
+    // fr.stepper.limit_min.state.sample (cap fr.stepper.limit_min.state)
+    {
+        int32_t x = 0;
+        x = 506952113;
+        v.value("fr.stepper.limit_min.state.sample", "fr.stepper.limit_min.state", x, fr::cap::encode_stepper_limit_min_state, fr::cap::decode_stepper_limit_min_state, "08e2e6bbe303", true);
+    }
+    // fr.stepper.limit_min.state.max (cap fr.stepper.limit_min.state)
+    {
+        int32_t x = 0;
+        x = 2147483647;
+        v.value("fr.stepper.limit_min.state.max", "fr.stepper.limit_min.state", x, fr::cap::encode_stepper_limit_min_state, fr::cap::decode_stepper_limit_min_state, "08feffffff0f", true);
+    }
+    // fr.stepper.limit_min.state.min (cap fr.stepper.limit_min.state)
+    {
+        int32_t x = 0;
+        x = (-2147483647 - 1);
+        v.value("fr.stepper.limit_min.state.min", "fr.stepper.limit_min.state", x, fr::cap::encode_stepper_limit_min_state, fr::cap::decode_stepper_limit_min_state, "08ffffffff0f", true);
+    }
+    // fr.stepper.limit_max.state.defaults (cap fr.stepper.limit_max.state)
+    {
+        int32_t x = 0;
+        x = 0;
+        v.value("fr.stepper.limit_max.state.defaults", "fr.stepper.limit_max.state", x, fr::cap::encode_stepper_limit_max_state, fr::cap::decode_stepper_limit_max_state, "", true);
+    }
+    // fr.stepper.limit_max.state.sample (cap fr.stepper.limit_max.state)
+    {
+        int32_t x = 0;
+        x = 506952113;
+        v.value("fr.stepper.limit_max.state.sample", "fr.stepper.limit_max.state", x, fr::cap::encode_stepper_limit_max_state, fr::cap::decode_stepper_limit_max_state, "08e2e6bbe303", true);
+    }
+    // fr.stepper.limit_max.state.max (cap fr.stepper.limit_max.state)
+    {
+        int32_t x = 0;
+        x = 2147483647;
+        v.value("fr.stepper.limit_max.state.max", "fr.stepper.limit_max.state", x, fr::cap::encode_stepper_limit_max_state, fr::cap::decode_stepper_limit_max_state, "08feffffff0f", true);
+    }
+    // fr.stepper.limit_max.state.min (cap fr.stepper.limit_max.state)
+    {
+        int32_t x = 0;
+        x = (-2147483647 - 1);
+        v.value("fr.stepper.limit_max.state.min", "fr.stepper.limit_max.state", x, fr::cap::encode_stepper_limit_max_state, fr::cap::decode_stepper_limit_max_state, "08ffffffff0f", true);
+    }
+    // fr.stepper.run_duty_pct.state.defaults (cap fr.stepper.run_duty_pct.state)
+    {
+        uint8_t x = 0;
+        x = 0;
+        v.value("fr.stepper.run_duty_pct.state.defaults", "fr.stepper.run_duty_pct.state", x, fr::cap::encode_stepper_run_duty_pct_state, fr::cap::decode_stepper_run_duty_pct_state, "", true);
+    }
+    // fr.stepper.run_duty_pct.state.sample (cap fr.stepper.run_duty_pct.state)
+    {
+        uint8_t x = 0;
+        x = 177;
+        v.value("fr.stepper.run_duty_pct.state.sample", "fr.stepper.run_duty_pct.state", x, fr::cap::encode_stepper_run_duty_pct_state, fr::cap::decode_stepper_run_duty_pct_state, "08b101", true);
+    }
+    // fr.stepper.run_duty_pct.state.max (cap fr.stepper.run_duty_pct.state)
+    {
+        uint8_t x = 0;
+        x = 255;
+        v.value("fr.stepper.run_duty_pct.state.max", "fr.stepper.run_duty_pct.state", x, fr::cap::encode_stepper_run_duty_pct_state, fr::cap::decode_stepper_run_duty_pct_state, "08ff01", true);
+    }
+    // fr.stepper.steps_per_rev.state.defaults (cap fr.stepper.steps_per_rev.state)
+    {
+        uint16_t x = 0;
+        x = 0;
+        v.value("fr.stepper.steps_per_rev.state.defaults", "fr.stepper.steps_per_rev.state", x, fr::cap::encode_stepper_steps_per_rev_state, fr::cap::decode_stepper_steps_per_rev_state, "", true);
+    }
+    // fr.stepper.steps_per_rev.state.sample (cap fr.stepper.steps_per_rev.state)
+    {
+        uint16_t x = 0;
+        x = 31153;
+        v.value("fr.stepper.steps_per_rev.state.sample", "fr.stepper.steps_per_rev.state", x, fr::cap::encode_stepper_steps_per_rev_state, fr::cap::decode_stepper_steps_per_rev_state, "08b1f301", true);
+    }
+    // fr.stepper.steps_per_rev.state.max (cap fr.stepper.steps_per_rev.state)
+    {
+        uint16_t x = 0;
+        x = 65535;
+        v.value("fr.stepper.steps_per_rev.state.max", "fr.stepper.steps_per_rev.state", x, fr::cap::encode_stepper_steps_per_rev_state, fr::cap::decode_stepper_steps_per_rev_state, "08ffff03", true);
     }
     // fr.node.identify.args.defaults (cap fr.node.identify.args)
     {

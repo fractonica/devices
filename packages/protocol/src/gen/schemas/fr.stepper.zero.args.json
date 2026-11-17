@@ -1,0 +1,22 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:fractonica:schema:fr.stepper.zero.args",
+  "title": "fr.stepper.zero arguments",
+  "description": "Calls where the shaft is now `position` (0 by default) without moving it; position_known becomes true. BUSY while moving.",
+  "type": "object",
+  "properties": {
+    "position": {
+      "type": "integer",
+      "minimum": -1000000000,
+      "maximum": 1000000000,
+      "description": "(-1000000000..1000000000)",
+      "default": 0
+    }
+  },
+  "additionalProperties": false,
+  "examples": [
+    {
+      "position": 100
+    }
+  ]
+}

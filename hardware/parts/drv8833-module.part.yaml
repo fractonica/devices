@@ -1,0 +1,26 @@
+schema: fractonica/part@1
+id: drv8833-module
+name: DRV8833 dual H-bridge module (TB6612-style pinout)
+category: module
+summary: Two H-bridges (1.5 A RMS each) for a bipolar stepper or two DC motors, VM 2.7–10.8 V, 3.3 V logic inputs; the TB6612 board's pinout with STBY, no fault pin and no current sensing.
+specs:
+  vm: 2.7–10.8 V
+  current: 1.5 A RMS, 2 A peak per bridge
+  logic: VIH 2 V, inputs pulled down inside
+  sense: ISEN tied to GND (no current limit)
+inferred: [sense]
+# As printed, labelled side up: left NC AIN2 AIN1 STBY BIN1 BIN2 NC GND; right VM NC GND AO1 AO2 BO2 BO1 GND.
+pins:
+  - { name: VM, desc: motor supply }
+  - { name: GND, desc: "ground (three pins, all joined)" }
+  - { name: AIN1 AIN2, desc: bridge A inputs }
+  - { name: BIN1 BIN2, desc: bridge B inputs }
+  - { name: AO1 AO2, desc: coil A }
+  - { name: BO1 BO2, desc: coil B }
+  - { name: STBY, desc: "the DRV8833's nSLEEP: high = awake; low = all outputs off (internal pull-down)" }
+  - { name: NC, desc: "not connected (the TB6612's PWMA, PWMB and VCC places)" }
+notes:
+  - "IN1/IN2: 00 coast, 10 forward, 01 reverse, 11 brake. No combination shorts the supply."
+  - "nFAULT (over-current or over-heat) is not brought out: the firmware cannot see a driver fault, and the chip protects itself."
+  - "Some modules pull STBY up to VM through a resistor or solder jumper; measure it before wiring it to a GPIO."
+datasheets: [https://www.ti.com/lit/ds/symlink/drv8833.pdf]

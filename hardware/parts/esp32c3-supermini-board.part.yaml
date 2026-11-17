@@ -1,0 +1,15 @@
+schema: fractonica/part@1
+id: esp32c3-supermini-board
+name: ESP32-C3 Super Mini
+category: board
+summary: Thumb-sized ESP32-C3 board (4 MB flash, USB-C on USB-Serial-JTAG), blue LED on GPIO8, BOOT on GPIO9.
+specs:
+  free_pins: GPIO0–7, 10, 20, 21
+  strapping: GPIO2, 8, 9
+  wifi_tx: 8.5 dBm (antenna)
+pins:
+  - { name: left, desc: "5V GND 3V3 4 3 2 1 0 (USB up)" }
+  - { name: right, desc: "5 6 7 8 9 10 20 21" }
+notes:
+  - "Board manifest: hardware/boards/esp32c3-supermini.board.yaml."
+  - "Its 5V pin is USB VBUS: a motor supply there shares the Mac's port."

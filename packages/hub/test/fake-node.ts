@@ -165,6 +165,8 @@ export interface FakeNodeOptions {
   netLog?: boolean;
   /** HELLO `role` (default node; `fixture`: the HIL fixture, design m2-c1-hil D6). */
   role?: 'node' | 'gateway' | 'fixture';
+  /** HELLO `chip`, esp_chip_model_t (default 13: ESP32-C6). */
+  chip?: number;
   /** The last seq of the ordinary space already used (a reconnect within one boot continues it). */
   seqStart?: number;
 }
@@ -390,6 +392,7 @@ export class FakeNode {
       caps: (1 << 1) | (1 << 4) | (addr !== ADDR.UNASSIGNED ? 1 << 5 : 0) | (opts.netLog ? 1 << 6 : 0),
       netLog: false,
       role: 'node',
+      chip: 13,
       seqStart: 0,
       ...opts,
     };
@@ -469,7 +472,7 @@ export class FakeNode {
     const o = this.opts;
     const body = encodePresenceHello({
       mac: Buffer.from(o.mac, 'hex'),
-      chip: 13,
+      chip: o.chip,
       chip_rev: 1,
       fw_id_prefix: Buffer.from(o.fwPrefix, 'hex'),
       descriptor_hash: o.descriptorHash,

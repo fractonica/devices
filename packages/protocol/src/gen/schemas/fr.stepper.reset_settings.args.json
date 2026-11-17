@@ -1,0 +1,9 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:fractonica:schema:fr.stepper.reset_settings.args",
+  "title": "fr.stepper.reset_settings arguments",
+  "description": "Forgets what configure kept; the build's configuration applies again. BUSY unless released.",
+  "type": "object",
+  "properties": {},
+  "additionalProperties": false
+}

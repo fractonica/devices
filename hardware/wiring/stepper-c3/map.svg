@@ -1,0 +1,86 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="100%" viewBox="0 0 1000 640" role="img"><title>Micro stepper on a DRV8833 module (TB6612 pinout), driven by an ESP32-C3 Super Mini</title><desc>C3 Super Mini (USB up) and the DRV8833 module seen from its labelled side. 5V to VM, GND to GND, GPIO5 to AIN2, GPIO6 to AIN1, GPIO7 to STBY, GPIO10 to BIN1, GPIO20 to BIN2. Motor pins 1 to 4 alternate A1, B1, A2, B2: pin 1 to AO1, pin 3 to AO2, pin 2 to BO1, pin 4 to BO2. GPIO8 (LED) and GPIO9 (BOOT) stay free; GPIO3 and GPIO4 are free for a limit switch.</desc>
+
+<!-- the C3 Super Mini, USB up; left row 5V GND 3V3 4 3 2 1 0, right row 5 6 7 8 9 10 20 21 -->
+<g class="c-teal"><rect x="40" y="96" width="200" height="350" rx="10" stroke-width="0.8"/></g>
+<rect class="box" x="104" y="74" width="72" height="30" rx="5"/>
+<text class="ts" x="140" y="94" text-anchor="middle">USB-C</text>
+<text class="th" x="140" y="404" text-anchor="middle">ESP32-C3</text>
+<text class="th" x="140" y="424" text-anchor="middle">Super Mini</text>
+<g class="ts">
+  <text x="58" y="134">5V</text><text x="58" y="174">GND</text><text x="58" y="214">3V3</text><text x="58" y="254">4</text>
+  <text x="58" y="294">3</text><text x="58" y="334">2</text><text x="58" y="374">1</text><text x="58" y="414">0</text>
+  <text x="222" y="134" text-anchor="end">5</text><text x="222" y="174" text-anchor="end">6</text><text x="222" y="214" text-anchor="end">7</text>
+  <text x="222" y="254" text-anchor="end">8 · LED</text><text x="222" y="294" text-anchor="end">9 · BOOT</text><text x="222" y="334" text-anchor="end">10</text>
+  <text x="222" y="374" text-anchor="end">20</text><text x="222" y="414" text-anchor="end">21</text>
+</g>
+<g fill="none" stroke="var(--s)" stroke-width="1">
+  <circle cx="40" cy="130" r="5"/><circle cx="40" cy="170" r="5"/><circle cx="40" cy="210" r="5"/><circle cx="40" cy="250" r="5"/>
+  <circle cx="40" cy="290" r="5"/><circle cx="40" cy="330" r="5"/><circle cx="40" cy="370" r="5"/><circle cx="40" cy="410" r="5"/>
+  <circle cx="240" cy="130" r="5"/><circle cx="240" cy="170" r="5"/><circle cx="240" cy="210" r="5"/><circle cx="240" cy="250" r="5"/>
+  <circle cx="240" cy="290" r="5"/><circle cx="240" cy="330" r="5"/><circle cx="240" cy="370" r="5"/><circle cx="240" cy="410" r="5"/>
+</g>
+
+<!-- the DRV8833 module, labelled side up (as printed): left NC AIN2 AIN1 STBY BIN1 BIN2 NC GND, right VM NC GND AO1 AO2 BO2 BO1 GND -->
+<g class="c-gray"><rect x="440" y="96" width="200" height="350" rx="8" stroke-width="0.8"/></g>
+<text class="th" x="540" y="404" text-anchor="middle">DRV8833</text>
+<text class="ts" x="540" y="424" text-anchor="middle">labelled side up</text>
+<g class="ts">
+  <text x="456" y="134">NC</text><text x="456" y="174">AIN2</text><text x="456" y="214">AIN1</text><text x="456" y="254">STBY</text>
+  <text x="456" y="294">BIN1</text><text x="456" y="334">BIN2</text><text x="456" y="374">NC</text><text x="456" y="414">GND</text>
+  <text x="624" y="134" text-anchor="end">VM</text><text x="624" y="174" text-anchor="end">NC</text><text x="624" y="214" text-anchor="end">GND</text>
+  <text x="624" y="254" text-anchor="end">AO1</text><text x="624" y="294" text-anchor="end">AO2</text><text x="624" y="334" text-anchor="end">BO2</text>
+  <text x="624" y="374" text-anchor="end">BO1</text><text x="624" y="414" text-anchor="end">GND</text>
+</g>
+<g fill="none" stroke="var(--s)" stroke-width="1">
+  <circle cx="440" cy="130" r="5"/><circle cx="440" cy="170" r="5"/><circle cx="440" cy="210" r="5"/><circle cx="440" cy="250" r="5"/>
+  <circle cx="440" cy="290" r="5"/><circle cx="440" cy="330" r="5"/><circle cx="440" cy="370" r="5"/><circle cx="440" cy="410" r="5"/>
+  <circle cx="640" cy="130" r="5"/><circle cx="640" cy="170" r="5"/><circle cx="640" cy="210" r="5"/><circle cx="640" cy="250" r="5"/>
+  <circle cx="640" cy="290" r="5"/><circle cx="640" cy="330" r="5"/><circle cx="640" cy="370" r="5"/><circle cx="640" cy="410" r="5"/>
+</g>
+
+<!-- power: 5V over the top to VM (right side), GND under the board to GND (left side) -->
+<g fill="none" stroke-width="2.2" stroke-linejoin="round">
+  <path stroke="#D85A30" d="M35 130 H12 V40 H690 V130 H645"/>
+  <path stroke="#9AA4AF" d="M35 170 H24 V520 H420 V410 H435"/>
+</g>
+<text class="ts" x="350" y="32" text-anchor="middle">5V (from USB) → VM</text>
+<text class="ts" x="230" y="538" text-anchor="middle">GND → GND</text>
+<!-- 100 µF electrolytic beside VM: + to VM, − to the GND pin under it -->
+<g fill="none" stroke="var(--p)" stroke-width="1.5"><path d="M690 130 V160"/><path d="M678 160 H702"/><path d="M678 168 H702"/><path d="M690 168 V210 H645"/></g>
+<text class="ts" x="710" y="168">+ 100 µF (optional)</text>
+
+<!-- the five inputs from the right row, in order: no crossings -->
+<g fill="none" stroke-width="2.2" stroke-linejoin="round">
+  <path stroke="#2E8F8C" d="M245 130 H400 V170 H435"/>
+  <path stroke="#4FC3C0" d="M245 170 H380 V210 H435"/>
+  <path stroke="#A99BFF" d="M245 210 H360 V250 H435"/>
+  <path stroke="#E0B44A" d="M245 330 H360 V290 H435"/>
+  <path stroke="#B0832B" d="M245 370 H380 V330 H435"/>
+</g>
+<g class="ts"><text x="290" y="124">GPIO5</text><text x="290" y="164">GPIO6</text><text x="276" y="204">GPIO7</text><text x="276" y="324">GPIO10</text><text x="276" y="364">GPIO20</text></g>
+
+<!-- the motor: two coils, four pins -->
+<g fill="none" stroke-width="2.2" stroke-linejoin="round">
+  <path stroke="#4FC3C0" d="M645 250 H760"/><path stroke="#4FC3C0" d="M645 290 H760"/>
+  <path stroke="#E0B44A" d="M645 330 H760"/><path stroke="#E0B44A" d="M645 370 H760"/>
+</g>
+<g class="c-coral"><circle cx="880" cy="310" r="96" stroke-width="0.8"/></g>
+<g fill="none" stroke="var(--p)" stroke-width="1.6">
+  <path d="M760 250 H800 a7 7 0 0 1 0 14 a7 7 0 0 1 0 12 a7 7 0 0 1 0 14 H760"/>
+  <path d="M760 330 H800 a7 7 0 0 1 0 14 a7 7 0 0 1 0 12 a7 7 0 0 1 0 14 H760"/>
+</g>
+<g fill="none" stroke="var(--s)" stroke-width="1"><circle cx="760" cy="250" r="5"/><circle cx="760" cy="290" r="5"/><circle cx="760" cy="330" r="5"/><circle cx="760" cy="370" r="5"/></g>
+<text class="t" x="880" y="302" text-anchor="middle">micro</text>
+<text class="t" x="880" y="322" text-anchor="middle">stepper</text>
+<text class="ts" x="828" y="276">coil A</text><text class="ts" x="828" y="356">coil B</text>
+<g class="ts" text-anchor="middle"><text x="702" y="243">pin 1 · A1</text><text x="702" y="283">pin 3 · A2</text><text x="702" y="323">pin 4 · B2</text><text x="702" y="363">pin 2 · B1</text></g>
+
+<!-- notes -->
+<rect class="box" x="560" y="470" width="420" height="150" rx="6"/>
+<text class="th" x="580" y="498">Before wiring (multimeter)</text>
+<text class="ts" x="580" y="524">Motor pins 1–4 alternate A1 B1 A2 B2: 1–3 and 2–4 read ~20 Ω.</text>
+<text class="ts" x="580" y="546">Module alone on 5 V: STBY to GND should read near 0 V.</text>
+<text class="ts" x="580" y="568">This module has no fault pin; GPIO3 and GPIO4 stay free.</text>
+<text class="ts" x="580" y="590">Turning the wrong way? Swap AO1 and AO2 (or set invert).</text>
+<text class="ts" x="580" y="610">Never plug or unplug the motor while VM is powered.</text>
+</svg>

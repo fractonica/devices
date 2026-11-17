@@ -1,0 +1,38 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:fractonica:schema:fr.stepper.move_to.args",
+  "title": "fr.stepper.move_to arguments",
+  "description": "Moves to `position`, replacing any running move or jog without stopping. OK at once; done (reached) at the end. INVALID_ARGS beyond the limits or above max_speed_hz or accel; BUSY in a fault's back-off, or with limits on and position_known false.",
+  "type": "object",
+  "properties": {
+    "position": {
+      "type": "integer",
+      "minimum": -1000000000,
+      "maximum": 1000000000,
+      "description": "(-1000000000..1000000000)"
+    },
+    "speed_hz": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 10000,
+      "description": "absent: max_speed_hz (Hz; 1..10000)"
+    },
+    "accel": {
+      "type": "integer",
+      "minimum": 10,
+      "maximum": 200000,
+      "description": "absent: the configured accel (Hz/s; 10..200000)"
+    }
+  },
+  "additionalProperties": false,
+  "examples": [
+    {
+      "position": 160
+    },
+    {
+      "position": -800,
+      "speed_hz": 400,
+      "accel": 2000
+    }
+  ]
+}

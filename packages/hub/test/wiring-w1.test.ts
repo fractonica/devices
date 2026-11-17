@@ -277,4 +277,16 @@ describe('the repo', () => {
     const failed = [...cat.guides.values()].filter((g) => g.check === 'failed').map((g) => ({ id: g.id, errors: g.errors }));
     expect(failed).toEqual([]);
   });
+
+  it('stepper-c3 checks the module pull-ups before any GPIO is wired (design stepper-s1 §14)', () => {
+    // A module that pulls STBY up to VM puts 5 V on GPIO7: the measurement must come first.
+    const g = loadCatalog(REPO).guides.get('stepper-c3')!;
+    expect(g).toMatchObject({ board: 'esp32c3-supermini', check: 'ok', errors: [] });
+    const steps = g.sections.flatMap((s) => s.steps);
+    const pullups = steps.findIndex((s) => s.id === 'module-pullups');
+    const firstGpio = steps.findIndex((s) => s.pins.some((p) => p.startsWith('gpio.')));
+    expect(pullups).toBeGreaterThanOrEqual(0);
+    expect(firstGpio).toBeGreaterThan(pullups);
+    expect(steps.slice(0, pullups).flatMap((s) => s.pins)).toEqual(['5v', 'gnd']);
+  });
 });

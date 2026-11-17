@@ -1,0 +1,8 @@
+# drv8833_stepper (design stepper-s1 D7, D9): its gptimer alarm ISR (CONFIG_GPTIMER_ISR_CACHE_SAFE) and its nFAULT ISR
+# run while flash is busy (NVS and OTA writes), and its safe-off hook in a panic with the cache in any state.
+# `noflash` puts the object's text in IRAM and its rodata in DRAM, so the inlined ledc_ll, gpio_ll, bridge and motion
+# code, and anything the compiler leaves out of line at -Og, stays reachable then (spec 03 §3.4).
+[mapping:drv8833_stepper]
+archive: libdrv8833_stepper.a
+entries:
+    drv8833_stepper (noflash)

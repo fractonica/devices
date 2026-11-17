@@ -1,0 +1,9 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:fractonica:schema:fr.stepper.stop.args",
+  "title": "fr.stepper.stop arguments",
+  "description": "Decelerates to rest (done stopped); OK when nothing moves.",
+  "type": "object",
+  "properties": {},
+  "additionalProperties": false
+}

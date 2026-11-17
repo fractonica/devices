@@ -6,7 +6,7 @@
 import type { CallOptions, CapMeta, CmdResult, Sent } from '../types.ts';
 
 /** FNV-1a 32 of the canonical catalog JSON (the hub's CATALOG_HASH): what an app's hello says it was built against. */
-export const CATALOG_HASH = 0x95782421;
+export const CATALOG_HASH = 0x616bf0f2;
 
 // ---- fr.button ----
 
@@ -1242,6 +1242,188 @@ export interface ClockProps {
   offset_ms: number;
 }
 
+// ---- fr.stepper ----
+
+export type StepperStepMode = 'full' | 'half' | 'micro4' | 'micro8' | 'micro16' | 'micro32';
+
+export type StepperMotion = 'released' | 'holding' | 'moving' | 'stopping' | 'fault';
+
+export type StepperDoneReason = 'reached' | 'stopped' | 'halted' | 'released' | 'limit' | 'fault' | 'hub_lost' | 'elapsed';
+
+export type StepperFaultCause = 'driver' | 'injected';
+
+/** fr.stepper.move_to arguments (all optional: the device applies the defaults). */
+export interface StepperMoveToArgs {
+  /** (-1000000000..1000000000) */
+  position?: number;
+  /** absent: max_speed_hz (Hz; 1..10000) */
+  speedHz?: number;
+  /** absent: the configured accel (Hz/s; 10..200000) */
+  accel?: number;
+}
+
+/** fr.stepper.move_by arguments (all optional: the device applies the defaults). */
+export interface StepperMoveByArgs {
+  /** (-1000000000..1000000000) */
+  steps?: number;
+  /** absent: max_speed_hz (Hz; 1..10000) */
+  speedHz?: number;
+  /** absent: the configured accel (Hz/s; 10..200000) */
+  accel?: number;
+}
+
+/** fr.stepper.jog arguments (all optional: the device applies the defaults). */
+export interface StepperJogArgs {
+  /** (Hz; -10000..10000) */
+  speedHz?: number;
+  /** absent: the configured accel (Hz/s; 10..200000) */
+  accel?: number;
+  /** 0: until stopped (default 0) */
+  seconds?: number;
+}
+
+/** fr.stepper.zero arguments (all optional: the device applies the defaults). */
+export interface StepperZeroArgs {
+  /** (-1000000000..1000000000; default 0) */
+  position?: number;
+}
+
+/** fr.stepper.configure arguments (all optional: the device applies the defaults). */
+export interface StepperConfigureArgs {
+  stepMode?: StepperStepMode;
+  /** (Hz; 1..10000) */
+  maxSpeedHz?: number;
+  /** (Hz/s; 10..200000) */
+  accel?: number;
+  /** (Hz; 1..10000) */
+  startHz?: number;
+  /** (ohm; 1..1000) */
+  coilOhm?: number;
+  /** (mA; 1..1500) */
+  runMa?: number;
+  /** (1..100) */
+  holdPct?: number;
+  /** (ms) */
+  releaseMs?: number;
+  /** (mV; 2700..10800) */
+  supplyMv?: number;
+  invert?: boolean;
+  limits?: boolean;
+  /** (-1000000000..1000000000) */
+  limitMin?: number;
+  /** (-1000000000..1000000000) */
+  limitMax?: number;
+}
+
+/** fr.stepper commands, as methods of an instance. */
+export interface StepperClient {
+  /** Moves to `position`, replacing any running move or jog without stopping. OK at once; done (reached) at the end. INVALID_ARGS beyond the limits or above max_speed_hz or accel; BUSY in a fault's back-off, or with limits on and position_known false. Reliable: resolves on the RESULT ok, rejects with CommandError otherwise. */
+  moveTo(args?: StepperMoveToArgs, opts?: CallOptions): Promise<CmdResult>;
+  /** Moves by `steps` from the running move's target, or from the position when no move runs. move_to's answers; 0 steps at rest is done (reached) at once. Reliable: resolves on the RESULT ok, rejects with CommandError otherwise. */
+  moveBy(args?: StepperMoveByArgs, opts?: CallOptions): Promise<CmdResult>;
+  /** Turns at `speed_hz` (negative: backward) until stop, another move, a limit, the hub's silence or `seconds` (done elapsed). Speed 0 decelerates to rest, like stop. Answers as move_to. Reliable: resolves on the RESULT ok, rejects with CommandError otherwise. */
+  jog(args?: StepperJogArgs, opts?: CallOptions): Promise<CmdResult>;
+  /** Decelerates to rest (done stopped); OK when nothing moves. Reliable: resolves on the RESULT ok, rejects with CommandError otherwise. */
+  stop(opts?: CallOptions): Promise<CmdResult>;
+  /** Stops stepping at once and holds (done halted); above start_hz the position becomes unknown. Reliable: resolves on the RESULT ok, rejects with CommandError otherwise. */
+  halt(opts?: CallOptions): Promise<CmdResult>;
+  /** Energises the coils at hold power where the position says, until release or the next motion's end; clears a fault (BUSY in its back-off). Reliable: resolves on the RESULT ok, rejects with CommandError otherwise. */
+  hold(opts?: CallOptions): Promise<CmdResult>;
+  /** Coils off and the driver asleep at once; a running motion ends (done released). Reliable: resolves on the RESULT ok, rejects with CommandError otherwise. */
+  release(opts?: CallOptions): Promise<CmdResult>;
+  /** Calls where the shaft is now `position` (0 by default) without moving it; position_known becomes true. BUSY while moving. Reliable: resolves on the RESULT ok, rejects with CommandError otherwise. */
+  zero(args?: StepperZeroArgs, opts?: CallOptions): Promise<CmdResult>;
+  /** Changes the settings given and keeps them across reboots; absent fields stay. BUSY while moving, and for step_mode unless released. A new step_mode rescales the position, the limits and the speeds not given in the same call. INVALID_ARGS for limit_min >= limit_max, or a step_mode the driver cannot do. Reliable: resolves on the RESULT ok, rejects with CommandError otherwise. */
+  configure(args?: StepperConfigureArgs, opts?: CallOptions): Promise<CmdResult>;
+  /** Forgets what configure kept; the build's configuration applies again. BUSY unless released. Reliable: resolves on the RESULT ok, rejects with CommandError otherwise. */
+  resetSettings(opts?: CallOptions): Promise<CmdResult>;
+}
+
+/** fr.stepper.done event fields (normal). A motion came to rest or was ended. A motion replaced by a newer move or jog has no done. */
+export interface StepperDoneFields {
+  reason: StepperDoneReason | number;
+  position: number;
+  /** the target it had (reached: equal to position) */
+  target: number;
+  /** times the step timer ran late and the ramp restarted from rest; 0 normally */
+  slips: number;
+}
+
+/** fr.stepper.fault event fields (normal). The driver reported a fault (or one was injected). The coils are off and motion is fault. */
+export interface StepperFaultFields {
+  cause: StepperFaultCause | number;
+  position: number;
+  /** faults in the last minute, this one included; at 3 the node refuses to energise for a minute */
+  recent: number;
+}
+
+/** fr.stepper events by wire name: `pad.on('<inst>.<event>', e => ...)`. */
+export interface StepperEvents {
+  done: StepperDoneFields;
+  fault: StepperFaultFields;
+}
+
+/** fr.stepper properties as the mirror holds them (`pad.<inst>.state`); a property a trait gates may be absent. */
+export interface StepperState {
+  /** steps, counted from zero at boot or from the last zero */
+  position: number;
+  /** where the running move ends (the position at rest) */
+  target: number;
+  /** steps a second now; negative while turning backward (Hz) */
+  speedHz: number;
+  motion: StepperMotion | number;
+  /** true after zero; false at boot and after a halt or fault at speed */
+  positionKnown: boolean;
+  stepMode: StepperStepMode | number;
+  /** (Hz) */
+  maxSpeedHz: number;
+  /** (Hz/s) */
+  accel: number;
+  /** (Hz) */
+  startHz: number;
+  /** (ohm) */
+  coilOhm: number;
+  /** (mA) */
+  runMa: number;
+  holdPct: number;
+  /** (ms) */
+  releaseMs: number;
+  /** (mV) */
+  supplyMv: number;
+  invert: boolean;
+  limits: boolean;
+  limitMin: number;
+  limitMax: number;
+  /** the PWM duty the run current needs, per cent of full: run_ma x coil_ohm / supply_mv, at most 100 */
+  runDutyPct: number;
+  /** full steps per turn (the build's configuration) */
+  stepsPerRev: number;
+}
+
+/** fr.stepper property values by wire name: what a `<inst>.<prop>` event carries as `value`. */
+export interface StepperProps {
+  position: number;
+  target: number;
+  speed_hz: number;
+  motion: StepperMotion | number;
+  position_known: boolean;
+  step_mode: StepperStepMode | number;
+  max_speed_hz: number;
+  accel: number;
+  start_hz: number;
+  coil_ohm: number;
+  run_ma: number;
+  hold_pct: number;
+  release_ms: number;
+  supply_mv: number;
+  invert: boolean;
+  limits: boolean;
+  limit_min: number;
+  limit_max: number;
+  run_duty_pct: number;
+  steps_per_rev: number;
+}
+
 // ---- fr.node ----
 
 /** fr.node.identify arguments (all optional: the device applies the defaults). */
@@ -1449,6 +1631,7 @@ export interface CapClients {
   'fr.haptic': HapticClient;
   'fr.storage': StorageClient;
   'fr.clock': ClockClient;
+  'fr.stepper': StepperClient;
   'fr.node': NodeClient;
   'fr.ota': OtaClient;
   'fr.diag': DiagClient;
@@ -1471,6 +1654,7 @@ export interface CapEvents {
   'fr.haptic': HapticEvents;
   'fr.storage': StorageEvents;
   'fr.clock': ClockEvents;
+  'fr.stepper': StepperEvents;
   'fr.node': NodeEvents;
   'fr.ota': OtaEvents;
   'fr.diag': DiagEvents;
@@ -1493,6 +1677,7 @@ export interface CapState {
   'fr.haptic': HapticState;
   'fr.storage': StorageState;
   'fr.clock': ClockState;
+  'fr.stepper': StepperState;
   'fr.node': NodeState;
   'fr.ota': OtaState;
   'fr.diag': DiagState;
@@ -1515,6 +1700,7 @@ export interface CapProps {
   'fr.haptic': HapticProps;
   'fr.storage': StorageProps;
   'fr.clock': ClockProps;
+  'fr.stepper': StepperProps;
   'fr.node': NodeProps;
   'fr.ota': OtaProps;
   'fr.diag': DiagProps;
@@ -1540,6 +1726,7 @@ export const CAP_META: Readonly<Record<string, CapMeta>> = {
   'fr.haptic': { commands: { pulse: { method: 'pulse', delivery: 'reliable', args: true }, play: { method: 'play', delivery: 'reliable', args: true }, stop: { method: 'stop', delivery: 'reliable' } }, events: ['cut'], props: ['active', 'supply_mv'] },
   'fr.storage': { commands: { info: { method: 'info', delivery: 'reliable' }, list: { method: 'list', delivery: 'reliable', args: true }, stat: { method: 'stat', delivery: 'reliable', args: true }, read: { method: 'read', delivery: 'reliable', args: true }, write: { method: 'write', delivery: 'reliable', args: true }, remove: { method: 'remove', delivery: 'reliable', args: true }, mkdir: { method: 'mkdir', delivery: 'reliable', args: true }, rename: { method: 'rename', delivery: 'reliable', args: true }, remount: { method: 'remount', delivery: 'reliable' } }, events: ['mounted', 'unmounted'], props: ['state', 'total_mb', 'free_mb', 'card_type', 'busy'] },
   'fr.clock': { commands: { read: { method: 'read', delivery: 'reliable' }, set: { method: 'set', delivery: 'reliable', args: true }, set_aging: { method: 'setAging', delivery: 'reliable', args: true }, inject: { method: 'inject', delivery: 'reliable', args: true, test: true } }, events: ['lost_power', 'set'], props: ['unix', 'valid', 'temp_c10', 'offset_ms'] },
+  'fr.stepper': { commands: { move_to: { method: 'moveTo', delivery: 'reliable', args: true }, move_by: { method: 'moveBy', delivery: 'reliable', args: true }, jog: { method: 'jog', delivery: 'reliable', args: true }, stop: { method: 'stop', delivery: 'reliable' }, halt: { method: 'halt', delivery: 'reliable' }, hold: { method: 'hold', delivery: 'reliable' }, release: { method: 'release', delivery: 'reliable' }, zero: { method: 'zero', delivery: 'reliable', args: true }, configure: { method: 'configure', delivery: 'reliable', args: true }, reset_settings: { method: 'resetSettings', delivery: 'reliable' }, inject_fault: { method: 'injectFault', delivery: 'reliable', test: true } }, events: ['done', 'fault'], props: ['position', 'target', 'speed_hz', 'motion', 'position_known', 'step_mode', 'max_speed_hz', 'accel', 'start_hz', 'coil_ohm', 'run_ma', 'hold_pct', 'release_ms', 'supply_mv', 'invert', 'limits', 'limit_min', 'limit_max', 'run_duty_pct', 'steps_per_rev'] },
   'fr.node': { commands: { identify: { method: 'identify', delivery: 'reliable', args: true }, describe: { method: 'describe', delivery: 'reliable' }, reboot: { method: 'reboot', delivery: 'reliable', args: true }, set_alias: { method: 'setAlias', delivery: 'reliable', args: true }, set_groups: { method: 'setGroups', delivery: 'reliable', args: true }, net_set: { method: 'netSet', delivery: 'reliable', args: true }, get_state: { method: 'getState', delivery: 'reliable' }, bind_set: { method: 'bindSet', delivery: 'reliable', args: true }, bind_clear: { method: 'bindClear', delivery: 'reliable', args: true }, bind_list: { method: 'bindList', delivery: 'reliable' } }, events: ['boot', 'binding_fired'], props: [] },
   'fr.ota': { commands: {}, events: [], props: [] },
   'fr.diag': { commands: { exec: { method: 'exec', delivery: 'reliable', args: true } }, events: ['mark'], props: [] },

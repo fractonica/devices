@@ -191,8 +191,11 @@ describe('CAM-1 capability and chip (design camera-c1 D1, D7)', () => {
     // 0x4f56e757, then 0xa9040fd4 (report_hz up to 100). POWER-1 was first 0x899d4aef; the review's doc strings
     // (stale readings, load renewal, max_on without a break) made it 0xa9d281fe. LCD-1 / CLOCK-1 (fr.storage 0x000F,
     // fr.clock 0x0010, fr.display 1.2's max_brightness) made it 0xec1ad81e; LCD-1/CLOCK-1's review fixes (doc strings,
-    // max_brightness range [1, 255], fr.clock set's example dropped) made it 0x95782421.
-    expect(CATALOG_HASH).toBe(0x95782421);
+    // max_brightness range [1, 255], fr.clock set's example dropped) made it 0x95782421. STEPPER-1 (fr.stepper 0x0012)
+    // made it 0x9a291431; its review fix (the doc: nFAULT reports no under-voltage) made it 0x616bf0f2.
+    expect(CATALOG_HASH).toBe(0x616bf0f2);
+    expect(CATALOG_HASH).not.toBe(0x9a291431); // STEPPER-1 as first built
+    expect(CATALOG_HASH).not.toBe(0x95782421); // LCD-1/CLOCK-1's
     expect(CATALOG_HASH).not.toBe(0xa9d281fe); // POWER-1's
     expect(CATALOG_HASH).not.toBe(0xa9040fd4); // SCALE-1's
     expect(CATALOG_HASH).not.toBe(0x7df39e8e); // CAM-1's

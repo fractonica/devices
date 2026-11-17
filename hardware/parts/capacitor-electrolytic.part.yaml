@@ -1,0 +1,8 @@
+schema: fractonica/part@1
+id: capacitor-electrolytic
+name: Electrolytic capacitor
+category: passive
+summary: Aluminium electrolytic, polarised (the stripe marks −); bulk storage on a supply rail.
+values: ["100 µF"]
+notes:
+  - "Rated voltage above the rail with margin: 10 V or more on 5 V."

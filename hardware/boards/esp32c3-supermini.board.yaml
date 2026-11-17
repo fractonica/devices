@@ -1,0 +1,45 @@
+schema: fractonica/board@1
+id: esp32c3-supermini
+name: ESP32-C3 Super Mini
+idf_target: esp32c3
+flash: { size: 4MB, mode: dio, part_profile: fr-4mb-v1 }
+psram: null
+usb: { kind: usb_serial_jtag, vid: 0x303A, pid: 0x1001, bcd_device: 0x0101, serial_is_mac: true, pins: [18, 19] }
+console: usb_serial_jtag
+buttons:
+  boot: { gpio: 9, active_level: low, pull: up, strapping: true, deep_sleep_wake: false, confidence: H }
+leds:
+  status: { gpio: 8, kind: gpio, active_level: low, strapping: true, confidence: H }
+pins:
+  reserved: { usb: [18, 19], flash: [11, 12, 13, 14, 15, 16, 17] }
+  strapping: [2, 8, 9]
+  # GPIO2 and GPIO8 must be high and GPIO9 high for a SPI boot (GPIO9 low = download mode).
+  strapping_levels: { 2: high, 8: high, 9: high }
+  free: [0, 1, 2, 3, 4, 5, 6, 7, 10, 20, 21]
+  adc1: [0, 1, 2, 3, 4]
+# Component side up, USB-C at the top (the owner's board and hardware/wiring/stepper-c3/map.svg).
+headers:
+  confidence: M
+  left: [5V, GND, 3V3, 4, 3, 2, 1, 0]
+  right: [5, 6, 7, 8, 9, 10, 20, 21]
+boot_uart_tx: 21              # U0TXD: the ROM log prints on it at every boot
+en_access: null               # EN is only the RST button
+# The Super Mini's antenna is badly matched: at full power it often fails to associate. 8.5 dBm (34 quarter-dBm)
+# is the known fix, as on esp32c3-oled042.
+rf: { max_tx_power_qdbm: 34, antenna: ceramic }
+test_pin: 0
+# gptimer: the chip's two general-purpose timers (one per group), which IDF's own services leave free on the C3
+# (esp_timer runs on SYSTIMER); drv8833_stepper draws one (design stepper-s1 D7). ADC1: GPIO0-4 (GPIO5 is ADC2).
+resources: { rmt_tx: 2, rmt_rx: 2, ledc_timers: 4, ledc_channels: 6, i2c: 1, adc1_channel: 5, i2s: 1, gptimer: 2 }
+defaults:
+  boot:   { cap: fr.button, driver: button_gpio, bind: buttons.boot }
+  status: { cap: fr.led,    driver: led_gpio,    bind: leds.status }
+detection:
+  usb: { vid: 0x303A, pid: 0x1001, bcd_device: 0x0101 }   # inferred: the same chip's USB-Serial-JTAG as esp32c3-oled042
+  # The same chip and USB as esp32c3-oled042: esptool cannot tell them apart. Provisioning takes the profile the
+  # user names, as for every ambiguous board.
+  esptool: { chip_type: '^ESP32-C3 \(QFN32\)', flash_size: 4MB }
+  ambiguous_with: [esp32c3-oled042]
+  probe: { leds: [status] }
+sources:
+  - https://documentation.espressif.com/esp32-c3_datasheet_en.pdf

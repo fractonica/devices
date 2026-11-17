@@ -1,0 +1,26 @@
+schema: fractonica/part@1
+id: micro-stepper-10mm
+name: Micro stepper motor, 8–10 mm, two coils
+category: actuator
+summary: Tiny bipolar can-stack stepper (camera-lens type) with a brass pinion; 18° a step, rated 3.3 V, four pins.
+specs:
+  step_angle: 18° (20 steps a turn)
+  coil_resistance: about 20 Ω (the bench motor read 20.5 Ω)
+  rated: 3.3 V (about 160 mA at 20 Ω)
+  pull_in_torque: 5 gf·cm, no load
+  max_response: 800 full steps a second, no load (6,400 at micro8)
+  max_start: 1,000 full steps a second, no load
+  size: 8 mm across, 9.2 mm tall
+  shaft: brass pinion
+# Pins numbered 1 to 4 along the motor; the coils alternate (the bench motor; check another with an ohmmeter).
+pins:
+  - { name: "1 (A1)", desc: "coil A; about 20 Ω to pin 3" }
+  - { name: "2 (B1)", desc: "coil B; about 20 Ω to pin 4" }
+  - { name: "3 (A2)", desc: coil A }
+  - { name: "4 (B2)", desc: coil B }
+notes:
+  - "fr.stepper on drv8833_stepper; set coil_ohm from the measured coil and run_ma at 60 % of the rated current to start (100 mA for a 20 Ω coil)."
+  - "Often sold as a pair of motors on one shared cable or flex: trace which four wires belong to which motor before wiring."
+  - "It runs warm when held: the firmware drops to hold power and lets go after a second at rest."
+  - "A faulty one warms but never moves or holds (the rotor slips on its shaft); the first bench motor was one."
+datasheets: [https://makerselectronics.com/product/micro-miniature-stepper-motor-8mm-2-phase-4-wire-with-copper-gear-for-camera-lenses/]

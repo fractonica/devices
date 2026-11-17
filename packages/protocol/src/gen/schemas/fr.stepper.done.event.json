@@ -1,0 +1,40 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:fractonica:schema:fr.stepper.done.event",
+  "title": "fr.stepper.done event",
+  "description": "A motion came to rest or was ended. A motion replaced by a newer move or jog has no done.",
+  "type": "object",
+  "properties": {
+    "reason": {
+      "type": "string",
+      "enum": [
+        "reached",
+        "stopped",
+        "halted",
+        "released",
+        "limit",
+        "fault",
+        "hub_lost",
+        "elapsed"
+      ]
+    },
+    "position": {
+      "type": "integer",
+      "minimum": -2147483648,
+      "maximum": 2147483647
+    },
+    "target": {
+      "type": "integer",
+      "minimum": -2147483648,
+      "maximum": 2147483647,
+      "description": "the target it had (reached: equal to position)"
+    },
+    "slips": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 65535,
+      "description": "times the step timer ran late and the ramp restarted from rest; 0 normally"
+    }
+  },
+  "additionalProperties": false
+}

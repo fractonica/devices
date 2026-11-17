@@ -16,6 +16,7 @@ import { CAMERA_PANEL } from './panels/camera/index.tsx';
 import { DISPLAY_PANEL } from './panels/display.tsx';
 import { GENERIC_PANEL } from './panels/generic.tsx';
 import { LED_PANEL } from './panels/led.tsx';
+import { STEPPER_PANEL } from './panels/stepper.tsx';
 
 /** What every panel component (Lens, Headline, Quick) is given. Built once by the page (page-lens.tsx panelProps). */
 export interface CapPanelProps {
@@ -51,6 +52,7 @@ export const PANELS: Readonly<Record<string, CapPanel>> = {
   'fr.camera': CAMERA_PANEL,
   'fr.led': LED_PANEL,
   'fr.display': DISPLAY_PANEL,
+  'fr.stepper': STEPPER_PANEL,
 };
 
 /**

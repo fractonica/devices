@@ -1,0 +1,28 @@
+# Driver manifest (design stepper-s1 D7-D9; spec 07 §7.8). A bipolar stepper on a DRV8833 dual H-bridge module: four
+# inputs on LEDC PWM (slow decay, 25 kHz, 11 bits), nSLEEP and nFAULT on bare pins, steps from a gptimer alarm ISR in
+# IRAM. bind { ain1, ain2, bin1, bin2: gpio.<n>[, sleep: gpio.<n>][, fault: gpio.<n>] }, each in the board's pins.free.
+schema: fractonica/driver@1
+id: drv8833_stepper
+summary: A two-coil stepper on a DRV8833 module - microsteps by PWM on its four inputs (slow decay, 25 kHz), steps timed by a gptimer ISR, nSLEEP and nFAULT handled; coils off at init.
+implements: hal.Stepper
+class: fr::drv::Drv8833Stepper          # header: include/fr/drv/drv8833_stepper.hpp
+targets: [esp32c3, esp32c6, esp32s3]
+binds: gpio                             # bare pins (no board section)
+accepts_kinds: [gpio]
+config:                                 # same order as Drv8833Stepper::Config
+  ain1:        { type: gpio, from: bind.ain1, output: true, doc: "AIN1 (IN1): coil A's first input" }
+  ain2:        { type: gpio, from: bind.ain2, output: true, doc: "AIN2 (IN2)" }
+  bin1:        { type: gpio, from: bind.bin1, output: true, doc: "BIN1 (IN3): coil B's first input" }
+  bin2:        { type: gpio, from: bind.bin2, output: true, doc: "BIN2 (IN4)" }
+  sleep:       { type: gpio, from: bind.sleep, optional: true, output: true, doc: "nSLEEP (EEP), high = awake; absent: the module must hold it high, and release only coasts" }
+  fault:       { type: gpio, from: bind.fault, optional: true, doc: "nFAULT (ULT), open drain, low = fault; an input" }
+  fault_pullup: { type: bool, default: true, doc: "the fault pin's internal pull-up (false when the module pulls nFAULT up to 3.3 V itself)" }
+  # 11 bits from LEDC's 80 MHz clock reach 39,062 Hz at most: a higher value would pass here and fail at boot.
+  pwm_hz:      { type: u16, default: 25000, range: [16000, 39000], doc: "PWM frequency on the four inputs (11 bits up to 39 kHz)" }
+traits: { microstep: true }
+# LEDC: timer 0 and channels 0-3 (fixture_gpio's on the S3: never in one profile with it; haptic_ledc takes channels
+# from LEDC_CHANNEL_MAX/2 up, which on the C3 is 3: never in one profile with it on a 6-channel chip, design D-risks).
+# gptimer: one of the chip's general-purpose timers, budgeted by the board's resources.gptimer.
+resources: { gpio: 6, ledc_channels: 4, ledc_timers: 1, gptimer: 1, input_slot: 1 }
+sdkconfig: [CONFIG_GPTIMER_ISR_CACHE_SAFE=y, CONFIG_GPTIMER_CTRL_FUNC_IN_IRAM=y]
+dependencies: {}

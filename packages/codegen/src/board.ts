@@ -240,6 +240,17 @@ export const SERVICES: Readonly<Record<string, ServiceFacts>> = {
   // Design lcd-clock-c1 D7, D8: one timer (the seconds poll, faster near the rollover; the reports; inject's hold);
   // has_temperature and resolution_ms from driver.yaml `traits:`.
   'fr.clock': { implements: 'hal.Rtc', service: 'fr::ClockService', header: 'fr/services/clock_service.hpp', timers: 1 },
+  // Design stepper-s1 D10, D11: one timer (the 20 ms poll while moving, the settle, the idle release, a jog's seconds,
+  // the hub-silence check); the steps themselves on the driver's own gptimer ISR. The settings kept in NVS namespace
+  // fr_stepper. microstep says whether the driver drives PWM (driver.yaml `traits:`).
+  'fr.stepper': {
+    implements: 'hal.Stepper',
+    service: 'fr::StepperService',
+    header: 'fr/services/stepper_service.hpp',
+    timers: 1,
+    settings: 'fr_stepper',
+    traits: (_cfg, { driverTraits }) => ({ microstep: driverTraits.microstep === true }),
+  },
 };
 
 /** fr.camera's `sensor` trait by the board entry's `sensor` (design camera-c1 D7): 0 is unknown. */

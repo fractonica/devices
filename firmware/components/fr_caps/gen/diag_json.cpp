@@ -26,6 +26,7 @@
 #include "haptic.hpp"
 #include "storage.hpp"
 #include "clock.hpp"
+#include "stepper.hpp"
 #include "node.hpp"
 #include "ota.hpp"
 #include "diag.hpp"
@@ -49,6 +50,7 @@ cJSON *to_json(const BatteryTraits &v);
 cJSON *to_json(const HapticTraits &v);
 cJSON *to_json(const StorageTraits &v);
 cJSON *to_json(const ClockTraits &v);
+cJSON *to_json(const StepperTraits &v);
 #if FR_TEST_HOOKS
 cJSON *to_json(const ButtonInjectArgs &v);
 cJSON *to_json(const ButtonDown &v);
@@ -151,6 +153,13 @@ cJSON *to_json(const ClockSetAgingArgs &v);
 cJSON *to_json(const ClockInjectArgs &v);
 cJSON *to_json(const ClockLostPower &v);
 cJSON *to_json(const ClockSet &v);
+cJSON *to_json(const StepperMoveToArgs &v);
+cJSON *to_json(const StepperMoveByArgs &v);
+cJSON *to_json(const StepperJogArgs &v);
+cJSON *to_json(const StepperZeroArgs &v);
+cJSON *to_json(const StepperConfigureArgs &v);
+cJSON *to_json(const StepperDone &v);
+cJSON *to_json(const StepperFault &v);
 cJSON *to_json(const NodeIdentifyArgs &v);
 cJSON *to_json(const NodeDescribeResult &v);
 cJSON *to_json(const NodeRebootArgs &v);
@@ -581,6 +590,14 @@ cJSON *to_json(const ClockTraits &v)
     bool ok = o != nullptr;
     ok = ok && add(o, "has_temperature", json_bool(v.has_temperature));
     ok = ok && add(o, "resolution_ms", json_number(v.resolution_ms));
+    return finish(o, ok);
+}
+
+cJSON *to_json(const StepperTraits &v)
+{
+    cJSON *o = cJSON_CreateObject();
+    bool ok = o != nullptr;
+    ok = ok && add(o, "microstep", json_bool(v.microstep));
     return finish(o, ok);
 }
 
@@ -1586,6 +1603,121 @@ cJSON *to_json(const ClockSet &v)
     bool ok = o != nullptr;
     ok = ok && add(o, "unix", json_number(v.unix));
     ok = ok && add(o, "by", json_enum(v.by));
+    return finish(o, ok);
+}
+
+cJSON *to_json(const StepperMoveToArgs &v)
+{
+    cJSON *o = cJSON_CreateObject();
+    bool ok = o != nullptr;
+    ok = ok && add(o, "position", json_number(v.position));
+    if (v.has_speed_hz) {
+        ok = ok && add(o, "speed_hz", json_number(v.speed_hz));
+    }
+    if (v.has_accel) {
+        ok = ok && add(o, "accel", json_number(v.accel));
+    }
+    return finish(o, ok);
+}
+
+cJSON *to_json(const StepperMoveByArgs &v)
+{
+    cJSON *o = cJSON_CreateObject();
+    bool ok = o != nullptr;
+    ok = ok && add(o, "steps", json_number(v.steps));
+    if (v.has_speed_hz) {
+        ok = ok && add(o, "speed_hz", json_number(v.speed_hz));
+    }
+    if (v.has_accel) {
+        ok = ok && add(o, "accel", json_number(v.accel));
+    }
+    return finish(o, ok);
+}
+
+cJSON *to_json(const StepperJogArgs &v)
+{
+    cJSON *o = cJSON_CreateObject();
+    bool ok = o != nullptr;
+    ok = ok && add(o, "speed_hz", json_number(v.speed_hz));
+    if (v.has_accel) {
+        ok = ok && add(o, "accel", json_number(v.accel));
+    }
+    ok = ok && add(o, "seconds", json_number(v.seconds));
+    return finish(o, ok);
+}
+
+cJSON *to_json(const StepperZeroArgs &v)
+{
+    cJSON *o = cJSON_CreateObject();
+    bool ok = o != nullptr;
+    ok = ok && add(o, "position", json_number(v.position));
+    return finish(o, ok);
+}
+
+cJSON *to_json(const StepperConfigureArgs &v)
+{
+    cJSON *o = cJSON_CreateObject();
+    bool ok = o != nullptr;
+    if (v.has_step_mode) {
+        ok = ok && add(o, "step_mode", json_enum(v.step_mode));
+    }
+    if (v.has_max_speed_hz) {
+        ok = ok && add(o, "max_speed_hz", json_number(v.max_speed_hz));
+    }
+    if (v.has_accel) {
+        ok = ok && add(o, "accel", json_number(v.accel));
+    }
+    if (v.has_start_hz) {
+        ok = ok && add(o, "start_hz", json_number(v.start_hz));
+    }
+    if (v.has_coil_ohm) {
+        ok = ok && add(o, "coil_ohm", json_number(v.coil_ohm));
+    }
+    if (v.has_run_ma) {
+        ok = ok && add(o, "run_ma", json_number(v.run_ma));
+    }
+    if (v.has_hold_pct) {
+        ok = ok && add(o, "hold_pct", json_number(v.hold_pct));
+    }
+    if (v.has_release_ms) {
+        ok = ok && add(o, "release_ms", json_number(v.release_ms));
+    }
+    if (v.has_supply_mv) {
+        ok = ok && add(o, "supply_mv", json_number(v.supply_mv));
+    }
+    if (v.has_invert) {
+        ok = ok && add(o, "invert", json_bool(v.invert));
+    }
+    if (v.has_limits) {
+        ok = ok && add(o, "limits", json_bool(v.limits));
+    }
+    if (v.has_limit_min) {
+        ok = ok && add(o, "limit_min", json_number(v.limit_min));
+    }
+    if (v.has_limit_max) {
+        ok = ok && add(o, "limit_max", json_number(v.limit_max));
+    }
+    return finish(o, ok);
+}
+
+cJSON *to_json(const StepperDone &v)
+{
+    cJSON *o = cJSON_CreateObject();
+    bool ok = o != nullptr;
+    ok = ok && add(o, "reason", json_enum(v.reason));
+    ok = ok && add(o, "position", json_number(v.position));
+    ok = ok && add(o, "target", json_number(v.target));
+    ok = ok && add(o, "slips", json_number(v.slips));
+    return finish(o, ok);
+}
+
+cJSON *to_json(const StepperFault &v)
+{
+    cJSON *o = cJSON_CreateObject();
+    bool ok = o != nullptr;
+    ok = ok && add(o, "cause", json_enum(v.cause));
+    ok = ok && add(o, "position", json_number(v.position));
+    ok = ok && add(o, "recent", json_number(v.recent));
     return finish(o, ok);
 }
 
@@ -3083,6 +3215,203 @@ Status args_clock_inject(const cJSON *obj, fr::wire::Writer &w)
     return encoded(w);
 }
 
+Status args_stepper_move_to(const cJSON *obj, fr::wire::Writer &w)
+{
+    StepperMoveToArgs v{};
+    bool ok = true;
+    for (const cJSON *it = obj != nullptr ? obj->child : nullptr; ok && it != nullptr; it = it->next) {
+        const std::string_view key = it->string != nullptr ? it->string : "";
+        if (key == "position") {
+            ok = from_json_sint(it, INT32_MIN, INT32_MAX, v.position);
+        } else if (key == "speed_hz") {
+            v.has_speed_hz = true;
+            ok = from_json_uint(it, 0xFFFF, v.speed_hz);
+        } else if (key == "accel") {
+            v.has_accel = true;
+            ok = from_json_uint(it, 0xFFFFFFFF, v.accel);
+        } else {
+            ok = false;  // unknown key
+        }
+    }
+    if (!ok || !valid(v)) {
+        return std::unexpected(Err::invalid_args);
+    }
+    encode(v, w);
+    return encoded(w);
+}
+
+Status args_stepper_move_by(const cJSON *obj, fr::wire::Writer &w)
+{
+    StepperMoveByArgs v{};
+    bool ok = true;
+    for (const cJSON *it = obj != nullptr ? obj->child : nullptr; ok && it != nullptr; it = it->next) {
+        const std::string_view key = it->string != nullptr ? it->string : "";
+        if (key == "steps") {
+            ok = from_json_sint(it, INT32_MIN, INT32_MAX, v.steps);
+        } else if (key == "speed_hz") {
+            v.has_speed_hz = true;
+            ok = from_json_uint(it, 0xFFFF, v.speed_hz);
+        } else if (key == "accel") {
+            v.has_accel = true;
+            ok = from_json_uint(it, 0xFFFFFFFF, v.accel);
+        } else {
+            ok = false;  // unknown key
+        }
+    }
+    if (!ok || !valid(v)) {
+        return std::unexpected(Err::invalid_args);
+    }
+    encode(v, w);
+    return encoded(w);
+}
+
+Status args_stepper_jog(const cJSON *obj, fr::wire::Writer &w)
+{
+    StepperJogArgs v{};
+    bool ok = true;
+    for (const cJSON *it = obj != nullptr ? obj->child : nullptr; ok && it != nullptr; it = it->next) {
+        const std::string_view key = it->string != nullptr ? it->string : "";
+        if (key == "speed_hz") {
+            ok = from_json_sint(it, INT32_MIN, INT32_MAX, v.speed_hz);
+        } else if (key == "accel") {
+            v.has_accel = true;
+            ok = from_json_uint(it, 0xFFFFFFFF, v.accel);
+        } else if (key == "seconds") {
+            ok = from_json_uint(it, 0xFFFF, v.seconds);
+        } else {
+            ok = false;  // unknown key
+        }
+    }
+    if (!ok || !valid(v)) {
+        return std::unexpected(Err::invalid_args);
+    }
+    encode(v, w);
+    return encoded(w);
+}
+
+Status args_stepper_stop(const cJSON *obj)
+{
+    if (obj != nullptr && obj->child != nullptr) {
+        return std::unexpected(Err::invalid_args);
+    }
+    return {};
+}
+
+Status args_stepper_halt(const cJSON *obj)
+{
+    if (obj != nullptr && obj->child != nullptr) {
+        return std::unexpected(Err::invalid_args);
+    }
+    return {};
+}
+
+Status args_stepper_hold(const cJSON *obj)
+{
+    if (obj != nullptr && obj->child != nullptr) {
+        return std::unexpected(Err::invalid_args);
+    }
+    return {};
+}
+
+Status args_stepper_release(const cJSON *obj)
+{
+    if (obj != nullptr && obj->child != nullptr) {
+        return std::unexpected(Err::invalid_args);
+    }
+    return {};
+}
+
+Status args_stepper_zero(const cJSON *obj, fr::wire::Writer &w)
+{
+    StepperZeroArgs v{};
+    bool ok = true;
+    for (const cJSON *it = obj != nullptr ? obj->child : nullptr; ok && it != nullptr; it = it->next) {
+        const std::string_view key = it->string != nullptr ? it->string : "";
+        if (key == "position") {
+            ok = from_json_sint(it, INT32_MIN, INT32_MAX, v.position);
+        } else {
+            ok = false;  // unknown key
+        }
+    }
+    if (!ok || !valid(v)) {
+        return std::unexpected(Err::invalid_args);
+    }
+    encode(v, w);
+    return encoded(w);
+}
+
+Status args_stepper_configure(const cJSON *obj, fr::wire::Writer &w)
+{
+    StepperConfigureArgs v{};
+    bool ok = true;
+    for (const cJSON *it = obj != nullptr ? obj->child : nullptr; ok && it != nullptr; it = it->next) {
+        const std::string_view key = it->string != nullptr ? it->string : "";
+        if (key == "step_mode") {
+            v.has_step_mode = true;
+            ok = from_json_enum(it, v.step_mode);
+        } else if (key == "max_speed_hz") {
+            v.has_max_speed_hz = true;
+            ok = from_json_uint(it, 0xFFFF, v.max_speed_hz);
+        } else if (key == "accel") {
+            v.has_accel = true;
+            ok = from_json_uint(it, 0xFFFFFFFF, v.accel);
+        } else if (key == "start_hz") {
+            v.has_start_hz = true;
+            ok = from_json_uint(it, 0xFFFF, v.start_hz);
+        } else if (key == "coil_ohm") {
+            v.has_coil_ohm = true;
+            ok = from_json_uint(it, 0xFFFF, v.coil_ohm);
+        } else if (key == "run_ma") {
+            v.has_run_ma = true;
+            ok = from_json_uint(it, 0xFFFF, v.run_ma);
+        } else if (key == "hold_pct") {
+            v.has_hold_pct = true;
+            ok = from_json_uint(it, 0xFF, v.hold_pct);
+        } else if (key == "release_ms") {
+            v.has_release_ms = true;
+            ok = from_json_uint(it, 0xFFFF, v.release_ms);
+        } else if (key == "supply_mv") {
+            v.has_supply_mv = true;
+            ok = from_json_uint(it, 0xFFFF, v.supply_mv);
+        } else if (key == "invert") {
+            v.has_invert = true;
+            ok = from_json_bool(it, v.invert);
+        } else if (key == "limits") {
+            v.has_limits = true;
+            ok = from_json_bool(it, v.limits);
+        } else if (key == "limit_min") {
+            v.has_limit_min = true;
+            ok = from_json_sint(it, INT32_MIN, INT32_MAX, v.limit_min);
+        } else if (key == "limit_max") {
+            v.has_limit_max = true;
+            ok = from_json_sint(it, INT32_MIN, INT32_MAX, v.limit_max);
+        } else {
+            ok = false;  // unknown key
+        }
+    }
+    if (!ok || !valid(v)) {
+        return std::unexpected(Err::invalid_args);
+    }
+    encode(v, w);
+    return encoded(w);
+}
+
+Status args_stepper_reset_settings(const cJSON *obj)
+{
+    if (obj != nullptr && obj->child != nullptr) {
+        return std::unexpected(Err::invalid_args);
+    }
+    return {};
+}
+
+Status args_stepper_inject_fault(const cJSON *obj)
+{
+    if (obj != nullptr && obj->child != nullptr) {
+        return std::unexpected(Err::invalid_args);
+    }
+    return {};
+}
+
 Status args_node_identify(const cJSON *obj, fr::wire::Writer &w)
 {
     NodeIdentifyArgs v{};
@@ -4373,6 +4702,239 @@ cJSON *clock_to_json(uint8_t cls, uint8_t id, std::span<const uint8_t> body)
     return nullptr;
 }
 
+cJSON *stepper_to_json(uint8_t cls, uint8_t id, std::span<const uint8_t> body)
+{
+    switch (cls) {
+    case fr::wire::kClsCmd:
+        switch (id) {
+        case Stepper::kCmdMoveTo:
+            return json_of(decode_stepper_move_to_args(body));
+        case Stepper::kCmdMoveBy:
+            return json_of(decode_stepper_move_by_args(body));
+        case Stepper::kCmdJog:
+            return json_of(decode_stepper_jog_args(body));
+        case Stepper::kCmdStop:
+            return json_empty(body);
+        case Stepper::kCmdHalt:
+            return json_empty(body);
+        case Stepper::kCmdHold:
+            return json_empty(body);
+        case Stepper::kCmdRelease:
+            return json_empty(body);
+        case Stepper::kCmdZero:
+            return json_of(decode_stepper_zero_args(body));
+        case Stepper::kCmdConfigure:
+            return json_of(decode_stepper_configure_args(body));
+        case Stepper::kCmdResetSettings:
+            return json_empty(body);
+        case Stepper::kCmdInjectFault:
+            return json_empty(body);
+        }
+        break;
+    case fr::wire::kClsResult:
+        switch (id) {
+        case Stepper::kCmdMoveTo:
+            return json_empty(body);
+        case Stepper::kCmdMoveBy:
+            return json_empty(body);
+        case Stepper::kCmdJog:
+            return json_empty(body);
+        case Stepper::kCmdStop:
+            return json_empty(body);
+        case Stepper::kCmdHalt:
+            return json_empty(body);
+        case Stepper::kCmdHold:
+            return json_empty(body);
+        case Stepper::kCmdRelease:
+            return json_empty(body);
+        case Stepper::kCmdZero:
+            return json_empty(body);
+        case Stepper::kCmdConfigure:
+            return json_empty(body);
+        case Stepper::kCmdResetSettings:
+            return json_empty(body);
+        case Stepper::kCmdInjectFault:
+            return json_empty(body);
+        }
+        break;
+    case fr::wire::kClsEvent:
+        switch (id) {
+        case Stepper::kEventDone:
+            return json_of(decode_stepper_done(body));
+        case Stepper::kEventFault:
+            return json_of(decode_stepper_fault(body));
+        }
+        break;
+    case fr::wire::kClsState:
+        switch (id) {
+        case Stepper::kPropPosition: {
+            const auto v = decode_stepper_position_state(body);
+            if (!v || !(*v >= -1000000000 && *v <= 1000000000)) {
+                return nullptr;
+            }
+            cJSON *o = cJSON_CreateObject();
+            return finish(o, o != nullptr && add(o, "position", json_number(*v)));
+        }
+        case Stepper::kPropTarget: {
+            const auto v = decode_stepper_target_state(body);
+            if (!v || !(*v >= -1000000000 && *v <= 1000000000)) {
+                return nullptr;
+            }
+            cJSON *o = cJSON_CreateObject();
+            return finish(o, o != nullptr && add(o, "target", json_number(*v)));
+        }
+        case Stepper::kPropSpeedHz: {
+            const auto v = decode_stepper_speed_hz_state(body);
+            if (!v || !(*v >= -10000 && *v <= 10000)) {
+                return nullptr;
+            }
+            cJSON *o = cJSON_CreateObject();
+            return finish(o, o != nullptr && add(o, "speed_hz", json_number(*v)));
+        }
+        case Stepper::kPropMotion: {
+            const auto v = decode_stepper_motion_state(body);
+            if (!v || !(is_known(*v))) {
+                return nullptr;
+            }
+            cJSON *o = cJSON_CreateObject();
+            return finish(o, o != nullptr && add(o, "motion", json_enum(*v)));
+        }
+        case Stepper::kPropPositionKnown: {
+            const auto v = decode_stepper_position_known_state(body);
+            if (!v) {
+                return nullptr;
+            }
+            cJSON *o = cJSON_CreateObject();
+            return finish(o, o != nullptr && add(o, "position_known", json_bool(*v)));
+        }
+        case Stepper::kPropStepMode: {
+            const auto v = decode_stepper_step_mode_state(body);
+            if (!v || !(is_known(*v))) {
+                return nullptr;
+            }
+            cJSON *o = cJSON_CreateObject();
+            return finish(o, o != nullptr && add(o, "step_mode", json_enum(*v)));
+        }
+        case Stepper::kPropMaxSpeedHz: {
+            const auto v = decode_stepper_max_speed_hz_state(body);
+            if (!v) {
+                return nullptr;
+            }
+            cJSON *o = cJSON_CreateObject();
+            return finish(o, o != nullptr && add(o, "max_speed_hz", json_number(*v)));
+        }
+        case Stepper::kPropAccel: {
+            const auto v = decode_stepper_accel_state(body);
+            if (!v) {
+                return nullptr;
+            }
+            cJSON *o = cJSON_CreateObject();
+            return finish(o, o != nullptr && add(o, "accel", json_number(*v)));
+        }
+        case Stepper::kPropStartHz: {
+            const auto v = decode_stepper_start_hz_state(body);
+            if (!v) {
+                return nullptr;
+            }
+            cJSON *o = cJSON_CreateObject();
+            return finish(o, o != nullptr && add(o, "start_hz", json_number(*v)));
+        }
+        case Stepper::kPropCoilOhm: {
+            const auto v = decode_stepper_coil_ohm_state(body);
+            if (!v) {
+                return nullptr;
+            }
+            cJSON *o = cJSON_CreateObject();
+            return finish(o, o != nullptr && add(o, "coil_ohm", json_number(*v)));
+        }
+        case Stepper::kPropRunMa: {
+            const auto v = decode_stepper_run_ma_state(body);
+            if (!v) {
+                return nullptr;
+            }
+            cJSON *o = cJSON_CreateObject();
+            return finish(o, o != nullptr && add(o, "run_ma", json_number(*v)));
+        }
+        case Stepper::kPropHoldPct: {
+            const auto v = decode_stepper_hold_pct_state(body);
+            if (!v) {
+                return nullptr;
+            }
+            cJSON *o = cJSON_CreateObject();
+            return finish(o, o != nullptr && add(o, "hold_pct", json_number(*v)));
+        }
+        case Stepper::kPropReleaseMs: {
+            const auto v = decode_stepper_release_ms_state(body);
+            if (!v) {
+                return nullptr;
+            }
+            cJSON *o = cJSON_CreateObject();
+            return finish(o, o != nullptr && add(o, "release_ms", json_number(*v)));
+        }
+        case Stepper::kPropSupplyMv: {
+            const auto v = decode_stepper_supply_mv_state(body);
+            if (!v) {
+                return nullptr;
+            }
+            cJSON *o = cJSON_CreateObject();
+            return finish(o, o != nullptr && add(o, "supply_mv", json_number(*v)));
+        }
+        case Stepper::kPropInvert: {
+            const auto v = decode_stepper_invert_state(body);
+            if (!v) {
+                return nullptr;
+            }
+            cJSON *o = cJSON_CreateObject();
+            return finish(o, o != nullptr && add(o, "invert", json_bool(*v)));
+        }
+        case Stepper::kPropLimits: {
+            const auto v = decode_stepper_limits_state(body);
+            if (!v) {
+                return nullptr;
+            }
+            cJSON *o = cJSON_CreateObject();
+            return finish(o, o != nullptr && add(o, "limits", json_bool(*v)));
+        }
+        case Stepper::kPropLimitMin: {
+            const auto v = decode_stepper_limit_min_state(body);
+            if (!v) {
+                return nullptr;
+            }
+            cJSON *o = cJSON_CreateObject();
+            return finish(o, o != nullptr && add(o, "limit_min", json_number(*v)));
+        }
+        case Stepper::kPropLimitMax: {
+            const auto v = decode_stepper_limit_max_state(body);
+            if (!v) {
+                return nullptr;
+            }
+            cJSON *o = cJSON_CreateObject();
+            return finish(o, o != nullptr && add(o, "limit_max", json_number(*v)));
+        }
+        case Stepper::kPropRunDutyPct: {
+            const auto v = decode_stepper_run_duty_pct_state(body);
+            if (!v) {
+                return nullptr;
+            }
+            cJSON *o = cJSON_CreateObject();
+            return finish(o, o != nullptr && add(o, "run_duty_pct", json_number(*v)));
+        }
+        case Stepper::kPropStepsPerRev: {
+            const auto v = decode_stepper_steps_per_rev_state(body);
+            if (!v) {
+                return nullptr;
+            }
+            cJSON *o = cJSON_CreateObject();
+            return finish(o, o != nullptr && add(o, "steps_per_rev", json_number(*v)));
+        }
+        }
+        break;
+    default:
+        break;
+    }
+    return nullptr;
+}
+
 cJSON *node_to_json(uint8_t cls, uint8_t id, std::span<const uint8_t> body)
 {
     switch (cls) {
@@ -4512,6 +5074,8 @@ cJSON *traits_to_json(uint16_t cap_id, std::span<const uint8_t> traits)
         return json_of(decode_storage_traits(traits));
     case Clock::kId:
         return json_of(decode_clock_traits(traits));
+    case Stepper::kId:
+        return json_of(decode_stepper_traits(traits));
     case Node::kId:
         return json_empty(traits);
     case Ota::kId:
@@ -4808,6 +5372,42 @@ Status encode_args_json(uint16_t cap_id, const char *cmd, const cJSON *args, uin
             s = args_clock_inject(obj, w);
         }
         break;
+    case Stepper::kId:
+        if (name == "move_to") {
+            id = Stepper::kCmdMoveTo;
+            s = args_stepper_move_to(obj, w);
+        } else if (name == "move_by") {
+            id = Stepper::kCmdMoveBy;
+            s = args_stepper_move_by(obj, w);
+        } else if (name == "jog") {
+            id = Stepper::kCmdJog;
+            s = args_stepper_jog(obj, w);
+        } else if (name == "stop") {
+            id = Stepper::kCmdStop;
+            s = args_stepper_stop(obj);
+        } else if (name == "halt") {
+            id = Stepper::kCmdHalt;
+            s = args_stepper_halt(obj);
+        } else if (name == "hold") {
+            id = Stepper::kCmdHold;
+            s = args_stepper_hold(obj);
+        } else if (name == "release") {
+            id = Stepper::kCmdRelease;
+            s = args_stepper_release(obj);
+        } else if (name == "zero") {
+            id = Stepper::kCmdZero;
+            s = args_stepper_zero(obj, w);
+        } else if (name == "configure") {
+            id = Stepper::kCmdConfigure;
+            s = args_stepper_configure(obj, w);
+        } else if (name == "reset_settings") {
+            id = Stepper::kCmdResetSettings;
+            s = args_stepper_reset_settings(obj);
+        } else if (name == "inject_fault") {
+            id = Stepper::kCmdInjectFault;
+            s = args_stepper_inject_fault(obj);
+        }
+        break;
     case Node::kId:
         if (name == "identify") {
             id = Node::kCmdIdentify;
@@ -4893,6 +5493,8 @@ cJSON *decode_to_json(uint16_t cap_id, uint8_t cls, uint8_t member_id, std::span
         return storage_to_json(cls, member_id, body);
     case Clock::kId:
         return clock_to_json(cls, member_id, body);
+    case Stepper::kId:
+        return stepper_to_json(cls, member_id, body);
     case Node::kId:
         return node_to_json(cls, member_id, body);
     case Ota::kId:

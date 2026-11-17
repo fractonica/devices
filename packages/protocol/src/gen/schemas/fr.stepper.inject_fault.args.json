@@ -1,0 +1,9 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:fractonica:schema:fr.stepper.inject_fault.args",
+  "title": "fr.stepper.inject_fault arguments",
+  "description": "Runs the fault path as if nFAULT fell (fault injected).",
+  "type": "object",
+  "properties": {},
+  "additionalProperties": false
+}

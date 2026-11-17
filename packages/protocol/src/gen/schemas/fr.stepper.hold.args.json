@@ -1,0 +1,9 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:fractonica:schema:fr.stepper.hold.args",
+  "title": "fr.stepper.hold arguments",
+  "description": "Energises the coils at hold power where the position says, until release or the next motion's end; clears a fault (BUSY in its back-off).",
+  "type": "object",
+  "properties": {},
+  "additionalProperties": false
+}

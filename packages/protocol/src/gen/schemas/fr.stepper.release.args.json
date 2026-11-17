@@ -1,0 +1,9 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:fractonica:schema:fr.stepper.release.args",
+  "title": "fr.stepper.release arguments",
+  "description": "Coils off and the driver asleep at once; a running motion ends (done released).",
+  "type": "object",
+  "properties": {},
+  "additionalProperties": false
+}

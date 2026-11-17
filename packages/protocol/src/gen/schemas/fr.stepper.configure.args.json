@@ -1,0 +1,101 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:fractonica:schema:fr.stepper.configure.args",
+  "title": "fr.stepper.configure arguments",
+  "description": "Changes the settings given and keeps them across reboots; absent fields stay. BUSY while moving, and for step_mode unless released. A new step_mode rescales the position, the limits and the speeds not given in the same call. INVALID_ARGS for limit_min >= limit_max, or a step_mode the driver cannot do.",
+  "type": "object",
+  "properties": {
+    "step_mode": {
+      "type": "string",
+      "enum": [
+        "full",
+        "half",
+        "micro4",
+        "micro8",
+        "micro16",
+        "micro32"
+      ]
+    },
+    "max_speed_hz": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 10000,
+      "description": "(Hz; 1..10000)"
+    },
+    "accel": {
+      "type": "integer",
+      "minimum": 10,
+      "maximum": 200000,
+      "description": "(Hz/s; 10..200000)"
+    },
+    "start_hz": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 10000,
+      "description": "(Hz; 1..10000)"
+    },
+    "coil_ohm": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 1000,
+      "description": "(ohm; 1..1000)"
+    },
+    "run_ma": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 1500,
+      "description": "(mA; 1..1500)"
+    },
+    "hold_pct": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 100,
+      "description": "(1..100)"
+    },
+    "release_ms": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 65535,
+      "description": "(ms)"
+    },
+    "supply_mv": {
+      "type": "integer",
+      "minimum": 2700,
+      "maximum": 10800,
+      "description": "(mV; 2700..10800)"
+    },
+    "invert": {
+      "type": "boolean"
+    },
+    "limits": {
+      "type": "boolean"
+    },
+    "limit_min": {
+      "type": "integer",
+      "minimum": -1000000000,
+      "maximum": 1000000000,
+      "description": "(-1000000000..1000000000)"
+    },
+    "limit_max": {
+      "type": "integer",
+      "minimum": -1000000000,
+      "maximum": 1000000000,
+      "description": "(-1000000000..1000000000)"
+    }
+  },
+  "additionalProperties": false,
+  "examples": [
+    {
+      "coil_ohm": 20,
+      "run_ma": 90
+    },
+    {
+      "step_mode": "micro16",
+      "max_speed_hz": 3200,
+      "accel": 16000
+    },
+    {
+      "invert": true
+    }
+  ]
+}

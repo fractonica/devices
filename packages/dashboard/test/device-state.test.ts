@@ -186,6 +186,17 @@ describe('units in pure and Earth mode', () => {
     expect(rateText(core, 1e6 / us)).toMatch(/^1(\.0+)? pB$|^1 per/);
   });
 
+  it('writes a negative rate (a stepper spinning back) as the same words after a minus sign', () => {
+    // the core's formatPerBlink takes magnitudes only: a raw negative threw FRC_ERR_ARG on the stepper panel
+    for (const hz of [-1600, -800, -1]) {
+      expect(rateText(core, hz)).toBe(`−${rateText(core, -hz)}`);
+    }
+    expect(rateText(core, 0)).toBe(rateText(core, -0));
+    const back = valueText(core, -1600, 'Hz');
+    expect(back.text.startsWith('−')).toBe(true);
+    expect(pureSafe(back.text)).toBe(true);
+  });
+
   it('writes Earth durations under a second in ms', () => {
     expect(earthDuration(core, 1521.5)).toBe('1.5 ms');
     expect(earthDuration(core, -3000)).toBe('−3 ms');

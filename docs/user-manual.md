@@ -27,6 +27,7 @@ Contents:
 19. [The bench](#19-the-bench)
 20. [Fractonica time](#20-fractonica-time)
 21. [The dashboard](#21-the-dashboard)
+22. [Stepper motor](#22-stepper-motor)
 
 `fr` runs from any directory once `fr doctor --fix` has written its shim (section 1); commands that build use the checkout around the current directory, or else the one the shim points at. Add `--json` to any of them for machine-readable output, and `--help` to see all options.
 
@@ -775,6 +776,7 @@ Every `fr` command is also an MCP tool, served by `fr mcp`.
 | pad-s3 | Waveshare ESP32-S3 1.9" LCD | s3l-pad | Button, LED, display |
 | pad-s3t | Waveshare ESP32-S3 2" touch LCD | s3t-pad | Button, display, touch |
 | gw-c6 | nanoESP32-C6 | c6g-gateway | ESP-NOW gateway on USB |
+| stepper-c3 | esp32c3-supermini | c3s-stepper | micro stepper on a DRV8833 |
 | (fixture) | ESP32-S3 DevKitC-1 | s3k-fixture | HIL fixture: presses buttons and sets voltages on wired lines |
 
 Boards that are not plugged in show as `unknown` or `offline` in `fr devices ls`; that is normal.
@@ -1004,3 +1006,125 @@ for a span you pick (30λ to 3ι, the lease cap of 30 minutes); **Release** take
 ignoring**, **Claim** and **Unclaim** change the port policy. The same words and buttons are on Provision's first step
 and in Settings › Ports. The dashboard never opens a port itself.
 
+---
+
+## 22. Stepper motor
+
+**The board:** stepper-c3, an **ESP32-C3 Super Mini** (black, blue LED on GPIO8, BOOT on GPIO9) driving a **10 mm
+two-coil micro stepper** with a brass pinion through a **DRV8833** dual H-bridge module with the TB6612-style pinout:
+AIN2 on GPIO5, AIN1 on GPIO6, STBY (the DRV8833's nSLEEP) on GPIO7, BIN1 on GPIO10, BIN2 on GPIO20, the motor supply
+(VM) from the board's 5V pin, that is from USB. This module does not bring out nFAULT, so the node cannot see a driver
+fault; the chip still protects itself. The motor is the `motor` instance (`fr.stepper`). The wiring guide is on the dashboard's Bench page:
+<http://127.0.0.1:7420/#/bench>, guide `stepper-c3`; follow it before the first power-up, its first steps measure the
+coils and check the module's STBY pull-up.
+
+**What it does:** moves to a position or by some steps, speeding up and slowing down smoothly; spins at a speed until
+stopped; stops smoothly, halts at once, holds the shaft and lets it go. The position is counted in **steps**: at the
+default eighth steps (`micro8`) one full step of 18° is 8 steps, so one turn of a 20-step motor is 160. There is no
+current sensing: the coil current is capped by the settings `coil_ohm` and `run_ma`, which you set from the measured
+coil. At boot the coils are off, the position is 0 and *position known* is false until you set it (`zero`).
+
+### 22.1 First run, step by step
+
+1. **Provision it** (section 13) with the profile `c3s-stepper` and the alias `stepper-c3`. Then
+   `fr devices get stepper-c3` shows `motor.motion released`.
+
+2. **Measure one coil** with a multimeter, probe to probe across two motor pins (the guide's first step): say 20 Ω.
+   Both coils read within a tenth of each other. On the bench motor the coils alternate: pins 1 and 3 are coil A,
+   2 and 4 coil B (pin 1 to AO1, 3 to AO2, 2 to BO1, 4 to BO2).
+
+3. **Set the run current.** The profile starts from the bench motor (rated 3.3 V, about 160 mA): `coil_ohm` 20,
+   `supply_mv` 5200, `run_ma` 150 (`motor.run_duty_pct` about 58) and 30 % of it at rest. `supply_mv` must be the
+   real VM: set lower, the cap lets more current through than `run_ma` says. For another coil, aim at 60 % of the motor's rated
+   current: `run_ma = 0.6 × V_rated / R`, and with the rating unknown assume 3 V (30 Ω → 60 mA):
+
+   ```bash
+   fr send stepper-c3 motor.configure '{"coil_ohm":30,"run_ma":60}'
+   fr devices get stepper-c3            # motor.run_duty_pct about 35
+   ```
+
+   The settings are kept across reboots. `fr send stepper-c3 motor.reset_settings` forgets them (only while the
+   coils are off).
+
+4. **Hold test:** `fr send stepper-c3 motor.hold`. The shaft resists turning by hand. After 30 s the can is warm at
+   most; too hot to touch means a lower `run_ma`. Then `fr send stepper-c3 motor.release`.
+
+5. **One slow turn:**
+
+   ```bash
+   fr send stepper-c3 motor.configure '{"max_speed_hz":160,"accel":800}'
+   fr send stepper-c3 motor.move_by '{"steps":160}'
+   ```
+
+   Mark the pinion: it turns exactly once and stops on its mark, and `fr events stepper-c3 --types 'motor.*'` ends
+   with `motor.done` `reached`. If it turns more or less than once, the motor's step angle differs: `steps_per_rev` is
+   the steps a turn took divided by 8. Turning the wrong way: `motor.configure '{"invert":true}'`, or swap the two
+   wires of one coil.
+
+6. **Repeatability:** five times `motor.move_by '{"steps":1600}'` then `'{"steps":-1600}'`. The mark comes back
+   exactly, and each `done` says `reached` with `slips` 0.
+
+7. **Top speed:** a spin may not be faster than `max_speed_hz` (step 5 set 160), so first
+   `fr send stepper-c3 motor.configure '{"max_speed_hz":10000}'`. Then `motor.jog '{"speed_hz":800}'`, then 1600,
+   2400, 3200, … with `motor.stop` between, until it buzzes without turning (a stall: harmless at this current). Set
+   `max_speed_hz` to 70 % of the last speed that turned. Then raise `accel` with `motor.configure` until a one-turn
+   move misses its mark, and set it to half of that. Expect 2,400–6,400 steps a second at eighth steps on 5 V.
+
+8. **Heat:** five minutes of turns, each waiting for its `done`:
+
+   ```bash
+   for i in $(seq 50); do
+     c=$(fr send stepper-c3 motor.move_by '{"steps":160}' --json | jq -r .cursor)
+     fr wait event motor.done --since "$c" --timeout 10
+   done
+   ```
+
+   The motor and the DRV8833 are warm, not hot.
+
+9. **Fault path** (a debug build): `fr send stepper-c3 motor.inject_fault` gives `motor.fault` `injected` and motion
+   `fault`. `motor.hold` within a second answers BUSY; after it, OK.
+
+10. **Keep the result:** put the measured `coil_ohm` and `run_ma` (and `steps_per_rev` if it differs) into the
+    profile's motor config too, so a freshly provisioned board starts right.
+
+### 22.2 Commands and what `done` says
+
+| Command | What it does |
+|---|---|
+| `motor.move_to '{"position":160}'` | Goes to a position (optional `speed_hz`, `accel`, at most the configured ones). |
+| `motor.move_by '{"steps":-20}'` | Moves by some steps from the running move's target, or from where it rests. |
+| `motor.jog '{"speed_hz":400}'` | Spins (negative: backward) until stopped, or for `seconds`. Speed 0 is a stop. |
+| `motor.stop` | Slows down to rest. |
+| `motor.halt` | Stops at once and holds; a fast motor may lose its place (*position known* becomes false). |
+| `motor.hold` / `motor.release` | Coils on at hold power / off. Hold also clears a fault. |
+| `motor.zero '{"position":0}'` | Calls where the shaft is now that position, without moving it; *position known* becomes true. |
+| `motor.configure '{…}'` | Speeds, acceleration, coil and current, hold power, when to let go, direction, soft limits. |
+
+A move answers OK at once; `motor.done` ends it. A newer move or spin replaces the running one without stopping, and
+the replaced one has no `done`. The coils drop to hold power after a motion and go off `release_ms` (1 s) later.
+
+| `done` reason | Meaning |
+|---|---|
+| `reached` | It arrived exactly on its target. |
+| `stopped` | `stop` (or a spin of speed 0) brought it to rest. |
+| `halted` | `halt` stopped it at once. |
+| `released` | `release` turned the coils off while it moved. |
+| `limit` | It reached a soft limit (`limits` on, between `limit_min` and `limit_max`). |
+| `fault` | The driver reported a fault (`motor.fault` comes first): the coils are off. |
+| `hub_lost` | It was started from the hub, and the hub fell silent for 10 s: it slowed to a stop by itself. |
+| `elapsed` | A spin's `seconds` ran out. |
+
+`slips` counts the times the step timer ran late and the motor started its ramp again from rest; it is 0 normally.
+
+### 22.3 Stepper troubleshooting
+
+| You see | Do this |
+|---|---|
+| Moves answer BUSY | A fault's back-off (1 s; a minute after three faults in a minute), or `limits` on with the position not known: `motor.zero` first. |
+| Moves answer INVALID_ARGS | `speed_hz` above the configured `max_speed_hz`, `accel` above the configured `accel`, or a position beyond the soft limits (or ±1,000,000,000): raise them with `motor.configure` first. |
+| `motor.fault` `driver` | The DRV8833 reported a short or over-heat (only on a module that brings out nFAULT, bound as `fault`). Unplug USB and check the motor's wires; then `motor.hold`. |
+| The motor warms but never moves, snaps or holds | The coils carry current but the rotor does not follow: a faulty motor (its rotor slips on the shaft). First check that the warm motor is the one you watch (these come two on a cable); then fit another. |
+| It buzzes but does not turn | Too fast or too weak: lower `max_speed_hz` or `accel`, or raise `run_ma` within the motor's rating. |
+| It misses its mark after fast moves | Steps were lost at speed: lower `accel`, or try `step_mode` `micro16` (with the coils off: `motor.release` first). |
+| It stops turning or lost its place with no `motor.fault` | stepper-c3's module has no fault pin: an over-current or over-heat stops the bridge without a report. Unplug USB, check the motor's wires and let it cool; then `motor.zero` again. Or the supply sagged: below about 2.6 V the DRV8833 stops driving without reporting it and resumes by itself. Use a stronger USB port or supply, then `motor.zero` again. |
+| The shaft is hot | `run_ma` is too high for the coil, or `coil_ohm` is set above the real resistance: measure again. |

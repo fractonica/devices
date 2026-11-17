@@ -124,6 +124,42 @@ constexpr MemberInfo kStorageProperties[] = {
 constexpr MemberInfo kClockCommands[] = {{1, "read"}, {2, "set"}, {3, "set_aging"}, {4, "inject"}};
 constexpr MemberInfo kClockEvents[] = {{1, "lost_power"}, {2, "set"}};
 constexpr MemberInfo kClockProperties[] = {{1, "unix"}, {2, "valid"}, {3, "temp_c10"}, {4, "offset_ms"}};
+constexpr MemberInfo kStepperCommands[] = {
+    {1, "move_to"},
+    {2, "move_by"},
+    {3, "jog"},
+    {4, "stop"},
+    {5, "halt"},
+    {6, "hold"},
+    {7, "release"},
+    {8, "zero"},
+    {9, "configure"},
+    {10, "reset_settings"},
+    {11, "inject_fault"},
+};
+constexpr MemberInfo kStepperEvents[] = {{1, "done"}, {2, "fault"}};
+constexpr MemberInfo kStepperProperties[] = {
+    {1, "position"},
+    {2, "target"},
+    {3, "speed_hz"},
+    {4, "motion"},
+    {5, "position_known"},
+    {6, "step_mode"},
+    {7, "max_speed_hz"},
+    {8, "accel"},
+    {9, "start_hz"},
+    {10, "coil_ohm"},
+    {11, "run_ma"},
+    {12, "hold_pct"},
+    {13, "release_ms"},
+    {14, "supply_mv"},
+    {15, "invert"},
+    {16, "limits"},
+    {17, "limit_min"},
+    {18, "limit_max"},
+    {19, "run_duty_pct"},
+    {20, "steps_per_rev"},
+};
 constexpr MemberInfo kNodeCommands[] = {
     {1, "identify"},
     {2, "describe"},
@@ -157,6 +193,7 @@ constexpr CapInfo kCaps[] = {
     {0x000E, "fr.haptic", {1, 0}, kHapticCommands, kHapticEvents, kHapticProperties},
     {0x000F, "fr.storage", {1, 0}, kStorageCommands, kStorageEvents, kStorageProperties},
     {0x0010, "fr.clock", {1, 0}, kClockCommands, kClockEvents, kClockProperties},
+    {0x0012, "fr.stepper", {1, 0}, kStepperCommands, kStepperEvents, kStepperProperties},
     {0x00F0, "fr.node", {1, 0}, kNodeCommands, kNodeEvents, {}},
     {0x00F1, "fr.ota", {1, 0}, {}, {}, {}},
     {0x00F2, "fr.diag", {1, 0}, kDiagCommands, kDiagEvents, {}},

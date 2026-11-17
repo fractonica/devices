@@ -1,0 +1,28 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:fractonica:schema:fr.stepper.fault.event",
+  "title": "fr.stepper.fault event",
+  "description": "The driver reported a fault (or one was injected). The coils are off and motion is fault.",
+  "type": "object",
+  "properties": {
+    "cause": {
+      "type": "string",
+      "enum": [
+        "driver",
+        "injected"
+      ]
+    },
+    "position": {
+      "type": "integer",
+      "minimum": -2147483648,
+      "maximum": 2147483647
+    },
+    "recent": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 255,
+      "description": "faults in the last minute, this one included; at 3 the node refuses to energise for a minute"
+    }
+  },
+  "additionalProperties": false
+}

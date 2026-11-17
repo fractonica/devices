@@ -1,0 +1,38 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:fractonica:schema:fr.stepper.jog.args",
+  "title": "fr.stepper.jog arguments",
+  "description": "Turns at `speed_hz` (negative: backward) until stop, another move, a limit, the hub's silence or `seconds` (done elapsed). Speed 0 decelerates to rest, like stop. Answers as move_to.",
+  "type": "object",
+  "properties": {
+    "speed_hz": {
+      "type": "integer",
+      "minimum": -10000,
+      "maximum": 10000,
+      "description": "(Hz; -10000..10000)"
+    },
+    "accel": {
+      "type": "integer",
+      "minimum": 10,
+      "maximum": 200000,
+      "description": "absent: the configured accel (Hz/s; 10..200000)"
+    },
+    "seconds": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 65535,
+      "description": "0: until stopped",
+      "default": 0
+    }
+  },
+  "additionalProperties": false,
+  "examples": [
+    {
+      "speed_hz": 400
+    },
+    {
+      "speed_hz": -800,
+      "seconds": 5
+    }
+  ]
+}
