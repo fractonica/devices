@@ -17,6 +17,7 @@ standard:
   0x000F: fr.storage       # design lcd-clock-c1 D5
   0x0010: fr.clock         # design lcd-clock-c1 D7
   0x0012: fr.stepper       # design stepper-s1 D1
+  0x0013: fr.buzzer        # design buzzer-b1 D1
 system:
   0x00F0: fr.node
   0x00F1: fr.ota

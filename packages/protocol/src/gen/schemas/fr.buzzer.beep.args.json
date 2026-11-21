@@ -1,0 +1,58 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:fractonica:schema:fr.buzzer.beep.args",
+  "title": "fr.buzzer.beep arguments",
+  "description": "`count` beeps of on_ms with off_ms between them (0 = until stop), at freq_hz or else config beep_hz, replacing whatever plays.",
+  "type": "object",
+  "properties": {
+    "count": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 1000,
+      "description": "(0..1000)",
+      "default": 1
+    },
+    "on_ms": {
+      "type": "integer",
+      "minimum": 10,
+      "maximum": 10000,
+      "description": "(ms; 10..10000)",
+      "default": 100
+    },
+    "off_ms": {
+      "type": "integer",
+      "minimum": 10,
+      "maximum": 10000,
+      "description": "(ms; 10..10000)",
+      "default": 100
+    },
+    "freq_hz": {
+      "type": "integer",
+      "minimum": 20,
+      "maximum": 20000,
+      "description": "(Hz; 20..20000)"
+    },
+    "volume": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 100,
+      "description": "(%; 0..100)"
+    }
+  },
+  "additionalProperties": false,
+  "examples": [
+    {},
+    {
+      "count": 3,
+      "on_ms": 80,
+      "off_ms": 80
+    },
+    {
+      "count": 2,
+      "on_ms": 300,
+      "off_ms": 150,
+      "freq_hz": 2700,
+      "volume": 80
+    }
+  ]
+}

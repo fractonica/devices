@@ -1,0 +1,28 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:fractonica:schema:fr.buzzer.done.event",
+  "title": "fr.buzzer.done event",
+  "description": "A tone, beep or melody ended: done (played to its end), stopped (stop), replaced (by another sound), hub_lost (the hub fell silent), error (the driver refused; the output is silenced).",
+  "type": "object",
+  "properties": {
+    "sound": {
+      "type": "string",
+      "enum": [
+        "tone",
+        "beep",
+        "melody"
+      ]
+    },
+    "reason": {
+      "type": "string",
+      "enum": [
+        "done",
+        "stopped",
+        "replaced",
+        "hub_lost",
+        "error"
+      ]
+    }
+  },
+  "additionalProperties": false
+}

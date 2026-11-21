@@ -12,6 +12,7 @@ import type { CatalogCapability } from '@fractonica/protocol/gen';
 
 import type { DeviceDetail } from '../../api/types.ts';
 import type { InstanceView, MembersView } from '../../state/caps.ts';
+import { BUZZER_PANEL } from './panels/buzzer.tsx';
 import { CAMERA_PANEL } from './panels/camera/index.tsx';
 import { DISPLAY_PANEL } from './panels/display.tsx';
 import { GENERIC_PANEL } from './panels/generic.tsx';
@@ -53,6 +54,7 @@ export const PANELS: Readonly<Record<string, CapPanel>> = {
   'fr.led': LED_PANEL,
   'fr.display': DISPLAY_PANEL,
   'fr.stepper': STEPPER_PANEL,
+  'fr.buzzer': BUZZER_PANEL,
 };
 
 /**

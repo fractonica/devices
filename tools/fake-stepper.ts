@@ -1,6 +1,7 @@
 // A fake stepper board for the scratch hub (tools/dash-dev.ts --stepper; design stepper-s1 D16): a FakeNode with
-// c3s-stepper's instances (boot fr.button, status fr.led, motor fr.stepper) whose motor answers as StepperService
-// does (D10-D12), so the dashboard's stepper panel can be worked on without a board:
+// c3s-stepper's instances (boot fr.button, status fr.led, motor fr.stepper, buzzer fr.buzzer) whose motor answers as
+// StepperService does (D10-D12), and whose buzzer as BuzzerService (tools/fake-buzzer.ts, design buzzer-b1 D10), so
+// the dashboard's stepper and buzzer panels can be worked on without a board:
 // - the motion states (released, holding, moving, stopping, fault) and the service's answers: INVALID_ARGS above
 //   max_speed_hz or accel, beyond the limits or ±10⁹, or for limit_min ≥ limit_max; BUSY in a fault's back-off, with
 //   limits on and the position unknown, for hold, zero and configure while moving, and for a new step_mode or
@@ -33,14 +34,17 @@ import {
 } from '@fractonica/protocol/gen';
 
 import { FakeNode, STATUS } from '../packages/hub/test/fake-node.ts';
+import { BuzzerSim } from './fake-buzzer.ts';
 
-/** c3s-stepper's instances and slots (design stepper-s1 D13): boot 1, status 2, motor 3. */
+/** c3s-stepper's instances and slots (design stepper-s1 D13, buzzer-b1 D8): boot 1, status 2, motor 3, buzzer 4. */
 export const STEPPER_CAPS = [
   { port: 1, cap_id: 0x0001, name: 'boot' },
   { port: 2, cap_id: 0x0002, name: 'status' },
   { port: 3, cap_id: 0x0012, name: 'motor' },
+  { port: 4, cap_id: 0x0013, name: 'buzzer' },
 ];
 export const MOTOR_PORT = 3;
+export const BUZZER_PORT = 4;
 /** HELLO's chip for c3s-stepper's board, the ESP32-C3 (esp_chip_model_t; the hub's CHIP_IDS). */
 const ESP32C3 = 5;
 /** c3s-stepper's motor config (D13); the rest are the capability's defaults. */
@@ -574,6 +578,7 @@ export interface FakeStepperOptions {
 export interface FakeStepper {
   node: FakeNode;
   sim: StepperSim;
+  buzzer: BuzzerSim;
   /** nFAULT fell: fault {driver}. */
   fault(): void;
   stop(): Promise<void>;
@@ -618,6 +623,29 @@ export async function startFakeStepper(o: FakeStepperOptions): Promise<FakeStepp
       return { status: d.ok ? sim.command(c.name, d.value) : STATUS.INVALID_ARGS };
     });
   }
+  const bcap = findCap('fr.buzzer')!;
+  const buzzer = new BuzzerSim({
+    now: () => performance.now(),
+    hub: () => (node.welcome && !node.tcpClosed ? { epoch: node.welcome.hub_epoch, heardAt } : null),
+    out: {
+      state(name, value) {
+        if (!closed) {
+          node.state(BUZZER_PORT, bcap.properties.find((p) => p.name === name)!.id, enc('fr.buzzer', 'state', name, { [name]: value }));
+        }
+      },
+      event(name, fields) {
+        if (!closed) {
+          node.event(BUZZER_PORT, bcap.events.find((e) => e.name === name)!.id, enc('fr.buzzer', 'event', name, fields));
+        }
+      },
+    },
+  });
+  for (const c of bcap.commands) {
+    node.handlers.set(`${BUZZER_PORT}/${c.id}`, (args) => {
+      const d = decodeMember('fr.buzzer', 'args', c.name, args);
+      return { status: d.ok ? buzzer.command(c.name, d.value) : STATUS.INVALID_ARGS };
+    });
+  }
   // The status LED's set, as the camera's fake keeps it.
   node.handlers.set('2/1', (args) => {
     const d = decodeMember('fr.led', 'args', 'set', args);
@@ -629,16 +657,19 @@ export async function startFakeStepper(o: FakeStepperOptions): Promise<FakeStepp
 
   await node.connect(10_000);
   sim.reportAll();
+  buzzer.reportAll();
   const timer = setInterval(() => {
     if (node.frames.length !== framesSeen) {
       framesSeen = node.frames.length;
       heardAt = performance.now();
     }
     sim.tick();
+    buzzer.tick();
   }, TICK_MS);
   return {
     node,
     sim,
+    buzzer,
     fault: () => sim.fault('driver'),
     async stop() {
       closed = true;

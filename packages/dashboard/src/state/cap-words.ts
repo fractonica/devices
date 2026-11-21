@@ -85,6 +85,20 @@ const MEMBERS: Readonly<Record<string, Partial<MemberWords>>> = {
   'fr.stepper.recent': { words: 'faults lately' },
   // the catalog gives jog's `seconds` no unit (fr.stepper D2); the other capabilities' `seconds` are `s`, a span
   'fr.stepper.seconds': { words: 'for', unit: 's' },
+  'fr.buzzer.freq_hz': { words: 'pitch' },
+  'fr.buzzer.ms': { words: 'for' },
+  'fr.buzzer.on_ms': { words: 'sounds for' },
+  'fr.buzzer.off_ms': { words: 'quiet for' },
+  'fr.buzzer.gap_ms': { words: 'gap between notes' },
+  'fr.buzzer.count': { words: 'times' },
+  'fr.buzzer.repeat': { words: 'times' },
+  'fr.buzzer.beep_hz': { words: 'beep pitch' },
+  'fr.buzzer.min_hz': { words: 'lowest pitch' },
+  'fr.buzzer.max_hz': { words: 'highest pitch' },
+  'fr.buzzer.pitched': { words: 'plays pitches' },
+  'fr.buzzer.playing': { words: 'playing' },
+  'fr.buzzer.sound': { words: 'sound' },
+  'fr.buzzer.reason': { words: 'how it ended' },
 };
 
 /** Enum member words, by `<cap>.<Type>`: a member the table leaves out is its name with spaces. */
@@ -121,6 +135,8 @@ const ENUMS: Readonly<Record<string, Readonly<Record<string, string>>>> = {
     elapsed: 'time up',
   },
   'fr.stepper.FaultCause': { driver: 'driver', injected: 'injected' },
+  'fr.buzzer.Sound': { tone: 'tone', beep: 'beep', melody: 'melody' },
+  'fr.buzzer.DoneReason': { done: 'played out', stopped: 'stopped', replaced: 'replaced', hub_lost: 'hub went quiet', error: 'failed' },
 };
 
 /** Suffixes that say a unit or a scale; the longest first. */
@@ -254,6 +270,11 @@ const COMMANDS: Readonly<Record<string, CommandWords>> = {
   'fr.stepper.zero': { verb: 'set position', does: 'Calls where {inst} is now its position, without moving it.' },
   'fr.stepper.configure': { verb: 'configure', does: 'Changes how {inst} moves and how hard it drives its coils, and keeps it.' },
   'fr.stepper.reset_settings': { verb: 'reset settings', does: 'Forgets what {inst} was configured with. It cannot be undone.' },
+  'fr.buzzer.tone': { verb: 'play a tone', does: 'Plays a tone on {inst} at the pitch and length chosen.' },
+  'fr.buzzer.beep': { verb: 'beep', does: 'Beeps {inst} the times chosen, or until it is stopped.' },
+  'fr.buzzer.melody': { verb: 'play a melody', does: 'Plays the notes given on {inst}, one after another.' },
+  'fr.buzzer.stop': { verb: 'stop', does: 'Stops what {inst} plays.' },
+  'fr.buzzer.set_volume': { verb: 'set volume', does: 'Changes how loud {inst} plays, now and later.' },
   'fr.node.identify': { verb: 'identify', does: 'Lights the first LED of the board for a while, so you can find it.' },
   'fr.node.describe': { verb: 'describe', does: 'Asks the board what it has.' },
   'fr.node.reboot': { verb: 'restart', does: 'Restarts the board. Its streams and blinks end.' },

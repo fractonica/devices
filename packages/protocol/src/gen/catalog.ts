@@ -5091,6 +5091,375 @@ export const CATALOG: Catalog = {
       ]
     },
     {
+      "id": 19,
+      "name": "fr.buzzer",
+      "version": "1.0",
+      "section": "standard",
+      "summary": "A buzzer that beeps, plays a tone or a short melody, one sound at a time, at a volume it can set.",
+      "doc": "Design buzzer-b1. A passive buzzer (a piezo disc or a magnetic buzzer) driven by a square wave at the note's pitch;\nits loudness follows the wave's duty (trait `volume`). A buzzer that is not `pitched` (an active one, with its own\noscillator) sounds at its own pitch for every note but a rest.\n\nOne sound at a time: tone, beep and melody replace whatever plays (done reason replaced), and answer when their sound\nstarts; `done` says how it ended, and `playing` is true in between. `stop` ends it (done stopped); OK when nothing\nplays. A beep `count` or a melody `repeat` of 0 plays until stop. A melody is up to 32 notes as two lists of the same\nlength, pitch (0 is a rest) and length; each note ends with `gap_ms` of silence inside its length (at most half of\nit), so two equal notes in a row sound as two. INVALID_ARGS for a pitch outside min_hz..max_hz (a rest excepted), a\nmelody with no notes, lists of different lengths or a note of 0 ms.\n\nA command's `volume` holds for its sound only; set_volume changes the volume of what plays now and later (not kept\nacross a reboot: config `volume` is the boot value). Volume 0 plays silence, timed as the sound. A sound started while\na hub session existed ends (done hub_lost) 10 s after that hub's newest frame, or at once at another hub run.\n",
+      "types": {
+        "Sound": {
+          "tone": 0,
+          "beep": 1,
+          "melody": 2
+        },
+        "DoneReason": {
+          "done": 0,
+          "stopped": 1,
+          "replaced": 2,
+          "hub_lost": 3,
+          "error": 4
+        }
+      },
+      "traits": [
+        {
+          "name": "pitched",
+          "id": 1,
+          "type": "bool",
+          "default": true,
+          "doc": "plays the pitch asked; false: a fixed-pitch (active) buzzer"
+        },
+        {
+          "name": "volume",
+          "id": 2,
+          "type": "bool",
+          "default": false,
+          "doc": "its loudness can be set (the duty of a passive buzzer's square wave)"
+        },
+        {
+          "name": "min_hz",
+          "id": 3,
+          "type": "u16",
+          "unit": "Hz",
+          "doc": "the lowest pitch it plays"
+        },
+        {
+          "name": "max_hz",
+          "id": 4,
+          "type": "u16",
+          "unit": "Hz",
+          "doc": "the highest pitch it plays"
+        }
+      ],
+      "config": [
+        {
+          "name": "volume",
+          "type": "u8",
+          "default": 50,
+          "range": [
+            0,
+            100
+          ],
+          "unit": "%",
+          "doc": "volume at boot"
+        },
+        {
+          "name": "beep_hz",
+          "type": "u16",
+          "default": 2000,
+          "range": [
+            20,
+            20000
+          ],
+          "unit": "Hz",
+          "doc": "the pitch of a beep that names none; a magnetic buzzer is loudest near its resonance (about 2-3 kHz)"
+        }
+      ],
+      "properties": [
+        {
+          "name": "playing",
+          "id": 1,
+          "type": "bool"
+        },
+        {
+          "name": "volume",
+          "id": 2,
+          "type": "u8",
+          "range": [
+            0,
+            100
+          ],
+          "unit": "%"
+        }
+      ],
+      "commands": [
+        {
+          "name": "tone",
+          "id": 1,
+          "delivery": "reliable",
+          "idempotent": false,
+          "visibility": "public",
+          "doc": "A tone of freq_hz for ms, replacing whatever plays; answers when it starts. volume overrides the current volume for this tone only.",
+          "fields": [
+            {
+              "name": "freq_hz",
+              "id": 1,
+              "type": "u16",
+              "range": [
+                20,
+                20000
+              ],
+              "unit": "Hz"
+            },
+            {
+              "name": "ms",
+              "id": 2,
+              "type": "u16",
+              "default": 500,
+              "range": [
+                1,
+                60000
+              ],
+              "unit": "ms"
+            },
+            {
+              "name": "volume",
+              "id": 3,
+              "type": "u8",
+              "optional": true,
+              "range": [
+                0,
+                100
+              ],
+              "unit": "%"
+            }
+          ],
+          "examples": [
+            {
+              "freq_hz": 2000,
+              "ms": 1000
+            },
+            {
+              "freq_hz": 440,
+              "ms": 500,
+              "volume": 30
+            }
+          ]
+        },
+        {
+          "name": "beep",
+          "id": 2,
+          "delivery": "reliable",
+          "idempotent": false,
+          "visibility": "public",
+          "doc": "`count` beeps of on_ms with off_ms between them (0 = until stop), at freq_hz or else config beep_hz, replacing whatever plays.",
+          "fields": [
+            {
+              "name": "count",
+              "id": 1,
+              "type": "u16",
+              "default": 1,
+              "range": [
+                0,
+                1000
+              ]
+            },
+            {
+              "name": "on_ms",
+              "id": 2,
+              "type": "u16",
+              "default": 100,
+              "range": [
+                10,
+                10000
+              ],
+              "unit": "ms"
+            },
+            {
+              "name": "off_ms",
+              "id": 3,
+              "type": "u16",
+              "default": 100,
+              "range": [
+                10,
+                10000
+              ],
+              "unit": "ms"
+            },
+            {
+              "name": "freq_hz",
+              "id": 4,
+              "type": "u16",
+              "optional": true,
+              "range": [
+                20,
+                20000
+              ],
+              "unit": "Hz"
+            },
+            {
+              "name": "volume",
+              "id": 5,
+              "type": "u8",
+              "optional": true,
+              "range": [
+                0,
+                100
+              ],
+              "unit": "%"
+            }
+          ],
+          "examples": [
+            {},
+            {
+              "count": 3,
+              "on_ms": 80,
+              "off_ms": 80
+            },
+            {
+              "count": 2,
+              "on_ms": 300,
+              "off_ms": 150,
+              "freq_hz": 2700,
+              "volume": 80
+            }
+          ]
+        },
+        {
+          "name": "melody",
+          "id": 3,
+          "delivery": "reliable",
+          "idempotent": false,
+          "visibility": "public",
+          "doc": "Up to 32 notes: freq_hz (0 is a rest) and ms, lists of the same length; each note ends with gap_ms of silence (at most half the note). Played `repeat` times (0 = until stop), replacing whatever plays.",
+          "fields": [
+            {
+              "name": "freq_hz",
+              "id": 1,
+              "type": "array<u16>",
+              "max": 32,
+              "unit": "Hz",
+              "doc": "each note's pitch; 0 is a rest"
+            },
+            {
+              "name": "ms",
+              "id": 2,
+              "type": "array<u16>",
+              "max": 32,
+              "unit": "ms",
+              "doc": "each note's length, at least 1"
+            },
+            {
+              "name": "gap_ms",
+              "id": 3,
+              "type": "u8",
+              "default": 10,
+              "range": [
+                0,
+                100
+              ],
+              "unit": "ms"
+            },
+            {
+              "name": "repeat",
+              "id": 4,
+              "type": "u8",
+              "default": 1,
+              "range": [
+                0,
+                100
+              ]
+            },
+            {
+              "name": "volume",
+              "id": 5,
+              "type": "u8",
+              "optional": true,
+              "range": [
+                0,
+                100
+              ],
+              "unit": "%"
+            }
+          ],
+          "examples": [
+            {
+              "freq_hz": [
+                523,
+                659,
+                784,
+                1047
+              ],
+              "ms": [
+                150,
+                150,
+                150,
+                400
+              ]
+            },
+            {
+              "freq_hz": [
+                1047,
+                0,
+                1047
+              ],
+              "ms": [
+                100,
+                50,
+                300
+              ],
+              "gap_ms": 0,
+              "repeat": 2
+            }
+          ]
+        },
+        {
+          "name": "stop",
+          "id": 4,
+          "delivery": "reliable",
+          "idempotent": true,
+          "visibility": "public",
+          "doc": "Ends what plays (done stopped); OK when nothing plays.",
+          "fields": []
+        },
+        {
+          "name": "set_volume",
+          "id": 5,
+          "delivery": "reliable",
+          "idempotent": true,
+          "visibility": "public",
+          "doc": "Sets the volume (property volume) for what plays now and later.",
+          "fields": [
+            {
+              "name": "volume",
+              "id": 1,
+              "type": "u8",
+              "range": [
+                0,
+                100
+              ],
+              "unit": "%"
+            }
+          ],
+          "examples": [
+            {
+              "volume": 30
+            }
+          ]
+        }
+      ],
+      "events": [
+        {
+          "name": "done",
+          "id": 1,
+          "priority": "normal",
+          "doc": "A tone, beep or melody ended: done (played to its end), stopped (stop), replaced (by another sound), hub_lost (the hub fell silent), error (the driver refused; the output is silenced).",
+          "fields": [
+            {
+              "name": "sound",
+              "id": 1,
+              "type": "Sound"
+            },
+            {
+              "name": "reason",
+              "id": 2,
+              "type": "DoneReason"
+            }
+          ]
+        }
+      ]
+    },
+    {
       "id": 240,
       "name": "fr.node",
       "version": "1.1",
@@ -5547,4 +5916,4 @@ export const CATALOG: Catalog = {
   ]
 };
 
-export const CATALOG_HASH = 0x2efa5e5e;
+export const CATALOG_HASH = 0xf3b9dd7e;

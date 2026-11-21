@@ -160,6 +160,15 @@ constexpr MemberInfo kStepperProperties[] = {
     {19, "run_duty_pct"},
     {20, "steps_per_rev"},
 };
+constexpr MemberInfo kBuzzerCommands[] = {
+    {1, "tone"},
+    {2, "beep"},
+    {3, "melody"},
+    {4, "stop"},
+    {5, "set_volume"},
+};
+constexpr MemberInfo kBuzzerEvents[] = {{1, "done"}};
+constexpr MemberInfo kBuzzerProperties[] = {{1, "playing"}, {2, "volume"}};
 constexpr MemberInfo kNodeCommands[] = {
     {1, "identify"},
     {2, "describe"},
@@ -196,6 +205,7 @@ constexpr CapInfo kCaps[] = {
     {0x000F, "fr.storage", {1, 0}, kStorageCommands, kStorageEvents, kStorageProperties},
     {0x0010, "fr.clock", {1, 0}, kClockCommands, kClockEvents, kClockProperties},
     {0x0012, "fr.stepper", {1, 0}, kStepperCommands, kStepperEvents, kStepperProperties},
+    {0x0013, "fr.buzzer", {1, 0}, kBuzzerCommands, kBuzzerEvents, kBuzzerProperties},
     {0x00F0, "fr.node", {1, 1}, kNodeCommands, kNodeEvents, {}},
     {0x00F1, "fr.ota", {1, 0}, {}, {}, {}},
     {0x00F2, "fr.diag", {1, 0}, kDiagCommands, kDiagEvents, {}},

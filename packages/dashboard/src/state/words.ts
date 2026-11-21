@@ -41,6 +41,8 @@ const COMMAND_VERBS: Record<string, string> = {
   sd_list: 'list its card',
   sd_fetch: 'send a recording from its card',
   sd_delete: 'delete a recording from its card',
+  tone: 'play a tone',
+  melody: 'play a melody',
 };
 
 /** What a camera stream was for, from its stream.* fields (`use`, `to`, `recording`): "the live view", "a recording to the card". */

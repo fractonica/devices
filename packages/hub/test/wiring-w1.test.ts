@@ -289,4 +289,16 @@ describe('the repo', () => {
     expect(firstGpio).toBeGreaterThan(pullups);
     expect(steps.slice(0, pullups).flatMap((s) => s.pins)).toEqual(['5v', 'gnd']);
   });
+
+  it('stepper-c3 covers the buzzer on GPIO4 and meters it before it is wired (design buzzer-b1 §10)', () => {
+    // A magnetic coil straight on a GPIO draws too much: the meter step decides the series resistor first.
+    const g = loadCatalog(REPO).guides.get('stepper-c3')!;
+    expect(g.covers).toEqual(['motor', 'buzzer']);
+    expect(g.connections.find((c) => c.instance === 'buzzer')).toMatchObject({ pin: 'gpio.4', check: 'ok' });
+    const steps = g.sections.find((s) => s.id === 'buzzer')!.steps;
+    expect(steps.map((s) => s.id)).toEqual(['buzzer-meter', 'buzzer-wire', 'buzzer-first-beep']);
+    expect(steps[0]!.pins).toEqual([]);
+    expect(steps[1]!.pins).toEqual(['gpio.4', 'gnd']);
+    expect(g.bom.map((b) => b.part)).toContain('passive-buzzer-module');
+  });
 });

@@ -1,0 +1,20 @@
+schema: fractonica/part@1
+id: passive-buzzer-module
+name: Passive buzzer module, three pins (KY-006 style)
+category: module
+summary: A passive buzzer (piezo disc or magnetic) on a small board with S, + and − pins and no transistor; it needs a square wave at the pitch to sound.
+specs:
+  kind: passive (no oscillator inside); a piezo disc, or a magnetic buzzer of about 16–42 Ω
+  resonance: about 2–2.7 kHz for a magnetic buzzer (the loudest pitch)
+  drive: S straight from a 3.3 V GPIO; a magnetic coil through 100 Ω
+inferred: [kind, resonance]
+# As printed on the owner's module: S, + (middle), −. On most KY-006 boards + is not connected.
+pins:
+  - { name: S, desc: "signal: the buzzer's one side; to the GPIO (through 100 Ω for a magnetic coil)" }
+  - { name: "+", desc: "usually not connected on these boards: check with the meter (open to S and to −) and leave it free" }
+  - { name: "−", desc: "the buzzer's other side: GND" }
+notes:
+  - "fr.buzzer on ledc_buzzer (bind gpio.<n>, active high, idle low)."
+  - "Ω between S and −: open means a piezo disc (a few mA, wire S straight); 10–50 Ω means a magnetic coil, which would draw more than a GPIO should give: put 100 Ω in series with S."
+  - "Passive: steady 3.3 V on S only clicks. An active buzzer (its own oscillator, a sealed back) beeps on steady voltage and needs another driver."
+  - "A module with a transistor (VCC, I/O, GND; often an S8550 PNP) is active low: ledc_buzzer's active_low, and VCC from 3V3, never 5 V."

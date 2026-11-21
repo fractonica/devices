@@ -435,7 +435,7 @@ describe('validation', () => {
       y.caps.status.bind = 'leds.status';
     });
     expect(messages(dir)).toEqual([
-      "unknown driver 'button_touch' (known: adc_audio, adc_oneshot, button_gpio, cst816_i2c, drv8833_stepper, ds3231_i2c, dvp_camera, espnow_tx, fixture_gpio, fixture_ws2812_rx, gc9a01_spi, haptic_ledc, hx711_gpio, i2s_amp, i2s_mic, led_gpio, led_ws2812, sdmmc_card, sdspi_card, ssd1306_i2c, st7789_spi, tp4056, tp5000, wifi_csi)",
+      "unknown driver 'button_touch' (known: adc_audio, adc_oneshot, button_gpio, cst816_i2c, drv8833_stepper, ds3231_i2c, dvp_camera, espnow_tx, fixture_gpio, fixture_ws2812_rx, gc9a01_spi, haptic_ledc, hx711_gpio, i2s_amp, i2s_mic, led_gpio, led_ws2812, ledc_buzzer, sdmmc_card, sdspi_card, ssd1306_i2c, st7789_spi, tp4056, tp5000, wifi_csi)",
       "driver led_ws2812 does not accept leds.status of kind 'gpio' (accepts: ws2812)",
     ]);
   });
@@ -463,7 +463,7 @@ describe('validation', () => {
     expect(messages(dir)).toEqual([
       "instance name 'node' is reserved (spec 03 §3.6)",
       "instance name 'Status' must be snake_case, at most 31 characters",
-      'fr.ota has no service in this framework yet (services: fr.button, fr.led, fr.fixture, fr.analog_in, fr.display, fr.touch, fr.audio_in, fr.audio_out, fr.csi, fr.radio_tx, fr.camera, fr.scale, fr.battery, fr.haptic, fr.storage, fr.clock, fr.stepper)',
+      'fr.ota has no service in this framework yet (services: fr.button, fr.led, fr.fixture, fr.analog_in, fr.display, fr.touch, fr.audio_in, fr.audio_out, fr.csi, fr.radio_tx, fr.camera, fr.scale, fr.battery, fr.haptic, fr.storage, fr.clock, fr.stepper, fr.buzzer)',
       'board esp32c6-supermini has no entry leds.nope',
     ]);
   });
@@ -574,7 +574,7 @@ describe('validation', () => {
 describe('driver manifests', () => {
   const drivers = listDrivers(ROOT);
 
-  it('lists the M1 drivers, the M2-C1 fixture drivers, M2-C3\'s adc_oneshot, the M2-C5 panel and touch drivers, A1\'s I2S ones, A2\'s adc_audio, CSI-1\'s radio drivers, CAM-1\'s camera and card, SCALE-1\'s HX711 and ROUND-1\'s panel, POWER-1\'s chargers and haptic output, and STEPPER-1\'s DRV8833', () => {
+  it('lists the M1 drivers, the M2-C1 fixture drivers, M2-C3\'s adc_oneshot, the M2-C5 panel and touch drivers, A1\'s I2S ones, A2\'s adc_audio, CSI-1\'s radio drivers, CAM-1\'s camera and card, SCALE-1\'s HX711 and ROUND-1\'s panel, POWER-1\'s chargers and haptic output, STEPPER-1\'s DRV8833 and BUZZER-1\'s LEDC buzzer', () => {
     expect(drivers).toEqual([
       'adc_audio',
       'adc_oneshot',
@@ -593,6 +593,7 @@ describe('driver manifests', () => {
       'i2s_mic',
       'led_gpio',
       'led_ws2812',
+      'ledc_buzzer',
       'sdmmc_card',
       'sdspi_card',
       'ssd1306_i2c',
@@ -2396,6 +2397,7 @@ describe('STEPPER-1: the C3 Super Mini and a DRV8833 stepper (design stepper-s1 
       ['boot', 1, 'fr.button', 'button_gpio'],
       ['status', 2, 'fr.led', 'led_gpio'],
       ['motor', 3, 'fr.stepper', 'drv8833_stepper'],
+      ['buzzer', 4, 'fr.buzzer', 'ledc_buzzer'],
     ]);
     expect(r.manifest.test_pin).toBe(0);
     expect(r.instances.motor.pins).toEqual([6, 5, 10, 20, 7]);
@@ -2415,19 +2417,19 @@ describe('STEPPER-1: the C3 Super Mini and a DRV8833 stepper (design stepper-s1 
     expect(file(r, 'components.cmake')).toContain('/hardware/drivers/drv8833_stepper"');
   });
 
-  it('fits the budget exactly: LEDC 4 channels and 1 timer, gptimer 1; one less of each is refused', () => {
+  it('fits the budget exactly: LEDC 5 channels and 2 timers (the motor and the buzzer), gptimer 1; one less of each is refused', () => {
     const dir = fixture();
     edit(dir, SUPERMINI, (y) => {
-      y.resources = { ...y.resources, ledc_channels: 4, ledc_timers: 1, gptimer: 1 };
+      y.resources = { ...y.resources, ledc_channels: 5, ledc_timers: 2, gptimer: 1 };
     });
-    expect(gen(dir, STEPPER, false).manifest.caps).toHaveLength(3);
+    expect(gen(dir, STEPPER, false).manifest.caps).toHaveLength(4);
     edit(dir, SUPERMINI, (y) => {
-      y.resources = { ...y.resources, ledc_channels: 3, ledc_timers: 0, gptimer: 0 };
+      y.resources = { ...y.resources, ledc_channels: 4, ledc_timers: 1, gptimer: 0 };
     });
     expect(messages(dir)).toEqual([
       'gptimer budget exceeded: 1 needed (motor), board esp32c3-supermini has 0',
-      'ledc_channels budget exceeded: 4 needed (motor), board esp32c3-supermini has 3',
-      'ledc_timers budget exceeded: 1 needed (motor), board esp32c3-supermini has 0',
+      'ledc_channels budget exceeded: 5 needed (motor, buzzer), board esp32c3-supermini has 4',
+      'ledc_timers budget exceeded: 2 needed (motor, buzzer), board esp32c3-supermini has 1',
     ]);
   });
 
@@ -2451,5 +2453,70 @@ describe('STEPPER-1: the C3 Super Mini and a DRV8833 stepper (design stepper-s1 
       `test_pin GPIO10 is claimed by 'motor' (${bind})`,
       'gptimer budget exceeded: 1 needed (motor), board esp32c3-oled042 has 0',
     ]);
+  });
+});
+
+describe('BUZZER-1: a passive buzzer on ledc_buzzer, first on c3s-stepper (design buzzer-b1 D4, D7, D8)', () => {
+  const STEPPER = 'c3s-stepper';
+  const messages = (dir: string) => issuesOf(() => gen(dir, STEPPER, false)).map((i) => i.message);
+
+  it('c3s-stepper carries fr.buzzer on GPIO4: BuzzerService on ledc_buzzer, the driver traits, no settings', () => {
+    const r = generateFirmware({ sourceDir: ROOT, profile: STEPPER, outDir: join(tmpdir(), 'unused'), write: false, model: MODEL });
+    expect(r.instances.buzzer.pins).toEqual([4]);
+    expect(r.instances.buzzer.driverConfig).toEqual({ out: 4, active_low: false });
+    expect(r.manifest.caps[3]).toMatchObject({
+      cap_id: 0x0013,
+      config: { volume: 50, beep_hz: 2000 },
+      traits: { pitched: true, volume: true, min_hz: 100, max_hz: 20000 },
+    });
+    const cpp = file(r, 'fr_board/fr_board.cpp');
+    expect(cpp).toContain('#include "fr/drv/ledc_buzzer.hpp"');
+    expect(cpp).toContain('fr::BuzzerService service{driver, kConfig};');
+    expect(file(r, 'components.cmake')).toContain('/hardware/drivers/ledc_buzzer"');
+  });
+
+  it('active_low is a driver field the profile may set', () => {
+    const dir = fixture();
+    edit(dir, PROFILE(STEPPER), (y) => {
+      y.caps.buzzer.config = { active_low: true, volume: 30 };
+    });
+    const r = gen(dir, STEPPER, false);
+    expect(r.instances.buzzer.driverConfig).toEqual({ out: 4, active_low: true });
+    expect(r.manifest.caps[3].config).toMatchObject({ volume: 30 });
+  });
+
+  it('refuses a beep pitch the driver cannot play', () => {
+    const dir = fixture();
+    edit(dir, PROFILE(STEPPER), (y) => {
+      y.caps.buzzer.config = { beep_hz: 50 };
+    });
+    expect(messages(dir)).toEqual(['beep_hz 50 is outside the pitches driver ledc_buzzer plays (100-20000 Hz)']);
+  });
+
+  it('an unpitched driver takes any beep pitch', () => {
+    const dir = fixture();
+    edit(dir, 'hardware/drivers/ledc_buzzer/driver.yaml', (y) => {
+      y.traits.pitched = false;
+    });
+    edit(dir, PROFILE(STEPPER), (y) => {
+      y.caps.buzzer.config = { beep_hz: 50 };
+    });
+    expect(gen(dir, STEPPER, false).manifest.caps[3].traits).toMatchObject({ pitched: false });
+  });
+
+  it('refuses a second ledc_buzzer in one firmware: it owns LEDC timer 2', () => {
+    const dir = fixture();
+    edit(dir, PROFILE(STEPPER), (y) => {
+      y.caps.beeper = { cap: 'fr.buzzer', driver: 'ledc_buzzer', bind: 'gpio.3' };
+    });
+    expect(messages(dir)).toEqual(["'buzzer' already uses driver ledc_buzzer, and a firmware has one (it owns LEDC timer 2)"]);
+  });
+
+  it('GPIO4 is taken by nothing else on the Super Mini', () => {
+    const dir = fixture();
+    edit(dir, PROFILE(STEPPER), (y) => {
+      y.caps.buzzer.bind = 'gpio.20';
+    });
+    expect(messages(dir)).toEqual([expect.stringContaining('GPIO20')]);
   });
 });

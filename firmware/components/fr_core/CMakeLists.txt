@@ -14,6 +14,7 @@
 # src/services/storage_service.cpp and clock_service.cpp (design lcd-clock-c1 D5-D8) are fr.storage over hal::FileStore
 # and fr.clock over hal::Rtc; both IDF-free. src/services/stepper_service.cpp (design stepper-s1 D10-D12) is fr.stepper
 # over hal::Stepper and hal::Settings, IDF-free; its motion core is header-only (fr/motion), the step ISR the driver's.
+# src/services/buzzer_service.cpp (design buzzer-b1 D5, D6) is fr.buzzer over hal::ToneOutput, IDF-free.
 idf_component_register(SRCS "src/adc1.cpp"
                             "src/app_desc.cpp"
                             "src/audio/dsp.cpp"
@@ -35,6 +36,7 @@ idf_component_register(SRCS "src/adc1.cpp"
                             "src/services/audio_out_service.cpp"
                             "src/services/battery_service.cpp"
                             "src/services/button_service.cpp"
+                            "src/services/buzzer_service.cpp"
                             "src/services/camera_service.cpp"
                             "src/services/clock_service.cpp"
                             "src/services/csi_record.cpp"

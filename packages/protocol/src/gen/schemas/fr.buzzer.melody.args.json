@@ -1,0 +1,80 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:fractonica:schema:fr.buzzer.melody.args",
+  "title": "fr.buzzer.melody arguments",
+  "description": "Up to 32 notes: freq_hz (0 is a rest) and ms, lists of the same length; each note ends with gap_ms of silence (at most half the note). Played `repeat` times (0 = until stop), replacing whatever plays.",
+  "type": "object",
+  "properties": {
+    "freq_hz": {
+      "type": "array",
+      "maxItems": 32,
+      "items": {
+        "type": "integer",
+        "minimum": 0,
+        "maximum": 65535
+      },
+      "description": "each note's pitch; 0 is a rest (Hz; <= 32 items)"
+    },
+    "ms": {
+      "type": "array",
+      "maxItems": 32,
+      "items": {
+        "type": "integer",
+        "minimum": 0,
+        "maximum": 65535
+      },
+      "description": "each note's length, at least 1 (ms; <= 32 items)"
+    },
+    "gap_ms": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 100,
+      "description": "(ms; 0..100)",
+      "default": 10
+    },
+    "repeat": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 100,
+      "description": "(0..100)",
+      "default": 1
+    },
+    "volume": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 100,
+      "description": "(%; 0..100)"
+    }
+  },
+  "additionalProperties": false,
+  "examples": [
+    {
+      "freq_hz": [
+        523,
+        659,
+        784,
+        1047
+      ],
+      "ms": [
+        150,
+        150,
+        150,
+        400
+      ]
+    },
+    {
+      "freq_hz": [
+        1047,
+        0,
+        1047
+      ],
+      "ms": [
+        100,
+        50,
+        300
+      ],
+      "gap_ms": 0,
+      "repeat": 2
+    }
+  ]
+}

@@ -35,6 +35,7 @@
 #include "storage.hpp"
 #include "clock.hpp"
 #include "stepper.hpp"
+#include "buzzer.hpp"
 #include "node.hpp"
 #include "ota.hpp"
 #include "diag.hpp"
@@ -48,7 +49,7 @@ inline std::expected<fr::wire::SerialFrame, fr::wire::DecodeErr> decode_serial(s
     return fr::wire::decode_line({reinterpret_cast<const char *>(in.data()), in.size()}, scratch);
 }
 
-inline constexpr size_t kCount = 1093;
+inline constexpr size_t kCount = 1126;
 
 template <class V>
 void for_each(V &&v)
@@ -10044,6 +10045,269 @@ void for_each(V &&v)
         uint16_t x = 0;
         x = 65535;
         v.value("fr.stepper.steps_per_rev.state.max", "fr.stepper.steps_per_rev.state", x, fr::cap::encode_stepper_steps_per_rev_state, fr::cap::decode_stepper_steps_per_rev_state, "08ffff03", true);
+    }
+    // fr.buzzer.traits.defaults (cap fr.buzzer.traits)
+    {
+        fr::cap::BuzzerTraits x{};
+        x.pitched = true;
+        x.volume = false;
+        x.min_hz = 0;
+        x.max_hz = 0;
+        v.value("fr.buzzer.traits.defaults", "fr.buzzer.traits", x, enc, fr::cap::decode_buzzer_traits, "0801", true);
+    }
+    // fr.buzzer.traits.sample (cap fr.buzzer.traits)
+    {
+        fr::cap::BuzzerTraits x{};
+        x.pitched = true;
+        x.volume = true;
+        x.min_hz = 27923;
+        x.max_hz = 59076;
+        v.value("fr.buzzer.traits.sample", "fr.buzzer.traits", x, enc, fr::cap::decode_buzzer_traits, "080110011893da0120c4cd03", true);
+    }
+    // fr.buzzer.traits.max (cap fr.buzzer.traits)
+    {
+        fr::cap::BuzzerTraits x{};
+        x.pitched = true;
+        x.volume = true;
+        x.min_hz = 65535;
+        x.max_hz = 65535;
+        v.value("fr.buzzer.traits.max", "fr.buzzer.traits", x, enc, fr::cap::decode_buzzer_traits, "0801100118ffff0320ffff03", true);
+    }
+    // fr.buzzer.tone.args.defaults (cap fr.buzzer.tone.args)
+    {
+        fr::cap::BuzzerToneArgs x{};
+        x.freq_hz = 0;
+        x.ms = 500;
+        v.value("fr.buzzer.tone.args.defaults", "fr.buzzer.tone.args", x, enc, fr::cap::decode_buzzer_tone_args, "10f403", true);
+    }
+    // fr.buzzer.tone.args.sample (cap fr.buzzer.tone.args)
+    {
+        fr::cap::BuzzerToneArgs x{};
+        x.freq_hz = 19874;
+        x.ms = 11523;
+        x.has_volume = true;
+        x.volume = 57;
+        v.value("fr.buzzer.tone.args.sample", "fr.buzzer.tone.args", x, enc, fr::cap::decode_buzzer_tone_args, "08a29b0110835a1839", true);
+    }
+    // fr.buzzer.tone.args.max (cap fr.buzzer.tone.args)
+    {
+        fr::cap::BuzzerToneArgs x{};
+        x.freq_hz = 20000;
+        x.ms = 60000;
+        x.has_volume = true;
+        x.volume = 100;
+        v.value("fr.buzzer.tone.args.max", "fr.buzzer.tone.args", x, enc, fr::cap::decode_buzzer_tone_args, "08a09c0110e0d4031864", true);
+    }
+    // fr.buzzer.tone.args.example_0 (cap fr.buzzer.tone.args)
+    {
+        fr::cap::BuzzerToneArgs x{};
+        x.freq_hz = 2000;
+        x.ms = 1000;
+        v.value("fr.buzzer.tone.args.example_0", "fr.buzzer.tone.args", x, enc, fr::cap::decode_buzzer_tone_args, "08d00f10e807", true);
+    }
+    // fr.buzzer.tone.args.example_1 (cap fr.buzzer.tone.args)
+    {
+        fr::cap::BuzzerToneArgs x{};
+        x.freq_hz = 440;
+        x.ms = 500;
+        x.has_volume = true;
+        x.volume = 30;
+        v.value("fr.buzzer.tone.args.example_1", "fr.buzzer.tone.args", x, enc, fr::cap::decode_buzzer_tone_args, "08b80310f403181e", true);
+    }
+    // fr.buzzer.beep.args.defaults (cap fr.buzzer.beep.args)
+    {
+        fr::cap::BuzzerBeepArgs x{};
+        x.count = 1;
+        x.on_ms = 100;
+        x.off_ms = 100;
+        v.value("fr.buzzer.beep.args.defaults", "fr.buzzer.beep.args", x, enc, fr::cap::decode_buzzer_beep_args, "080110641864", true);
+    }
+    // fr.buzzer.beep.args.sample (cap fr.buzzer.beep.args)
+    {
+        fr::cap::BuzzerBeepArgs x{};
+        x.count = 978;
+        x.on_ms = 3817;
+        x.off_ms = 725;
+        x.has_freq_hz = true;
+        x.freq_hz = 19493;
+        x.has_volume = true;
+        x.volume = 95;
+        v.value("fr.buzzer.beep.args.sample", "fr.buzzer.beep.args", x, enc, fr::cap::decode_buzzer_beep_args, "08d20710e91d18d50520a59801285f", true);
+    }
+    // fr.buzzer.beep.args.max (cap fr.buzzer.beep.args)
+    {
+        fr::cap::BuzzerBeepArgs x{};
+        x.count = 1000;
+        x.on_ms = 10000;
+        x.off_ms = 10000;
+        x.has_freq_hz = true;
+        x.freq_hz = 20000;
+        x.has_volume = true;
+        x.volume = 100;
+        v.value("fr.buzzer.beep.args.max", "fr.buzzer.beep.args", x, enc, fr::cap::decode_buzzer_beep_args, "08e80710904e18904e20a09c012864", true);
+    }
+    // fr.buzzer.beep.args.example_0 (cap fr.buzzer.beep.args)
+    {
+        fr::cap::BuzzerBeepArgs x{};
+        x.count = 1;
+        x.on_ms = 100;
+        x.off_ms = 100;
+        v.value("fr.buzzer.beep.args.example_0", "fr.buzzer.beep.args", x, enc, fr::cap::decode_buzzer_beep_args, "080110641864", true);
+    }
+    // fr.buzzer.beep.args.example_1 (cap fr.buzzer.beep.args)
+    {
+        fr::cap::BuzzerBeepArgs x{};
+        x.count = 3;
+        x.on_ms = 80;
+        x.off_ms = 80;
+        v.value("fr.buzzer.beep.args.example_1", "fr.buzzer.beep.args", x, enc, fr::cap::decode_buzzer_beep_args, "080310501850", true);
+    }
+    // fr.buzzer.beep.args.example_2 (cap fr.buzzer.beep.args)
+    {
+        fr::cap::BuzzerBeepArgs x{};
+        x.count = 2;
+        x.on_ms = 300;
+        x.off_ms = 150;
+        x.has_freq_hz = true;
+        x.freq_hz = 2700;
+        x.has_volume = true;
+        x.volume = 80;
+        v.value("fr.buzzer.beep.args.example_2", "fr.buzzer.beep.args", x, enc, fr::cap::decode_buzzer_beep_args, "080210ac02189601208c152850", true);
+    }
+    // fr.buzzer.melody.args.defaults (cap fr.buzzer.melody.args)
+    {
+        fr::cap::BuzzerMelodyArgs x{};
+        x.freq_hz = fr::proto::Array<uint16_t, 32>{};
+        x.ms = fr::proto::Array<uint16_t, 32>{};
+        x.gap_ms = 10;
+        x.repeat = 1;
+        v.value("fr.buzzer.melody.args.defaults", "fr.buzzer.melody.args", x, enc, fr::cap::decode_buzzer_melody_args, "180a2001", true);
+    }
+    // fr.buzzer.melody.args.sample (cap fr.buzzer.melody.args)
+    {
+        fr::cap::BuzzerMelodyArgs x{};
+        x.freq_hz = fr::proto::Array<uint16_t, 32>{31153, 62306, 27923};
+        x.ms = fr::proto::Array<uint16_t, 32>{62306, 27923, 59076};
+        x.gap_ms = 57;
+        x.repeat = 76;
+        x.has_volume = true;
+        x.volume = 95;
+        v.value("fr.buzzer.melody.args.sample", "fr.buzzer.melody.args", x, enc, fr::cap::decode_buzzer_melody_args, "0a09b1f301e2e60393da011209e2e60393da01c4cd031839204c285f", true);
+    }
+    // fr.buzzer.melody.args.max (cap fr.buzzer.melody.args)
+    {
+        fr::cap::BuzzerMelodyArgs x{};
+        x.freq_hz = fr::proto::Array<uint16_t, 32>{65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535};
+        x.ms = fr::proto::Array<uint16_t, 32>{65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535, 65535};
+        x.gap_ms = 100;
+        x.repeat = 100;
+        x.has_volume = true;
+        x.volume = 100;
+        v.value("fr.buzzer.melody.args.max", "fr.buzzer.melody.args", x, enc, fr::cap::decode_buzzer_melody_args, "0a60ffff03ffff03ffff03ffff03ffff03ffff03ffff03ffff03ffff03ffff03ffff03ffff03ffff03ffff03ffff03ffff03ffff03ffff03ffff03ffff03ffff03ffff03ffff03ffff03ffff03ffff03ffff03ffff03ffff03ffff03ffff03ffff031260ffff03ffff03ffff03ffff03ffff03ffff03ffff03ffff03ffff03ffff03ffff03ffff03ffff03ffff03ffff03ffff03ffff03ffff03ffff03ffff03ffff03ffff03ffff03ffff03ffff03ffff03ffff03ffff03ffff03ffff03ffff03ffff03186420642864", true);
+    }
+    // fr.buzzer.melody.args.example_0 (cap fr.buzzer.melody.args)
+    {
+        fr::cap::BuzzerMelodyArgs x{};
+        x.freq_hz = fr::proto::Array<uint16_t, 32>{523, 659, 784, 1047};
+        x.ms = fr::proto::Array<uint16_t, 32>{150, 150, 150, 400};
+        x.gap_ms = 10;
+        x.repeat = 1;
+        v.value("fr.buzzer.melody.args.example_0", "fr.buzzer.melody.args", x, enc, fr::cap::decode_buzzer_melody_args, "0a088b0493059006970812089601960196019003180a2001", true);
+    }
+    // fr.buzzer.melody.args.example_1 (cap fr.buzzer.melody.args)
+    {
+        fr::cap::BuzzerMelodyArgs x{};
+        x.freq_hz = fr::proto::Array<uint16_t, 32>{1047, 0, 1047};
+        x.ms = fr::proto::Array<uint16_t, 32>{100, 50, 300};
+        x.gap_ms = 0;
+        x.repeat = 2;
+        v.value("fr.buzzer.melody.args.example_1", "fr.buzzer.melody.args", x, enc, fr::cap::decode_buzzer_melody_args, "0a05970800970812046432ac0218002002", true);
+    }
+    // fr.buzzer.stop.args.empty (cap fr.buzzer.stop.args)
+    {
+        fr::proto::Empty x{};
+        v.value("fr.buzzer.stop.args.empty", "fr.buzzer.stop.args", x, enc, fr::proto::decode_empty, "", true);
+    }
+    // fr.buzzer.set_volume.args.defaults (cap fr.buzzer.set_volume.args)
+    {
+        fr::cap::BuzzerSetVolumeArgs x{};
+        x.volume = 0;
+        v.value("fr.buzzer.set_volume.args.defaults", "fr.buzzer.set_volume.args", x, enc, fr::cap::decode_buzzer_set_volume_args, "", true);
+    }
+    // fr.buzzer.set_volume.args.sample (cap fr.buzzer.set_volume.args)
+    {
+        fr::cap::BuzzerSetVolumeArgs x{};
+        x.volume = 19;
+        v.value("fr.buzzer.set_volume.args.sample", "fr.buzzer.set_volume.args", x, enc, fr::cap::decode_buzzer_set_volume_args, "0813", true);
+    }
+    // fr.buzzer.set_volume.args.max (cap fr.buzzer.set_volume.args)
+    {
+        fr::cap::BuzzerSetVolumeArgs x{};
+        x.volume = 100;
+        v.value("fr.buzzer.set_volume.args.max", "fr.buzzer.set_volume.args", x, enc, fr::cap::decode_buzzer_set_volume_args, "0864", true);
+    }
+    // fr.buzzer.set_volume.args.example_0 (cap fr.buzzer.set_volume.args)
+    {
+        fr::cap::BuzzerSetVolumeArgs x{};
+        x.volume = 30;
+        v.value("fr.buzzer.set_volume.args.example_0", "fr.buzzer.set_volume.args", x, enc, fr::cap::decode_buzzer_set_volume_args, "081e", true);
+    }
+    // fr.buzzer.done.event.defaults (cap fr.buzzer.done.event)
+    {
+        fr::cap::BuzzerDone x{};
+        x.sound = BuzzerSound::tone;
+        x.reason = BuzzerDoneReason::done;
+        v.value("fr.buzzer.done.event.defaults", "fr.buzzer.done.event", x, enc, fr::cap::decode_buzzer_done, "", true);
+    }
+    // fr.buzzer.done.event.sample (cap fr.buzzer.done.event)
+    {
+        fr::cap::BuzzerDone x{};
+        x.sound = BuzzerSound::melody;
+        x.reason = BuzzerDoneReason::hub_lost;
+        v.value("fr.buzzer.done.event.sample", "fr.buzzer.done.event", x, enc, fr::cap::decode_buzzer_done, "08021003", true);
+    }
+    // fr.buzzer.done.event.max (cap fr.buzzer.done.event)
+    {
+        fr::cap::BuzzerDone x{};
+        x.sound = BuzzerSound::melody;
+        x.reason = BuzzerDoneReason::error;
+        v.value("fr.buzzer.done.event.max", "fr.buzzer.done.event", x, enc, fr::cap::decode_buzzer_done, "08021004", true);
+    }
+    // fr.buzzer.playing.state.defaults (cap fr.buzzer.playing.state)
+    {
+        bool x = false;
+        x = false;
+        v.value("fr.buzzer.playing.state.defaults", "fr.buzzer.playing.state", x, fr::cap::encode_buzzer_playing_state, fr::cap::decode_buzzer_playing_state, "", true);
+    }
+    // fr.buzzer.playing.state.sample (cap fr.buzzer.playing.state)
+    {
+        bool x = false;
+        x = true;
+        v.value("fr.buzzer.playing.state.sample", "fr.buzzer.playing.state", x, fr::cap::encode_buzzer_playing_state, fr::cap::decode_buzzer_playing_state, "0801", true);
+    }
+    // fr.buzzer.playing.state.max (cap fr.buzzer.playing.state)
+    {
+        bool x = false;
+        x = true;
+        v.value("fr.buzzer.playing.state.max", "fr.buzzer.playing.state", x, fr::cap::encode_buzzer_playing_state, fr::cap::decode_buzzer_playing_state, "0801", true);
+    }
+    // fr.buzzer.volume.state.defaults (cap fr.buzzer.volume.state)
+    {
+        uint8_t x = 0;
+        x = 0;
+        v.value("fr.buzzer.volume.state.defaults", "fr.buzzer.volume.state", x, fr::cap::encode_buzzer_volume_state, fr::cap::decode_buzzer_volume_state, "", true);
+    }
+    // fr.buzzer.volume.state.sample (cap fr.buzzer.volume.state)
+    {
+        uint8_t x = 0;
+        x = 19;
+        v.value("fr.buzzer.volume.state.sample", "fr.buzzer.volume.state", x, fr::cap::encode_buzzer_volume_state, fr::cap::decode_buzzer_volume_state, "0813", true);
+    }
+    // fr.buzzer.volume.state.max (cap fr.buzzer.volume.state)
+    {
+        uint8_t x = 0;
+        x = 100;
+        v.value("fr.buzzer.volume.state.max", "fr.buzzer.volume.state", x, fr::cap::encode_buzzer_volume_state, fr::cap::decode_buzzer_volume_state, "0864", true);
     }
     // fr.node.identify.args.defaults (cap fr.node.identify.args)
     {

@@ -1,4 +1,4 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="100%" viewBox="0 0 1000 640" role="img"><title>Micro stepper on a DRV8833 module (TB6612 pinout), driven by an ESP32-C3 Super Mini</title><desc>C3 Super Mini (USB up) and the DRV8833 module seen from its labelled side. 5V to VM, GND to GND, GPIO5 to AIN2, GPIO6 to AIN1, GPIO7 to STBY, GPIO10 to BIN1, GPIO20 to BIN2. Motor pins 1 to 4 alternate A1, B1, A2, B2: pin 1 to AO1, pin 3 to AO2, pin 2 to BO1, pin 4 to BO2. GPIO8 (LED) and GPIO9 (BOOT) stay free; GPIO3 and GPIO4 are free for a limit switch.</desc>
+<svg xmlns="http://www.w3.org/2000/svg" width="100%" viewBox="0 0 1000 640" role="img"><title>Micro stepper on a DRV8833 module (TB6612 pinout) and a passive buzzer, driven by an ESP32-C3 Super Mini</title><desc>C3 Super Mini (USB up) and the DRV8833 module seen from its labelled side. 5V to VM, GND to GND, GPIO5 to AIN2, GPIO6 to AIN1, GPIO7 to STBY, GPIO10 to BIN1, GPIO20 to BIN2. Motor pins 1 to 4 alternate A1, B1, A2, B2: pin 1 to AO1, pin 3 to AO2, pin 2 to BO1, pin 4 to BO2. GPIO8 (LED) and GPIO9 (BOOT) stay free; GPIO3 is free for a limit switch. The passive buzzer module under the board: S to GPIO4 (through 100 ohm for a magnetic buzzer), minus to GND, plus free.</desc>
 
 <!-- the C3 Super Mini, USB up; left row 5V GND 3V3 4 3 2 1 0, right row 5 6 7 8 9 10 20 21 -->
 <g class="c-teal"><rect x="40" y="96" width="200" height="350" rx="10" stroke-width="0.8"/></g>
@@ -75,12 +75,26 @@
 <text class="ts" x="828" y="276">coil A</text><text class="ts" x="828" y="356">coil B</text>
 <g class="ts" text-anchor="middle"><text x="702" y="243">pin 1 · A1</text><text x="702" y="283">pin 3 · A2</text><text x="702" y="323">pin 4 · B2</text><text x="702" y="363">pin 2 · B1</text></g>
 
+<!-- the passive buzzer module under the board (design buzzer-b1): S from GPIO4 (100 ohm only for a magnetic coil), - to GND, + free -->
+<g class="c-gray"><rect x="104" y="470" width="150" height="40" rx="6" stroke-width="0.8"/></g>
+<g fill="none" stroke="var(--s)" stroke-width="1"><circle cx="130" cy="470" r="4"/><circle cx="170" cy="470" r="4"/><circle cx="210" cy="470" r="4"/></g>
+<g class="ts" text-anchor="middle"><text x="130" y="488">S</text><text x="170" y="488">+</text><text x="210" y="488">−</text></g>
+<text class="ts" x="179" y="504" text-anchor="middle">passive buzzer</text>
+<g fill="none" stroke-width="2.2" stroke-linejoin="round">
+  <path stroke="#7FB069" d="M35 250 H31 V458 H60"/>
+  <path stroke="#7FB069" d="M88 458 H130 V466"/>
+  <path stroke="#9AA4AF" d="M210 466 V458 H270 V520"/>
+</g>
+<g fill="none" stroke="var(--p)" stroke-width="1.5"><path d="M60 458 l3 -5 l5 10 l5 -10 l5 10 l5 -10 l5 10 l2 -5"/></g>
+<text class="ts" x="74" y="482" text-anchor="middle">100 Ω*</text>
+<circle cx="270" cy="520" r="3" fill="#9AA4AF"/>
+
 <!-- notes -->
 <rect class="box" x="560" y="470" width="420" height="150" rx="6"/>
 <text class="th" x="580" y="498">Before wiring (multimeter)</text>
 <text class="ts" x="580" y="524">Motor pins 1–4 alternate A1 B1 A2 B2: 1–3 and 2–4 read ~20 Ω.</text>
 <text class="ts" x="580" y="546">Module alone on 5 V: STBY to GND should read near 0 V.</text>
-<text class="ts" x="580" y="568">This module has no fault pin; GPIO3 and GPIO4 stay free.</text>
+<text class="ts" x="580" y="568">No fault pin. *Buzzer: 100 Ω only if S to − reads 10–50 Ω.</text>
 <text class="ts" x="580" y="590">Turning the wrong way? Swap AO1 and AO2 (or set invert).</text>
 <text class="ts" x="580" y="610">Never plug or unplug the motor while VM is powered.</text>
 </svg>

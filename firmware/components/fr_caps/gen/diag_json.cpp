@@ -27,6 +27,7 @@
 #include "storage.hpp"
 #include "clock.hpp"
 #include "stepper.hpp"
+#include "buzzer.hpp"
 #include "node.hpp"
 #include "ota.hpp"
 #include "diag.hpp"
@@ -51,6 +52,7 @@ cJSON *to_json(const HapticTraits &v);
 cJSON *to_json(const StorageTraits &v);
 cJSON *to_json(const ClockTraits &v);
 cJSON *to_json(const StepperTraits &v);
+cJSON *to_json(const BuzzerTraits &v);
 #if FR_TEST_HOOKS
 cJSON *to_json(const ButtonInjectArgs &v);
 cJSON *to_json(const ButtonDown &v);
@@ -160,6 +162,11 @@ cJSON *to_json(const StepperZeroArgs &v);
 cJSON *to_json(const StepperConfigureArgs &v);
 cJSON *to_json(const StepperDone &v);
 cJSON *to_json(const StepperFault &v);
+cJSON *to_json(const BuzzerToneArgs &v);
+cJSON *to_json(const BuzzerBeepArgs &v);
+cJSON *to_json(const BuzzerMelodyArgs &v);
+cJSON *to_json(const BuzzerSetVolumeArgs &v);
+cJSON *to_json(const BuzzerDone &v);
 cJSON *to_json(const NodeHub &v);
 cJSON *to_json(const NodeIdentifyArgs &v);
 cJSON *to_json(const NodeDescribeResult &v);
@@ -601,6 +608,17 @@ cJSON *to_json(const StepperTraits &v)
     cJSON *o = cJSON_CreateObject();
     bool ok = o != nullptr;
     ok = ok && add(o, "microstep", json_bool(v.microstep));
+    return finish(o, ok);
+}
+
+cJSON *to_json(const BuzzerTraits &v)
+{
+    cJSON *o = cJSON_CreateObject();
+    bool ok = o != nullptr;
+    ok = ok && add(o, "pitched", json_bool(v.pitched));
+    ok = ok && add(o, "volume", json_bool(v.volume));
+    ok = ok && add(o, "min_hz", json_number(v.min_hz));
+    ok = ok && add(o, "max_hz", json_number(v.max_hz));
     return finish(o, ok);
 }
 
@@ -1721,6 +1739,65 @@ cJSON *to_json(const StepperFault &v)
     ok = ok && add(o, "cause", json_enum(v.cause));
     ok = ok && add(o, "position", json_number(v.position));
     ok = ok && add(o, "recent", json_number(v.recent));
+    return finish(o, ok);
+}
+
+cJSON *to_json(const BuzzerToneArgs &v)
+{
+    cJSON *o = cJSON_CreateObject();
+    bool ok = o != nullptr;
+    ok = ok && add(o, "freq_hz", json_number(v.freq_hz));
+    ok = ok && add(o, "ms", json_number(v.ms));
+    if (v.has_volume) {
+        ok = ok && add(o, "volume", json_number(v.volume));
+    }
+    return finish(o, ok);
+}
+
+cJSON *to_json(const BuzzerBeepArgs &v)
+{
+    cJSON *o = cJSON_CreateObject();
+    bool ok = o != nullptr;
+    ok = ok && add(o, "count", json_number(v.count));
+    ok = ok && add(o, "on_ms", json_number(v.on_ms));
+    ok = ok && add(o, "off_ms", json_number(v.off_ms));
+    if (v.has_freq_hz) {
+        ok = ok && add(o, "freq_hz", json_number(v.freq_hz));
+    }
+    if (v.has_volume) {
+        ok = ok && add(o, "volume", json_number(v.volume));
+    }
+    return finish(o, ok);
+}
+
+cJSON *to_json(const BuzzerMelodyArgs &v)
+{
+    cJSON *o = cJSON_CreateObject();
+    bool ok = o != nullptr;
+    ok = ok && add(o, "freq_hz", json_array(v.freq_hz, [](uint16_t e) { return json_number(e); }));
+    ok = ok && add(o, "ms", json_array(v.ms, [](uint16_t e) { return json_number(e); }));
+    ok = ok && add(o, "gap_ms", json_number(v.gap_ms));
+    ok = ok && add(o, "repeat", json_number(v.repeat));
+    if (v.has_volume) {
+        ok = ok && add(o, "volume", json_number(v.volume));
+    }
+    return finish(o, ok);
+}
+
+cJSON *to_json(const BuzzerSetVolumeArgs &v)
+{
+    cJSON *o = cJSON_CreateObject();
+    bool ok = o != nullptr;
+    ok = ok && add(o, "volume", json_number(v.volume));
+    return finish(o, ok);
+}
+
+cJSON *to_json(const BuzzerDone &v)
+{
+    cJSON *o = cJSON_CreateObject();
+    bool ok = o != nullptr;
+    ok = ok && add(o, "sound", json_enum(v.sound));
+    ok = ok && add(o, "reason", json_enum(v.reason));
     return finish(o, ok);
 }
 
@@ -3463,6 +3540,116 @@ Status args_stepper_inject_fault(const cJSON *obj)
     return {};
 }
 
+Status args_buzzer_tone(const cJSON *obj, fr::wire::Writer &w)
+{
+    BuzzerToneArgs v{};
+    bool ok = true;
+    for (const cJSON *it = obj != nullptr ? obj->child : nullptr; ok && it != nullptr; it = it->next) {
+        const std::string_view key = it->string != nullptr ? it->string : "";
+        if (key == "freq_hz") {
+            ok = from_json_uint(it, 0xFFFF, v.freq_hz);
+        } else if (key == "ms") {
+            ok = from_json_uint(it, 0xFFFF, v.ms);
+        } else if (key == "volume") {
+            v.has_volume = true;
+            ok = from_json_uint(it, 0xFF, v.volume);
+        } else {
+            ok = false;  // unknown key
+        }
+    }
+    if (!ok || !valid(v)) {
+        return std::unexpected(Err::invalid_args);
+    }
+    encode(v, w);
+    return encoded(w);
+}
+
+Status args_buzzer_beep(const cJSON *obj, fr::wire::Writer &w)
+{
+    BuzzerBeepArgs v{};
+    bool ok = true;
+    for (const cJSON *it = obj != nullptr ? obj->child : nullptr; ok && it != nullptr; it = it->next) {
+        const std::string_view key = it->string != nullptr ? it->string : "";
+        if (key == "count") {
+            ok = from_json_uint(it, 0xFFFF, v.count);
+        } else if (key == "on_ms") {
+            ok = from_json_uint(it, 0xFFFF, v.on_ms);
+        } else if (key == "off_ms") {
+            ok = from_json_uint(it, 0xFFFF, v.off_ms);
+        } else if (key == "freq_hz") {
+            v.has_freq_hz = true;
+            ok = from_json_uint(it, 0xFFFF, v.freq_hz);
+        } else if (key == "volume") {
+            v.has_volume = true;
+            ok = from_json_uint(it, 0xFF, v.volume);
+        } else {
+            ok = false;  // unknown key
+        }
+    }
+    if (!ok || !valid(v)) {
+        return std::unexpected(Err::invalid_args);
+    }
+    encode(v, w);
+    return encoded(w);
+}
+
+Status args_buzzer_melody(const cJSON *obj, fr::wire::Writer &w)
+{
+    BuzzerMelodyArgs v{};
+    bool ok = true;
+    for (const cJSON *it = obj != nullptr ? obj->child : nullptr; ok && it != nullptr; it = it->next) {
+        const std::string_view key = it->string != nullptr ? it->string : "";
+        if (key == "freq_hz") {
+            ok = from_json_array(it, v.freq_hz,
+                [](const cJSON *e, uint16_t &out) { return from_json_uint(e, 0xFFFF, out); });
+        } else if (key == "ms") {
+            ok = from_json_array(it, v.ms,
+                [](const cJSON *e, uint16_t &out) { return from_json_uint(e, 0xFFFF, out); });
+        } else if (key == "gap_ms") {
+            ok = from_json_uint(it, 0xFF, v.gap_ms);
+        } else if (key == "repeat") {
+            ok = from_json_uint(it, 0xFF, v.repeat);
+        } else if (key == "volume") {
+            v.has_volume = true;
+            ok = from_json_uint(it, 0xFF, v.volume);
+        } else {
+            ok = false;  // unknown key
+        }
+    }
+    if (!ok || !valid(v)) {
+        return std::unexpected(Err::invalid_args);
+    }
+    encode(v, w);
+    return encoded(w);
+}
+
+Status args_buzzer_stop(const cJSON *obj)
+{
+    if (obj != nullptr && obj->child != nullptr) {
+        return std::unexpected(Err::invalid_args);
+    }
+    return {};
+}
+
+Status args_buzzer_set_volume(const cJSON *obj, fr::wire::Writer &w)
+{
+    BuzzerSetVolumeArgs v{};
+    bool ok = true;
+    for (const cJSON *it = obj != nullptr ? obj->child : nullptr; ok && it != nullptr; it = it->next) {
+        const std::string_view key = it->string != nullptr ? it->string : "";
+        if (key == "volume") {
+            ok = from_json_uint(it, 0xFF, v.volume);
+        } else {
+            ok = false;  // unknown key
+        }
+    }
+    if (!ok || !valid(v)) {
+        return std::unexpected(Err::invalid_args);
+    }
+    encode(v, w);
+    return encoded(w);
+}
+
 Status args_node_identify(const cJSON *obj, fr::wire::Writer &w)
 {
     NodeIdentifyArgs v{};
@@ -5016,6 +5203,69 @@ cJSON *stepper_to_json(uint8_t cls, uint8_t id, std::span<const uint8_t> body)
     return nullptr;
 }
 
+cJSON *buzzer_to_json(uint8_t cls, uint8_t id, std::span<const uint8_t> body)
+{
+    switch (cls) {
+    case fr::wire::kClsCmd:
+        switch (id) {
+        case Buzzer::kCmdTone:
+            return json_of(decode_buzzer_tone_args(body));
+        case Buzzer::kCmdBeep:
+            return json_of(decode_buzzer_beep_args(body));
+        case Buzzer::kCmdMelody:
+            return json_of(decode_buzzer_melody_args(body));
+        case Buzzer::kCmdStop:
+            return json_empty(body);
+        case Buzzer::kCmdSetVolume:
+            return json_of(decode_buzzer_set_volume_args(body));
+        }
+        break;
+    case fr::wire::kClsResult:
+        switch (id) {
+        case Buzzer::kCmdTone:
+            return json_empty(body);
+        case Buzzer::kCmdBeep:
+            return json_empty(body);
+        case Buzzer::kCmdMelody:
+            return json_empty(body);
+        case Buzzer::kCmdStop:
+            return json_empty(body);
+        case Buzzer::kCmdSetVolume:
+            return json_empty(body);
+        }
+        break;
+    case fr::wire::kClsEvent:
+        switch (id) {
+        case Buzzer::kEventDone:
+            return json_of(decode_buzzer_done(body));
+        }
+        break;
+    case fr::wire::kClsState:
+        switch (id) {
+        case Buzzer::kPropPlaying: {
+            const auto v = decode_buzzer_playing_state(body);
+            if (!v) {
+                return nullptr;
+            }
+            cJSON *o = cJSON_CreateObject();
+            return finish(o, o != nullptr && add(o, "playing", json_bool(*v)));
+        }
+        case Buzzer::kPropVolume: {
+            const auto v = decode_buzzer_volume_state(body);
+            if (!v || !(*v <= 100)) {
+                return nullptr;
+            }
+            cJSON *o = cJSON_CreateObject();
+            return finish(o, o != nullptr && add(o, "volume", json_number(*v)));
+        }
+        }
+        break;
+    default:
+        break;
+    }
+    return nullptr;
+}
+
 cJSON *node_to_json(uint8_t cls, uint8_t id, std::span<const uint8_t> body)
 {
     switch (cls) {
@@ -5165,6 +5415,8 @@ cJSON *traits_to_json(uint16_t cap_id, std::span<const uint8_t> traits)
         return json_of(decode_clock_traits(traits));
     case Stepper::kId:
         return json_of(decode_stepper_traits(traits));
+    case Buzzer::kId:
+        return json_of(decode_buzzer_traits(traits));
     case Node::kId:
         return json_empty(traits);
     case Ota::kId:
@@ -5497,6 +5749,24 @@ Status encode_args_json(uint16_t cap_id, const char *cmd, const cJSON *args, uin
             s = args_stepper_inject_fault(obj);
         }
         break;
+    case Buzzer::kId:
+        if (name == "tone") {
+            id = Buzzer::kCmdTone;
+            s = args_buzzer_tone(obj, w);
+        } else if (name == "beep") {
+            id = Buzzer::kCmdBeep;
+            s = args_buzzer_beep(obj, w);
+        } else if (name == "melody") {
+            id = Buzzer::kCmdMelody;
+            s = args_buzzer_melody(obj, w);
+        } else if (name == "stop") {
+            id = Buzzer::kCmdStop;
+            s = args_buzzer_stop(obj);
+        } else if (name == "set_volume") {
+            id = Buzzer::kCmdSetVolume;
+            s = args_buzzer_set_volume(obj, w);
+        }
+        break;
     case Node::kId:
         if (name == "identify") {
             id = Node::kCmdIdentify;
@@ -5590,6 +5860,8 @@ cJSON *decode_to_json(uint16_t cap_id, uint8_t cls, uint8_t member_id, std::span
         return clock_to_json(cls, member_id, body);
     case Stepper::kId:
         return stepper_to_json(cls, member_id, body);
+    case Buzzer::kId:
+        return buzzer_to_json(cls, member_id, body);
     case Node::kId:
         return node_to_json(cls, member_id, body);
     case Ota::kId:

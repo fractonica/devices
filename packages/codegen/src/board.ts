@@ -251,6 +251,9 @@ export const SERVICES: Readonly<Record<string, ServiceFacts>> = {
     settings: 'fr_stepper',
     traits: (_cfg, { driverTraits }) => ({ microstep: driverTraits.microstep === true }),
   },
+  // Design buzzer-b1 D5-D7: one timer (each step's end, the hub-silence deadline, a 1 s wake); pitched, volume, min_hz
+  // and max_hz come from driver.yaml `traits:`. No settings: the volume at boot is config.
+  'fr.buzzer': { implements: 'hal.ToneOutput', service: 'fr::BuzzerService', header: 'fr/services/buzzer_service.hpp', timers: 1 },
 };
 
 /** fr.camera's `sensor` trait by the board entry's `sensor` (design camera-c1 D7): 0 is unknown. */
@@ -403,6 +406,15 @@ function analogInProblems(config: Record<string, CapValue>): [key: 'max_mv' | 't
 /** Board resource budgets drivers draw from (04 §4.3). `gpio` is checked pin by pin instead. */
 const AUDIO_IN_CAP = 'fr.audio_in';
 const AUDIO_OUT_CAP = 'fr.audio_out';
+
+/** fr.buzzer (design buzzer-b1 D7): its config beep_hz must be a pitch its driver plays. */
+const BUZZER_CAP = 'fr.buzzer';
+
+/**
+ * Drivers a firmware holds once (design buzzer-b1 D4: ledc_buzzer owns LEDC timer 2, and its init answers busy to a
+ * second instance), with what makes them single.
+ */
+const ONE_PER_FIRMWARE: Readonly<Record<string, string>> = { ledc_buzzer: 'it owns LEDC timer 2' };
 
 /** The rates fr.audio_in and fr.audio_out take (design audio-a1 D1; fr::hal::kAudioRates). */
 export const AUDIO_RATES: readonly number[] = [8000, 16000, 22050, 32000, 44100, 48000];
@@ -2016,6 +2028,16 @@ function resolveInstances(sourceDir: string, inp: Inputs, model: Model, issues: 
         issues.add(pf, settings.sample_hz !== undefined ? [...at, 'config', 'sample_hz'] : at, `sample_hz ${String(rate)} is not one of ${AUDIO_RATES.join(', ')}`);
       }
     }
+    // fr.buzzer's beep pitch must be one its driver plays (design buzzer-b1 D7): BuzzerService refuses it at init. An
+    // unpitched buzzer sounds at its own pitch, so any is fine.
+    if (c.cap === BUZZER_CAP && cap && traits.pitched === true) {
+      const hz = Number(capConfig.find((x) => x.entry.name === 'beep_hz')?.value ?? 0);
+      const lo = Number(traits.min_hz ?? 0);
+      const hi = Number(traits.max_hz ?? 0);
+      if (hz < lo || hz > hi) {
+        issues.add(pf, settings.beep_hz !== undefined ? [...at, 'config', 'beep_hz'] : at, `beep_hz ${hz} is outside the pitches driver ${driver.id} plays (${lo}-${hi} Hz)`);
+      }
+    }
     // The ADC DMA's ceiling (design audio-a2 D2): config sample_hz x oversample conversions per second. A stream that
     // asks for a faster rate at runtime gets fewer conversions per sample (AdcAudio::oversample_at), never a refusal.
     if ((driver.resources?.[ADC_CONTINUOUS_RESOURCE] ?? 0) > 0) {
@@ -2137,6 +2159,7 @@ function resolveInstances(sourceDir: string, inp: Inputs, model: Model, issues: 
   }
 
   checkAdcContinuous(inp, out, issues);
+  checkOnePerFirmware(inp, out, issues);
   checkTestPin(inp, out, reserved, strapping, issues);
   checkProfile(inp, issues);
   checkBoardFacts(board, issues);
@@ -2181,6 +2204,24 @@ function resolveInstances(sourceDir: string, inp: Inputs, model: Model, issues: 
     }
   }
   return out;
+}
+
+/** A driver of ONE_PER_FIRMWARE in a second instance (design buzzer-b1 D4): its init would answer busy at boot. */
+function checkOnePerFirmware(inp: Inputs, insts: ResolvedInstance[], issues: Issues): void {
+  const pf = profileFile(inp.profile.profile);
+  const first = new Map<string, string>();
+  for (const i of insts) {
+    const why = ONE_PER_FIRMWARE[i.driver.id];
+    if (why === undefined) {
+      continue;
+    }
+    const owner = first.get(i.driver.id);
+    if (owner === undefined) {
+      first.set(i.driver.id, i.name);
+    } else {
+      issues.add(pf, ['caps', i.name, 'driver'], `'${owner}' already uses driver ${i.driver.id}, and a firmware has one (${why})`);
+    }
+  }
 }
 
 /**

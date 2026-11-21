@@ -7,9 +7,12 @@ net: { link_profile: default }
 # The config is the bench motor as measured: a 20.5 ohm coil (20 here: too low is the safe side), VM 5.2 V from USB,
 # 150 mA while moving (58 % duty; the motor is rated 3.3 V, about 160 mA) and 30 % of it at rest. At 150 mA it ran
 # ten turns out and back twice with no lost step; never set supply_mv below the real VM, or the cap lets more through.
+# Design buzzer-b1 D8: a passive buzzer module (KY-006 style: S, +, -; no transistor) with S on GPIO4 (a magnetic coil
+# under 100 ohm through a 100 ohm resistor) and - on GND; LEDC timer 2 and channel 4, beside the motor's timer 0 and 0-3.
 caps:
   boot:   { cap: fr.button,  driver: button_gpio, bind: buttons.boot }
   status: { cap: fr.led,     driver: led_gpio,    bind: leds.status }
   motor:  { cap: fr.stepper, driver: drv8833_stepper,
             bind: { ain1: gpio.6, ain2: gpio.5, bin1: gpio.10, bin2: gpio.20, sleep: gpio.7 },
             config: { steps_per_rev: 20, step_mode: micro8, coil_ohm: 20, run_ma: 150, hold_pct: 30, supply_mv: 5200 } }
+  buzzer: { cap: fr.buzzer,  driver: ledc_buzzer, bind: gpio.4 }

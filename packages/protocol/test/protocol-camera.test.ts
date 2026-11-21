@@ -193,8 +193,10 @@ describe('CAM-1 capability and chip (design camera-c1 D1, D7)', () => {
     // fr.clock 0x0010, fr.display 1.2's max_brightness) made it 0xec1ad81e; LCD-1/CLOCK-1's review fixes (doc strings,
     // max_brightness range [1, 255], fr.clock set's example dropped) made it 0x95782421. STEPPER-1 (fr.stepper 0x0012)
     // made it 0x9a291431; its review fix (the doc: nFAULT reports no under-voltage) made it 0x616bf0f2. fr.node 1.1
-    // (design multi-hub-m1: the Hub type, hubs_set and hubs_get) made it 0x2efa5e5e.
-    expect(CATALOG_HASH).toBe(0x2efa5e5e);
+    // (design multi-hub-m1: the Hub type, hubs_set and hubs_get) made it 0x2efa5e5e. BUZZER-1 (fr.buzzer 0x0013) made
+    // it 0xf3b9dd7e.
+    expect(CATALOG_HASH).toBe(0xf3b9dd7e);
+    expect(CATALOG_HASH).not.toBe(0x2efa5e5e); // fr.node 1.1's
     expect(CATALOG_HASH).not.toBe(0x616bf0f2); // STEPPER-1's
     expect(CATALOG_HASH).not.toBe(0x9a291431); // STEPPER-1 as first built
     expect(CATALOG_HASH).not.toBe(0x95782421); // LCD-1/CLOCK-1's

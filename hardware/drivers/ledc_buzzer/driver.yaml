@@ -1,0 +1,27 @@
+# Driver manifest (design buzzer-b1 D4; spec 07 §7.8). `fr gen firmware` validates profiles against it and fills
+# fr::drv::LedcBuzzer::Config from the instance's `bind: gpio.<n>` (a pin in the board's pins.free): a passive buzzer (a
+# piezo disc or a magnetic buzzer, KY-006 style: S to the pin, - to GND) driven by a square wave at the note's pitch,
+# straight from the pin (a magnetic coil under 100 Ohm through a 100 Ohm resistor), or a module that switches it
+# through a transistor (active_low for a PNP one, which idles high).
+schema: fractonica/driver@1
+id: ledc_buzzer
+summary: A passive buzzer on one GPIO - a square wave from LEDC at the note's pitch (100 Hz-20 kHz), its loudness by the duty (10 bits); silent at init and through a restart or panic.
+implements: hal.ToneOutput
+class: fr::drv::LedcBuzzer              # header: include/fr/drv/ledc_buzzer.hpp
+targets: [esp32c3, esp32c5, esp32c6, esp32s3]
+binds: gpio                             # a bare pin: bind gpio.<n> (no board section)
+accepts_kinds: [gpio]
+config:                                 # same order as LedcBuzzer::Config
+  out:        { type: gpio, from: bind, output: true, doc: "S of the buzzer module (or the transistor's input)" }
+  active_low: { type: bool, default: false, doc: "the module sounds while the pin is low and idles high (a PNP switch); false: a buzzer straight on the pin, idle low" }
+# fr.buzzer traits its service reports (pitched(), volume(), min_hz(), max_hz()). At 10 bits LEDC's 80 MHz source
+# reaches 77 Hz to 78 kHz, so every pitch here stays on the clock the other LEDC drivers already chose (the C3, C6 and
+# S3 share one source among all low-speed timers; another one would be a "timer clock conflict").
+traits: { pitched: true, volume: true, min_hz: 100, max_hz: 20000 }
+# LEDC low-speed timer 2 and channel LEDC_CHANNEL_MAX - 2 (4 on the C3, C5 and C6; 6 on the S3), fixed: clear of
+# drv8833_stepper (timer 0, channels 0-3), dvp_camera (timer 0, channel 0), st7789_spi (timer 3, the top channel),
+# fixture_gpio (timer 0, channels from 0 up) and one haptic_ledc frequency (timer 1, channels from LEDC_CHANNEL_MAX/2 up).
+# Never in one profile with two haptic_ledc instances on a six-channel chip (their second channel is 4) or with two
+# haptic_ledc frequencies (timer 2). One instance per firmware (codegen refuses a second; init answers busy).
+resources: { gpio: 1, ledc_channels: 1, ledc_timers: 1 }
+dependencies: {}

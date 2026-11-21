@@ -6,7 +6,7 @@
 import type { CallOptions, CapMeta, CmdResult, Sent } from '../types.ts';
 
 /** FNV-1a 32 of the canonical catalog JSON (the hub's CATALOG_HASH): what an app's hello says it was built against. */
-export const CATALOG_HASH = 0x2efa5e5e;
+export const CATALOG_HASH = 0xf3b9dd7e;
 
 // ---- fr.button ----
 
@@ -1424,6 +1424,94 @@ export interface StepperProps {
   steps_per_rev: number;
 }
 
+// ---- fr.buzzer ----
+
+export type BuzzerSound = 'tone' | 'beep' | 'melody';
+
+export type BuzzerDoneReason = 'done' | 'stopped' | 'replaced' | 'hub_lost' | 'error';
+
+/** fr.buzzer.tone arguments (all optional: the device applies the defaults). */
+export interface BuzzerToneArgs {
+  /** (Hz; 20..20000) */
+  freqHz?: number;
+  /** (ms; 1..60000; default 500) */
+  ms?: number;
+  /** (%; 0..100) */
+  volume?: number;
+}
+
+/** fr.buzzer.beep arguments (all optional: the device applies the defaults). */
+export interface BuzzerBeepArgs {
+  /** (0..1000; default 1) */
+  count?: number;
+  /** (ms; 10..10000; default 100) */
+  onMs?: number;
+  /** (ms; 10..10000; default 100) */
+  offMs?: number;
+  /** (Hz; 20..20000) */
+  freqHz?: number;
+  /** (%; 0..100) */
+  volume?: number;
+}
+
+/** fr.buzzer.melody arguments (all optional: the device applies the defaults). */
+export interface BuzzerMelodyArgs {
+  /** each note's pitch; 0 is a rest (Hz; <= 32 items) */
+  freqHz?: readonly number[];
+  /** each note's length, at least 1 (ms; <= 32 items) */
+  ms?: readonly number[];
+  /** (ms; 0..100; default 10) */
+  gapMs?: number;
+  /** (0..100; default 1) */
+  repeat?: number;
+  /** (%; 0..100) */
+  volume?: number;
+}
+
+/** fr.buzzer.set_volume arguments (all optional: the device applies the defaults). */
+export interface BuzzerSetVolumeArgs {
+  /** (%; 0..100) */
+  volume?: number;
+}
+
+/** fr.buzzer commands, as methods of an instance. */
+export interface BuzzerClient {
+  /** A tone of freq_hz for ms, replacing whatever plays; answers when it starts. volume overrides the current volume for this tone only. Reliable: resolves on the RESULT ok, rejects with CommandError otherwise. */
+  tone(args?: BuzzerToneArgs, opts?: CallOptions): Promise<CmdResult>;
+  /** `count` beeps of on_ms with off_ms between them (0 = until stop), at freq_hz or else config beep_hz, replacing whatever plays. Reliable: resolves on the RESULT ok, rejects with CommandError otherwise. */
+  beep(args?: BuzzerBeepArgs, opts?: CallOptions): Promise<CmdResult>;
+  /** Up to 32 notes: freq_hz (0 is a rest) and ms, lists of the same length; each note ends with gap_ms of silence (at most half the note). Played `repeat` times (0 = until stop), replacing whatever plays. Reliable: resolves on the RESULT ok, rejects with CommandError otherwise. */
+  melody(args?: BuzzerMelodyArgs, opts?: CallOptions): Promise<CmdResult>;
+  /** Ends what plays (done stopped); OK when nothing plays. Reliable: resolves on the RESULT ok, rejects with CommandError otherwise. */
+  stop(opts?: CallOptions): Promise<CmdResult>;
+  /** Sets the volume (property volume) for what plays now and later. Reliable: resolves on the RESULT ok, rejects with CommandError otherwise. */
+  setVolume(args?: BuzzerSetVolumeArgs, opts?: CallOptions): Promise<CmdResult>;
+}
+
+/** fr.buzzer.done event fields (normal). A tone, beep or melody ended: done (played to its end), stopped (stop), replaced (by another sound), hub_lost (the hub fell silent), error (the driver refused; the output is silenced). */
+export interface BuzzerDoneFields {
+  sound: BuzzerSound | number;
+  reason: BuzzerDoneReason | number;
+}
+
+/** fr.buzzer events by wire name: `pad.on('<inst>.<event>', e => ...)`. */
+export interface BuzzerEvents {
+  done: BuzzerDoneFields;
+}
+
+/** fr.buzzer properties as the mirror holds them (`pad.<inst>.state`); a property a trait gates may be absent. */
+export interface BuzzerState {
+  playing: boolean;
+  /** (%) */
+  volume: number;
+}
+
+/** fr.buzzer property values by wire name: what a `<inst>.<prop>` event carries as `value`. */
+export interface BuzzerProps {
+  playing: boolean;
+  volume: number;
+}
+
 // ---- fr.node ----
 
 /** fr.node.identify arguments (all optional: the device applies the defaults). */
@@ -1656,6 +1744,7 @@ export interface CapClients {
   'fr.storage': StorageClient;
   'fr.clock': ClockClient;
   'fr.stepper': StepperClient;
+  'fr.buzzer': BuzzerClient;
   'fr.node': NodeClient;
   'fr.ota': OtaClient;
   'fr.diag': DiagClient;
@@ -1679,6 +1768,7 @@ export interface CapEvents {
   'fr.storage': StorageEvents;
   'fr.clock': ClockEvents;
   'fr.stepper': StepperEvents;
+  'fr.buzzer': BuzzerEvents;
   'fr.node': NodeEvents;
   'fr.ota': OtaEvents;
   'fr.diag': DiagEvents;
@@ -1702,6 +1792,7 @@ export interface CapState {
   'fr.storage': StorageState;
   'fr.clock': ClockState;
   'fr.stepper': StepperState;
+  'fr.buzzer': BuzzerState;
   'fr.node': NodeState;
   'fr.ota': OtaState;
   'fr.diag': DiagState;
@@ -1725,6 +1816,7 @@ export interface CapProps {
   'fr.storage': StorageProps;
   'fr.clock': ClockProps;
   'fr.stepper': StepperProps;
+  'fr.buzzer': BuzzerProps;
   'fr.node': NodeProps;
   'fr.ota': OtaProps;
   'fr.diag': DiagProps;
@@ -1751,6 +1843,7 @@ export const CAP_META: Readonly<Record<string, CapMeta>> = {
   'fr.storage': { commands: { info: { method: 'info', delivery: 'reliable' }, list: { method: 'list', delivery: 'reliable', args: true }, stat: { method: 'stat', delivery: 'reliable', args: true }, read: { method: 'read', delivery: 'reliable', args: true }, write: { method: 'write', delivery: 'reliable', args: true }, remove: { method: 'remove', delivery: 'reliable', args: true }, mkdir: { method: 'mkdir', delivery: 'reliable', args: true }, rename: { method: 'rename', delivery: 'reliable', args: true }, remount: { method: 'remount', delivery: 'reliable' } }, events: ['mounted', 'unmounted'], props: ['state', 'total_mb', 'free_mb', 'card_type', 'busy'] },
   'fr.clock': { commands: { read: { method: 'read', delivery: 'reliable' }, set: { method: 'set', delivery: 'reliable', args: true }, set_aging: { method: 'setAging', delivery: 'reliable', args: true }, inject: { method: 'inject', delivery: 'reliable', args: true, test: true } }, events: ['lost_power', 'set'], props: ['unix', 'valid', 'temp_c10', 'offset_ms'] },
   'fr.stepper': { commands: { move_to: { method: 'moveTo', delivery: 'reliable', args: true }, move_by: { method: 'moveBy', delivery: 'reliable', args: true }, jog: { method: 'jog', delivery: 'reliable', args: true }, stop: { method: 'stop', delivery: 'reliable' }, halt: { method: 'halt', delivery: 'reliable' }, hold: { method: 'hold', delivery: 'reliable' }, release: { method: 'release', delivery: 'reliable' }, zero: { method: 'zero', delivery: 'reliable', args: true }, configure: { method: 'configure', delivery: 'reliable', args: true }, reset_settings: { method: 'resetSettings', delivery: 'reliable' }, inject_fault: { method: 'injectFault', delivery: 'reliable', test: true } }, events: ['done', 'fault'], props: ['position', 'target', 'speed_hz', 'motion', 'position_known', 'step_mode', 'max_speed_hz', 'accel', 'start_hz', 'coil_ohm', 'run_ma', 'hold_pct', 'release_ms', 'supply_mv', 'invert', 'limits', 'limit_min', 'limit_max', 'run_duty_pct', 'steps_per_rev'] },
+  'fr.buzzer': { commands: { tone: { method: 'tone', delivery: 'reliable', args: true }, beep: { method: 'beep', delivery: 'reliable', args: true }, melody: { method: 'melody', delivery: 'reliable', args: true }, stop: { method: 'stop', delivery: 'reliable' }, set_volume: { method: 'setVolume', delivery: 'reliable', args: true } }, events: ['done'], props: ['playing', 'volume'] },
   'fr.node': { commands: { identify: { method: 'identify', delivery: 'reliable', args: true }, describe: { method: 'describe', delivery: 'reliable' }, reboot: { method: 'reboot', delivery: 'reliable', args: true }, set_alias: { method: 'setAlias', delivery: 'reliable', args: true }, set_groups: { method: 'setGroups', delivery: 'reliable', args: true }, net_set: { method: 'netSet', delivery: 'reliable', args: true }, get_state: { method: 'getState', delivery: 'reliable' }, bind_set: { method: 'bindSet', delivery: 'reliable', args: true }, bind_clear: { method: 'bindClear', delivery: 'reliable', args: true }, bind_list: { method: 'bindList', delivery: 'reliable' }, hubs_set: { method: 'hubsSet', delivery: 'reliable', args: true }, hubs_get: { method: 'hubsGet', delivery: 'reliable' } }, events: ['boot', 'binding_fired'], props: [] },
   'fr.ota': { commands: {}, events: [], props: [] },
   'fr.diag': { commands: { exec: { method: 'exec', delivery: 'reliable', args: true } }, events: ['mark'], props: [] },

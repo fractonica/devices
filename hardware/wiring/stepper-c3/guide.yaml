@@ -1,15 +1,15 @@
 schema: fractonica/wiring@1
 id: stepper-c3
-title: Micro stepper on a DRV8833, ESP32-C3 Super Mini
+title: Micro stepper on a DRV8833 and a passive buzzer, ESP32-C3 Super Mini
 summary: >-
   A 10 mm two-coil micro stepper on a DRV8833 dual H-bridge module (TB6612-style pinout), driven from an ESP32-C3
   Super Mini: AIN2, AIN1, STBY, BIN1 and BIN2 on GPIO5, 6, 7, 10 and 20, the motor supply from the board's 5V (USB).
-  The module has no fault pin.
+  The module has no fault pin. A passive buzzer module (S, +, −) on GPIO4.
 board: esp32c3-supermini
 profile: c3s-stepper
 device: stepper-c3
 design: docs/design/stepper-s1.md
-covers: [motor]
+covers: [motor, buzzer]
 safety:
   - "Unplug the board's USB before connecting or moving any wire."
   - "Never plug or unplug the motor while the module has power: the coil's energy arcs on the pins."
@@ -21,6 +21,8 @@ bom:
   - { part: drv8833-module, qty: 1 }
   - { part: micro-stepper-10mm, qty: 1, note: "pins 1–4: A1 B1 A2 B2" }
   - { part: capacitor-electrolytic, value: "100 µF", qty: 1, note: "optional: across VM and the GND beside it, at the module; 10 V or more" }
+  - { part: passive-buzzer-module, qty: 1, note: "buzzer: S, +, −; design buzzer-b1" }
+  - { part: resistor, value: "100 Ω", qty: 1, note: "only for a magnetic buzzer (10–50 Ω between S and −): in series with S" }
 diagrams:
   - { id: map, title: "The C3 Super Mini, the DRV8833 and the motor", file: map.svg }
 connections:
@@ -31,6 +33,8 @@ connections:
   - { pin: gpio.20, instance: motor, bind: bin2, to: "DRV8833 BIN2" }
   - { pin: 5v, to: "DRV8833 VM", via: "optional 100 µF electrolytic across VM and GND" }
   - { pin: gnd, to: "DRV8833 GND" }
+  - { pin: gpio.4, instance: buzzer, to: "buzzer S", via: "100 Ω in series for a magnetic buzzer" }
+  - { pin: gnd, to: "buzzer −" }
 sections:
   - id: check
     title: Before wiring
@@ -60,7 +64,7 @@ sections:
         text: "USB unplugged. GPIO5 to AIN2, GPIO6 to AIN1, GPIO10 to BIN1, GPIO20 to BIN2. Keep the four wires short and together."
         pins: [gpio.5, gpio.6, gpio.10, gpio.20]
       - id: sleep-fault
-        text: "Only after the pull-up check passed: GPIO7 to STBY. GPIO8 (the LED) and GPIO9 (BOOT) stay free, and GPIO3 and GPIO4 are free for a limit switch."
+        text: "Only after the pull-up check passed: GPIO7 to STBY. GPIO8 (the LED) and GPIO9 (BOOT) stay free, GPIO4 is the buzzer's, and GPIO3 is free for a limit switch."
         pins: [gpio.7]
         check: "After flashing c3s-stepper, before the motor: fr devices get stepper-c3 shows motor.motion released. Press the board's reset a few times while measuring AO1 to AO2: it stays at 0 V."
         note: "AO1 to AO2 jumps at reset? A 4.7 kΩ from GPIO7 to GND holds the driver asleep while the C3 boots (not 10 kΩ: too weak)."
@@ -78,3 +82,19 @@ sections:
       - id: first-turn
         text: "fr send stepper-c3 motor.move_by '{\"steps\": 160}' turns one revolution at eighth steps (20 full steps of 18°)."
         check: "The pinion turns exactly once and stops on its mark; motor.done says reached."
+  - id: buzzer
+    title: The buzzer
+    diagram: map
+    intro: "Design buzzer-b1. A passive buzzer module (KY-006 style: S, +, −, no transistor). It can be wired before or after the motor."
+    steps:
+      - id: buzzer-meter
+        text: "Module off the board, multimeter on Ω. Measure S to −, then + to S and + to −."
+        check: "S to − reads open (a piezo disc) or 10–50 Ω (a magnetic buzzer). + reads open to both: it is not connected, leave it free."
+        note: "A magnetic coil straight on a GPIO draws more than the pin should give: it goes through a 100 Ω resistor in the next step. + joined to S or −? Follow the trace: the buzzer sits between S and −, and + stays free."
+      - id: buzzer-wire
+        text: "USB unplugged. S to GPIO4 (through the 100 Ω resistor for a magnetic buzzer), − to GND, + free."
+        pins: [gpio.4, gnd]
+      - id: buzzer-first-beep
+        text: "After flashing c3s-stepper: fr send stepper-c3 buzzer.beep"
+        check: "One short beep; fr events stepper-c3 --types 'buzzer.*' ends with buzzer.done done. fr send stepper-c3 buzzer.tone '{\"freq_hz\": 2000, \"ms\": 1000}' holds a tone for a second."
+        note: "Quiet? Try pitches from 1000 to 4000 Hz: a magnetic buzzer is loudest near its resonance, which becomes beep_hz in the profile. Silent? Check S is on GPIO4 (not +), and that volume is not 0."

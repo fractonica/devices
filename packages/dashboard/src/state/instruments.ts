@@ -23,6 +23,7 @@ const CAP_WORDS: Readonly<Record<string, string>> = {
   'fr.storage': 'card',
   'fr.clock': 'clock',
   'fr.stepper': 'stepper',
+  'fr.buzzer': 'buzzer',
   'fr.fixture': 'test fixture',
   'fr.node': 'the board',
   'fr.ota': 'updates',
@@ -104,6 +105,11 @@ export function traitWords(cap: string, traits: Record<string, unknown> | null |
       out.push(`up to ${name}`);
     }
     return out;
+  }
+  // fr.buzzer (design buzzer-b1 D9): whether it plays pitches and sets its volume; its pitch range is in Hz, never a
+  // bare number in a caption
+  if (cap === 'fr.buzzer') {
+    return [traits.pitched === false ? 'one pitch' : 'plays pitches', ...(traits.volume === true ? ['sets its volume'] : [])];
   }
   const out: string[] = [];
   for (const [k, v] of Object.entries(traits)) {

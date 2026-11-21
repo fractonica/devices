@@ -15,10 +15,12 @@
 // camera the ov2640 sensor and the uxga buffers. SIGUSR2 cuts the fake camera's link (it goes offline) and the next
 // SIGUSR2 brings it back, for the camera page's offline state. --no-card leaves its card slot empty.
 //
-// --stepper adds stepper-c3, a fake stepper board (tools/fake-stepper.ts: c3s-stepper's boot, status and motor, a
-// motor that moves on a trapezoid in time, reports, ends each motion with done and backs off after a fault),
+// --stepper adds stepper-c3, a fake stepper board (tools/fake-stepper.ts: c3s-stepper's boot, status, motor and
+// buzzer, a motor that moves on a trapezoid in time, reports, ends each motion with done and backs off after a fault,
+// and a buzzer that plays tones, beeps and melodies in time and ends each with done, tools/fake-buzzer.ts),
 // provisioned the same way, with a build manifest that gives its motor the drv8833_stepper driver and the microstep
-// trait. SIGUSR1 raises a driver fault on it (nFAULT fell), for the panel's fault line.
+// trait, and its buzzer ledc_buzzer's traits. SIGUSR1 raises a driver fault on it (nFAULT fell), for the panel's fault
+// line.
 //
 // It prints one JSON line {"url": ..., "home": ...} (and writes the URL to --url-file), then runs until SIGINT or
 // SIGTERM, when it stops the fleet and the hub and removes the temp home.
@@ -34,6 +36,7 @@ import { type FleetSpec, simMac } from '@fractonica/protocol';
 import { Fleet, fleetBin, fleetBinExists } from '../tests/sim/lib/fleet.ts';
 import { startPrivateHub } from '../tests/sim/lib/private-hub.ts';
 import { type FakeCamera, startFakeCamera } from './fake-camera.ts';
+import { BUZZER_CONFIG, BUZZER_TRAITS } from './fake-buzzer.ts';
 import { C3S_STEPPER_CONFIG, type FakeStepper, startFakeStepper } from './fake-stepper.ts';
 
 const args = process.argv.slice(2);
@@ -170,6 +173,7 @@ try {
       { name: 'boot', port: 1, cap: 'fr.button', cap_id: 1, version: '1.0', driver: 'button_gpio', config: {}, traits: { long_press: true, multi_press_max: 2 } },
       led('status', 2),
       { name: 'motor', port: 3, cap: 'fr.stepper', cap_id: 0x12, version: '1.0', driver: 'drv8833_stepper', config: C3S_STEPPER_CONFIG, traits: { microstep: true } },
+      { name: 'buzzer', port: 4, cap: 'fr.buzzer', cap_id: 0x13, version: '1.0', driver: 'ledc_buzzer', config: { ...BUZZER_CONFIG }, traits: { ...BUZZER_TRAITS } },
     ]);
     motor = await startFakeStepper({ ...identity(STEP_MAC), hub: hub.node });
   }

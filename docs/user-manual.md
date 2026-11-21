@@ -1462,3 +1462,97 @@ the replaced one has no `done`. The coils drop to hold power after a motion and 
 | It misses its mark after fast moves | Steps were lost at speed: lower `accel`, or try `step_mode` `micro16` (with the coils off: `motor.release` first). |
 | It stops turning or lost its place with no `motor.fault` | stepper-c3's module has no fault pin: an over-current or over-heat stops the bridge without a report. Unplug USB, check the motor's wires and let it cool; then `motor.zero` again. Or the supply sagged: below about 2.6 V the DRV8833 stops driving without reporting it and resumes by itself. Use a stronger USB port or supply, then `motor.zero` again. |
 | The shaft is hot | `run_ma` is too high for the coil, or `coil_ohm` is set above the real resistance: measure again. |
+
+## 23. Buzzer
+
+**The part:** a **passive buzzer module** with three pins, S, + and − (KY-006 style, no transistor), on **stepper-c3**
+(section 22's ESP32-C3 Super Mini): S on **GPIO4**, − on GND, + left free. Passive means it has no oscillator of its
+own: the board makes a square wave at the note's pitch, so it plays tones and melodies, and the wave's duty sets how
+loud it is. It is the `buzzer` instance (`fr.buzzer`, driver `ledc_buzzer`) of the profile `c3s-stepper`. The wiring
+guide `stepper-c3` on the dashboard's Bench page (<http://127.0.0.1:7420/#/bench>) has a section for it.
+
+**What it does:** beeps (once, a number of times, or until stopped), plays a tone at a pitch for a length, plays a
+short melody of up to 32 notes, and sets its volume. One sound at a time: a new one replaces the one playing. Each
+sound ends with a `buzzer.done` event that says how it ended. The motor and the buzzer run side by side.
+
+### 23.1 First run, step by step
+
+1. **Meter the module** before wiring it (the guide's first buzzer step), the module off the board, the multimeter on
+   Ω:
+   - S to − reads **open**: a piezo disc. Wire S straight to GPIO4.
+   - S to − reads **10–50 Ω**: a magnetic buzzer. Its coil would draw more than a GPIO should give: put a **100 Ω
+     resistor in series with S**. It is a little quieter and safe for the pin.
+   - + to S and + to − read open: + is not connected. Leave it free.
+2. **Wire it**, USB unplugged: S to GPIO4 (through the resistor for a magnetic buzzer), − to GND.
+3. **Firmware:** the buzzer is in `c3s-stepper` since buzzer-b1. Build the profile on the lab hub
+   (`fr build --profile c3s-stepper`) and update stepper-c3 (`fr ota` or a flash; section 14). The hub that holds the
+   board must know `fr.buzzer` too: a hub started before this version needs a restart. Then
+   `fr devices get stepper-c3` lists `buzzer` with `playing` false and `volume` 50.
+4. **One beep:**
+
+   ```bash
+   fr send stepper-c3 buzzer.beep
+   fr events stepper-c3 --types 'buzzer.*'      # ends with buzzer.done {sound: beep, reason: done}
+   ```
+
+5. **A tone for a second, then a sweep** to find the loudest pitch (a magnetic buzzer is loudest near its resonance,
+   about 2–3 kHz):
+
+   ```bash
+   fr send stepper-c3 buzzer.tone '{"freq_hz":2000,"ms":1000}'
+   for f in 1000 1500 2000 2500 3000 3500 4000; do
+     fr send stepper-c3 buzzer.tone "{\"freq_hz\":$f,\"ms\":400}"; sleep 0.6
+   done
+   ```
+
+   Put the loudest into the profile's buzzer config as `beep_hz` (default 2000), so a beep that names no pitch uses
+   it: `buzzer: { cap: fr.buzzer, driver: ledc_buzzer, bind: gpio.4, config: { beep_hz: 2500 } }`.
+
+6. **Volume:** `fr send stepper-c3 buzzer.set_volume '{"volume":10}'`, then 50 and 100, each followed by a beep. 100
+   is a 50 % square wave, the loudest; 50 is half the loudness; 0 is silent (sounds still run their time). The volume
+   set this way lasts until the board restarts; the profile's `volume` is the one it boots with.
+
+7. **A melody:** a rising chime.
+
+   ```bash
+   fr send stepper-c3 buzzer.melody '{"freq_hz":[1047,1319,1568,2093],"ms":[110,110,110,330]}'
+   ```
+
+8. **Side by side with the motor:** `fr send stepper-c3 motor.move_by '{"steps":1600}'` and, while it turns,
+   `fr send stepper-c3 buzzer.beep '{"count":3}'`: both run, and the motor's `done` still says `reached`.
+
+The dashboard's buzzer page (the instrument `buzzer` of stepper-c3) has the same: BEEP, THREE BEEPS, KEEP BEEPING,
+four tunes and STOP over the volume slider and the forms for a tone, beep or melody of your own. The device's Overview
+row offers BEEP while the buzzer is quiet and STOP while it plays.
+
+### 23.2 Commands and what `done` says
+
+| Command | What it does |
+|---|---|
+| `buzzer.beep` | One beep at `beep_hz`. `'{"count":3,"on_ms":80,"off_ms":80}'`: three short ones; `count` 0 beeps until `stop`. Optional `freq_hz` and `volume`. |
+| `buzzer.tone '{"freq_hz":440,"ms":500}'` | A tone at a pitch for a length (up to 60 s). Optional `volume`. |
+| `buzzer.melody '{"freq_hz":[…],"ms":[…]}'` | Up to 32 notes: pitches (0 is a rest) and lengths, two lists of the same length. `gap_ms` (default 10) of silence ends each note, inside its length, so two equal notes sound as two; `repeat` plays it again (0: until `stop`). Optional `volume`. |
+| `buzzer.stop` | Ends what plays. |
+| `buzzer.set_volume '{"volume":30}'` | How loud, 0–100, for what plays now and later. |
+
+A command answers when its sound starts; a `volume` given with a sound is for that sound only. Pitches run from
+100 Hz to 20 kHz on this driver (traits `min_hz`, `max_hz`).
+
+| `done` reason | Meaning |
+|---|---|
+| `done` | It played to its end. |
+| `stopped` | `stop` ended it. |
+| `replaced` | Another sound took its place. |
+| `hub_lost` | It was started from the hub, and the hub fell silent for 10 s (or restarted): it stopped by itself, so nothing beeps forever with nobody to stop it. |
+| `error` | The buzzer refused a note; it is silent. |
+
+### 23.3 Buzzer troubleshooting
+
+| You see | Do this |
+|---|---|
+| Commands answer INVALID_ARGS | A pitch below 100 Hz or above 20 kHz, a melody whose two lists differ in length or hold more than 32 notes, or a note of 0 ms. |
+| `done` comes but nothing is heard | `volume` is 0 (`fr devices get stepper-c3`), or S is on + instead of GPIO4, or − is not on GND. A steady 3.3 V on S only clicks: that is normal for a passive buzzer. |
+| It is quiet | The pitch is far from the buzzer's resonance: sweep (23.1 step 5) and set `beep_hz`. A 100 Ω resistor costs some loudness; with a piezo disc (S to − open) it is not needed. |
+| It beeps on steady voltage by itself | It is an active buzzer (its own oscillator). `ledc_buzzer` still sounds it, but at its own pitch: tones and melodies all sound the same. |
+| A 3-pin module with a transistor (VCC, I/O, GND) stays on, or sounds only when the pin is low | It is active low: set `active_low: true` in the profile's buzzer config, and power its VCC from 3V3, never 5 V. |
+| `buzzer.done` `hub_lost` | The hub went quiet for 10 s while a sound it started was playing. Normal when the hub restarts. |
