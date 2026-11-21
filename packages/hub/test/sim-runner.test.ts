@@ -574,6 +574,7 @@ function deps(sc: Script, hubUrl: string, modules: Record<string, ModuleRun>, ov
             url: hubUrl,
             port,
             node: { tcp: 1, udp: 1, http: 2 },
+            peerPort: () => null,
             home,
             addrs: new Map(),
             rows,

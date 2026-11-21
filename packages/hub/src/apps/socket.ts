@@ -31,7 +31,8 @@ import { sendMessage } from '../bindings/ops.ts';
 import type { Device, HubContext } from '../context.ts';
 import { matchTypes } from '../events/index.ts';
 import { nowUs } from '../ring.ts';
-import { type CommandOutcome, sendCommandTo } from '../router/ops.ts';
+import { commandAnywhere, messageAnywhere } from '../peers/passing.ts';
+import type { CommandOutcome } from '../router/ops.ts';
 import { type AppEventFrame, frameBytes } from './bridge.ts';
 import { appVisible } from './directory.ts';
 import { tokenMatches } from './token.ts';
@@ -426,7 +427,7 @@ export class AppSocket {
     }
     const timeoutMs = Math.min(Math.max(1, Number(f.timeout_ms ?? APP_CMD_TIMEOUT_MS) || APP_CMD_TIMEOUT_MS), APP_CMD_TIMEOUT_MAX_MS);
     this.#inFlight++;
-    attempt(() => sendCommandTo(this.#host.hub(), dev, f.inst, f.cmd, args, { ack: 'result', timeoutMs }))
+    attempt(() => commandAnywhere(this.#host.hub(), dev, f.inst, f.cmd, args, { ack: 'result', timeoutMs }))
       .then(
         (o) => this.#outcome(f.req, o),
         (e: unknown) => this.#failed(f.req, e),
@@ -435,7 +436,7 @@ export class AppSocket {
   }
 
   #sendFast(key: string, f: CmdFrame, dev: Device): void {
-    attempt(() => sendCommandTo(this.#host.hub(), dev, f.inst, f.cmd, f.args ?? {}, { ack: 'none', timeoutMs: APP_CMD_TIMEOUT_MS }))
+    attempt(() => commandAnywhere(this.#host.hub(), dev, f.inst, f.cmd, f.args ?? {}, { ack: 'none', timeoutMs: APP_CMD_TIMEOUT_MS }))
       .then(
         (o) => this.#outcome(f.req, o),
         (e: unknown) => this.#failed(f.req, e),
@@ -462,6 +463,7 @@ export class AppSocket {
     }
     const hub = this.#host.hub();
     let to: string;
+    let one: Device | null = null;
     if (f.to.toLowerCase() === BROADCAST_ALIAS) {
       to = BROADCAST_ALIAS;
     } else {
@@ -470,10 +472,12 @@ export class AppSocket {
         this.#result({ req: f.req, ok: false, status: 'not_found', t_hub_us: Math.round(nowUs()), error: `no provisioned device ${JSON.stringify(f.to)}` });
         return;
       }
+      one = dev;
       to = `id:${dev.device_id}`; // a selector that cannot mean anything else
     }
     this.#inFlight++;
-    attempt(() => sendMessage(hub, { to, topic: f.topic, ...(f.data !== undefined ? { data: f.data } : {}) }))
+    // To one board: wherever it is (a board another hub holds is reached through the hubs' link, as a `cmd` is).
+    attempt(() => (one ? messageAnywhere(hub, one, f.topic, f.data) : sendMessage(hub, { to, topic: f.topic, ...(f.data !== undefined ? { data: f.data } : {}) })))
       .then(
         (r) => {
           const t_hub_us = Math.round(nowUs());

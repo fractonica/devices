@@ -21,6 +21,13 @@
 //   per job; the active jobs first); `ports: true` the port.* events.
 // web/feeds.ts publishes the port.*, job.state and loop-delay events; this part starts and stops it.
 // - Counted for hub_status `ws` (design m2-c2 D16): frames and bytes sent, gaps, overflows and selector resolves.
+// - Several hubs (design multi-hub-m2 §8, §17): the server subscribes to the fleet, so a client also gets the events the
+//   other hubs of the network relay, each marked `hub`, in this hub's own seq order (a relayed event takes a seq here
+//   and is not stored here: a `since` finds it while it is kept in memory, events/index.ts). A selector's `online` is
+//   the network's. The first values of a board another hub holds come from what that hub last said (peers/events.ts).
+//   `jobs` also gets the jobs the other hubs run (frames with `hub`). `ports` stays this machine's. `logs` are one
+//   hub's own: a logs sub for a board whose lines are at another hub is refused (`err` CAPABILITY_UNSUPPORTED naming
+//   the hub), and so is a `since` that is another hub's cursor (INVALID_ARGS naming it).
 
 import type { WebSocket } from '@fastify/websocket';
 import type { FastifyInstance } from 'fastify';
@@ -40,10 +47,12 @@ import {
 } from '@fractonica/protocol';
 
 import type { HubContext, HubEvent, HubRunOptions, WsServer } from '../context.ts';
-import { matchTypes, mintCursor, parseTypes, tailEvents } from '../events/index.ts';
+import { matchTypes, mintCursor, parseTypes, sinceSeqOf, subscribeFleet, tailEvents } from '../events/index.ts';
 import type { JobChange } from '../jobs.ts';
 import { type StoredLine, toLogLine } from '../logstore.ts';
 import { logDevices } from '../ops.ts';
+import type { RemoteJob } from '../peers/events.ts';
+import { netPresence } from '../peers/index.ts';
 import { nowUs } from '../ring.ts';
 import { routerInfo } from '../router/index.ts';
 import type { WsStatsView } from '../router/scale.ts';
@@ -276,12 +285,10 @@ export class WsHub {
       return undefined;
     }
     const hub = this.#hub();
-    const cur = parseCursor(since)!;
-    if (cur.run !== hub.logs.run) {
-      throw new FrError('HUB_RESTARTED', `cursor ${since} is from an earlier hub run`, { details: { resume_cursor: mintCursor(hub) } });
-    }
+    // HUB_RESTARTED for an earlier run's; INVALID_ARGS naming the hub for a cursor another hub of the network gave.
+    const seq = sinceSeqOf(hub, since)!;
     // A cursor past the head was never handed out: read as the head, or the live events up to it would be skipped.
-    return Math.min(cur.seq, hub.logs.headSeq());
+    return Math.min(seq, hub.logs.headSeq());
   }
 
   #resolve(selector: string | undefined): Set<string> | null {
@@ -291,7 +298,8 @@ export class WsHub {
     const hub = this.#hub();
     this.#stats.resolves++;
     // Unlike events_read, a selector that matches no device now is accepted: `online`, a tag, may later.
-    return new Set(hub.registry.resolve(selector, (id) => hub.router.presence(id)).map((d) => d.device_id));
+    // `online` and `offline` are the network's (design multi-hub-m2 §6): a board another hub holds is online.
+    return new Set(hub.registry.resolve(selector, netPresence(hub)).map((d) => d.device_id));
   }
 
   #sub(c: Client, f: WsSub): void {
@@ -313,6 +321,7 @@ export class WsHub {
     }
     let logSince: number | undefined;
     if (f.logs) {
+      this.#logsHere(f.logs.selector);
       const devices = logDevices(this.#hub(), f.logs.selector);
       const level = f.logs.level;
       sub.logs = { devices: devices ? new Set(devices) : null, levels: level ? new Set(LEVELS.slice(0, LEVELS.indexOf(level) + 1)) : null };
@@ -340,6 +349,44 @@ export class WsHub {
     }
     if (sub.events?.since !== undefined) {
       this.#catchUp(c, sub);
+    }
+  }
+
+  /**
+   * Log lines are one hub's own and do not cross the hubs' link (design multi-hub-m2 §17): a logs sub that names a
+   * board another hub holds, with no port of it on this machine, is refused naming that hub, not left silent.
+   */
+  #logsHere(selector: string | undefined): void {
+    const hub = this.#hub();
+    if (!selector || selector === 'all' || !hub.peers) {
+      return;
+    }
+    let devices;
+    try {
+      devices = hub.registry.resolve(selector, netPresence(hub));
+    } catch {
+      return; // a port selector, or one the registry does not take: logDevices says what is wrong with it
+    }
+    const isUp = (p: string) => p === 'online' || p === 'suspect';
+    const elsewhere = devices
+      .filter((d) => !isUp(hub.router.presence(d.device_id)))
+      .map((d) => ({ d, at: hub.peers!.holder(d.device_id) }))
+      .filter((x) => {
+        if (!x.at) {
+          return false;
+        }
+        try {
+          hub.serial.resolve(x.d.device_id);
+          return false; // its USB cable is on this machine: its lines are here
+        } catch {
+          return true;
+        }
+      });
+    if (elsewhere.length) {
+      const to = elsewhere[0].at!.name;
+      throw new FrError('CAPABILITY_UNSUPPORTED', `${elsewhere.map((x) => `${x.d.alias} is at hub ${x.at!.name}`).join(', ')}: log lines do not cross the hubs' link, so ${elsewhere.length === 1 ? 'its' : 'their'} log is followed on that hub (fr --at ${to} logs ${elsewhere[0].d.alias} --follow, or that hub's dashboard)`, {
+        details: { hub: to, boards: elsewhere.map((x) => ({ device_id: x.d.device_id, alias: x.d.alias, at: x.at!.name })) },
+      });
     }
   }
 
@@ -481,7 +528,8 @@ export class WsHub {
     const parts = cur.subs.map((s) => s.events!);
     const types = parts.some((p) => !p.globs.length) ? [] : [...new Set(parts.flatMap((p) => p.globs))];
     const devices = parts.some((p) => p.ids === null) ? null : [...new Set(parts.flatMap((p) => [...p.ids!]))];
-    const rows = this.#hub().events.query({ afterSeq: cur.after, types, devices, limit: this.#page });
+    // The stored events and, in the same seq order, what the other hubs relayed and is still kept in memory.
+    const rows = this.#hub().events.query({ afterSeq: cur.after, types, devices, limit: this.#page, relayed: true });
     let more = rows.length === this.#page;
     for (const e of rows) {
       if (e.seq > cur.end) {
@@ -527,6 +575,12 @@ export class WsHub {
     for (const id of ids) {
       const info = routerInfo(hub.router, id);
       if (!info || (info.presence !== 'online' && info.presence !== 'suspect')) {
+        // A board another hub holds: its properties as that hub last said them (design multi-hub-m2 §8).
+        for (const e of hub.peers?.events.states(id) ?? []) {
+          if (matchTypes(ev.globs, e.type)) {
+            this.#out(c.sock, JSON.stringify({ t: 'ev', e, snapshot: true }));
+          }
+        }
         continue;
       }
       for (const [type, value] of Object.entries(info.properties)) {
@@ -601,7 +655,7 @@ export class WsHub {
   // ---- jobs ----
 
   /** The job runner's listener: `job` frames, progress throttled per job (WS_LIMITS.jobFramesPerS). */
-  onJob(job: Job, change: JobChange): void {
+  onJob(job: Pick<Job, 'job_id' | 'kind' | 'status' | 'stage' | 'progress'>, change: JobChange, hub?: string): void {
     const frame = JSON.stringify({
       t: 'job',
       job_id: job.job_id,
@@ -609,6 +663,8 @@ export class WsHub {
       status: job.status,
       ...(job.stage ? { stage: job.stage } : {}),
       ...(job.progress ? { progress: job.progress } : {}),
+      // A job another hub of the network runs (design multi-hub-m2 §8): where.
+      ...(hub ? { hub } : {}),
     });
     const gapMs = 1000 / this.#limits.jobFramesPerS;
     const now = Date.now();
@@ -644,14 +700,21 @@ export class WsHub {
     }
   }
 
-  /** On a `jobs` sub: the jobs not ended yet, newest first. */
+  /** A change of a job another hub runs, as that hub relayed it. */
+  onRemoteJob(job: RemoteJob): void {
+    this.onJob(job as unknown as Pick<Job, 'job_id' | 'kind' | 'status' | 'stage' | 'progress'>, job.change, job.hub);
+  }
+
+  /** On a `jobs` sub: the jobs not ended yet, newest first; then those the other hubs run, as each last said. */
   #activeJobs(c: Client): void {
     const jobs = this.#hub().jobs;
-    if (typeof jobs?.list !== 'function') {
-      return;
+    if (typeof jobs?.list === 'function') {
+      for (const j of jobs.list(100).filter((j) => !TERMINAL.has(j.status))) {
+        this.#out(c.sock, JSON.stringify({ t: 'job', job_id: j.job_id, kind: j.kind, status: j.status, ...(j.stage ? { stage: j.stage } : {}), ...(j.progress ? { progress: j.progress } : {}) }));
+      }
     }
-    for (const j of jobs.list(100).filter((j) => !TERMINAL.has(j.status))) {
-      this.#out(c.sock, JSON.stringify({ t: 'job', job_id: j.job_id, kind: j.kind, status: j.status, ...(j.stage ? { stage: j.stage } : {}), ...(j.progress ? { progress: j.progress } : {}) }));
+    for (const j of this.#hub().peers?.events.jobs() ?? []) {
+      this.#out(c.sock, JSON.stringify({ t: 'job', job_id: j.job_id, kind: j.kind, status: j.status, ...(j.stage ? { stage: j.stage } : {}), ...(j.progress ? { progress: j.progress } : {}), hub: j.hub }));
     }
   }
 }
@@ -665,10 +728,14 @@ export function createWsServer(hub: () => HubContext, _run: HubRunOptions, opts:
     start() {
       const h = hub();
       // D7: main.ts starts the AppServer first and this right after it, so /ws is the bus's second listener.
-      offs.push(h.events.subscribe((e) => ws.onEvent(e)));
+      // The fleet: this hub's events and those the other hubs of the network relay (design multi-hub-m2 §8).
+      offs.push(subscribeFleet(h.events, (e) => ws.onEvent(e)));
       offs.push(h.logs.subscribe((l) => ws.onLog(l)));
       if (typeof h.jobs?.onChange === 'function') {
         offs.push(h.jobs.onChange((j, change) => ws.onJob(j, change)));
+      }
+      if (h.peers) {
+        offs.push(h.peers.events.onJob((j) => ws.onRemoteJob(j)));
       }
       feeds.start();
     },

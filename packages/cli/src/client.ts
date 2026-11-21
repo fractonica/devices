@@ -1,7 +1,42 @@
-import { CLIENT_HEADER, HUB_API_PORT, type ErrorCode, type JobOrigin, type OpDef, type Result } from '@fractonica/protocol';
+import { AT_HEADER, CLIENT_HEADER, HUB_API_PORT, type ErrorCode, type JobOrigin, type OpDef, type Result } from '@fractonica/protocol';
 
 export function hubUrl(): string {
   return process.env.FR_HUB || `http://127.0.0.1:${HUB_API_PORT}`;
+}
+
+/**
+ * `fr --at <hub> <command>` (design multi-hub-m2 §7.2): the hub of the network every op call of this process runs on,
+ * sent beside the input as the X-Fr-At header. Unset: the hub that holds the board, else the hub that is asked.
+ */
+let atHub: string | undefined;
+
+export function setAtHub(name: string | undefined): void {
+  atHub = name;
+}
+
+export function atHubName(): string | undefined {
+  return atHub;
+}
+
+/**
+ * Takes `--at <hub>` (or `--at=<hub>`) out of the words before the command: `fr --at uriel ports ls`, `fr --json --at
+ * uriel hub status`. Only there, because some commands have an `--at` of their own (`fr time --at <instant>`).
+ * Returns the hub named (undefined without one, '' for an `--at` with no name) and the other words.
+ */
+export function takeAtHub(args: readonly string[]): { at: string | undefined; rest: string[] } {
+  const rest: string[] = [];
+  let at: string | undefined;
+  let i = 0;
+  for (; i < args.length && args[i].startsWith('-') && args[i] !== '--'; i++) {
+    if (args[i] === '--at') {
+      at = args[i + 1] !== undefined && !args[i + 1].startsWith('-') ? args[++i] : '';
+    } else if (args[i].startsWith('--at=')) {
+      at = args[i].slice(5);
+    } else {
+      rest.push(args[i]);
+    }
+  }
+  return { at, rest: [...rest, ...args.slice(i)] };
 }
 
 function unreachable(message: string): Result<never> {
@@ -63,8 +98,9 @@ export async function hubHealth(): Promise<{ ok: boolean; version: string; regis
  * of a job the op starts, so `fr mcp` passes `mcp` and the dashboard's Agents page can tell them apart.
  * `cancel` aborts the request (an MCP client's cancel): the hub sees the waiter leave (a prompt_human ends
  * as cancelled, design c6 D3), and the call resolves with a TIMEOUT Result the caller drops.
+ * `at` names the hub of the network to run it on (default: what `fr --at` said, setAtHub).
  */
-export async function hubCall(op: string, input: Record<string, unknown>, timeoutMs: number, client: JobOrigin = 'cli', cancel?: AbortSignal): Promise<Result> {
+export async function hubCall(op: string, input: Record<string, unknown>, timeoutMs: number, client: JobOrigin = 'cli', cancel?: AbortSignal, at: string | undefined = atHub): Promise<Result> {
   // AbortSignal.timeout throws on NaN or fractional delays, which would read as "hub not reachable".
   const ms = Number.isFinite(timeoutMs) ? Math.max(1, Math.ceil(timeoutMs)) : 30_000;
   const cancelled = (): Result => ({ ok: false, cursor: '', error: { code: 'TIMEOUT', message: `${op} was cancelled by the client`, retryable: false } });
@@ -74,7 +110,7 @@ export async function hubCall(op: string, input: Record<string, unknown>, timeou
   try {
     const r = await fetch(`${hubUrl()}/api/v1/op/${op}`, {
       method: 'POST',
-      headers: { 'content-type': 'application/json', [CLIENT_HEADER]: client },
+      headers: { 'content-type': 'application/json', [CLIENT_HEADER]: client, ...(at ? { [AT_HEADER]: at } : {}) },
       body: JSON.stringify(input),
       signal: cancel ? AbortSignal.any([cancel, AbortSignal.timeout(ms)]) : AbortSignal.timeout(ms),
     });

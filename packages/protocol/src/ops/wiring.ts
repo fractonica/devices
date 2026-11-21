@@ -178,6 +178,7 @@ export function parseStepList(steps: readonly string[] | string): string[] {
 export const WIRING_OPS = [
   op({
     name: 'wiring_list',
+    target: 'hub',
     kind: 'query',
     tier: 'read',
     summary:
@@ -188,6 +189,7 @@ export const WIRING_OPS = [
   }),
   op({
     name: 'wiring_show',
+    target: 'hub',
     kind: 'query',
     tier: 'read',
     summary:
@@ -198,6 +200,7 @@ export const WIRING_OPS = [
   }),
   op({
     name: 'wiring_step',
+    target: 'hub',
     kind: 'command',
     tier: 'mutate',
     summary: "Mark steps of a wiring guide done (the person finished them at the bench). Publishes wiring.step per step. NOT_FOUND for an unknown guide or step.",
@@ -207,6 +210,7 @@ export const WIRING_OPS = [
   }),
   op({
     name: 'wiring_undo',
+    target: 'hub',
     kind: 'command',
     tier: 'mutate',
     summary: 'Mark steps of a wiring guide not done again. Publishes wiring.step per step. NOT_FOUND for an unknown guide or step.',
@@ -216,6 +220,7 @@ export const WIRING_OPS = [
   }),
   op({
     name: 'wiring_reset',
+    target: 'hub',
     kind: 'command',
     tier: 'mutate',
     destructive: true,
@@ -227,6 +232,7 @@ export const WIRING_OPS = [
   }),
   op({
     name: 'wiring_check',
+    target: 'hub',
     kind: 'query',
     tier: 'read',
     summary:
@@ -237,6 +243,7 @@ export const WIRING_OPS = [
   }),
   op({
     name: 'wiring_reload',
+    target: 'hub',
     kind: 'command',
     tier: 'mutate',
     summary: "Read hardware/wiring and hardware/parts again from the hub's checkout (after editing a guide or a part). Answers what loaded and what was refused.",
@@ -246,6 +253,7 @@ export const WIRING_OPS = [
   }),
   op({
     name: 'wiring_shopping',
+    target: 'hub',
     kind: 'query',
     tier: 'read',
     summary:
@@ -256,6 +264,7 @@ export const WIRING_OPS = [
   }),
   op({
     name: 'part_list',
+    target: 'hub',
     kind: 'query',
     tier: 'read',
     summary: "The parts catalogue (hardware/parts/*.part.yaml): id, name, category, summary, the values a generic part comes in, and how many are on hand. Filter by category or by a word in the id, name or summary.",
@@ -268,6 +277,7 @@ export const WIRING_OPS = [
   }),
   op({
     name: 'part_show',
+    target: 'hub',
     kind: 'query',
     tier: 'read',
     summary: 'One part: specs (the inferred ones listed), pins and pinout hint, notes, datasheets, stock rows and the guides that use it.',
@@ -277,6 +287,7 @@ export const WIRING_OPS = [
   }),
   op({
     name: 'part_stock',
+    target: 'hub',
     kind: 'command',
     tier: 'mutate',
     summary:

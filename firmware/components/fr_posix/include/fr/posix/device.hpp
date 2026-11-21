@@ -4,6 +4,8 @@
 // unanswered (the hub refuses OTA for such devices). fr.node.reboot asks the Runner to stop with kExitRestart, and
 // the service manager starts the process again (a new boot, a new epoch). A MSG `fr.adopt` from the hub (device_adopt,
 // UNOQ-1 step 5) carries the identity a flash would write: it is saved, then the node restarts with it.
+// fr.node.hubs_set and hubs_get (design multi-hub-m1) go to the TCP link, which keeps and tries the hub list; a list it
+// says to keep is written to the identity file (attach_hub_link, which the Runner calls).
 #pragma once
 
 #include <array>
@@ -21,6 +23,8 @@
 #include "protocol.hpp"  // generated fr::proto constants
 
 namespace fr::posix {
+
+class TcpLink;
 
 /** What a node is, beyond its identity: the HELLO and descriptor facts. */
 struct NodeInfo {
@@ -52,12 +56,15 @@ public:
     Status set_groups(const cap::NodeSetGroupsArgs &) override { return std::unexpected(Err::unsupported); }
     Status net_set(const cap::NodeNetSetArgs &) override { return std::unexpected(Err::unsupported); }
     Status get_state() override;
+    Status hubs_set(const cap::NodeHubsSetArgs &args) override;
+    std::expected<cap::NodeHubsGetResult, Err> hubs_get() override;
     Status bind_set(const cap::NodeBindSetArgs &args) override;
     Status bind_clear(const cap::NodeBindClearArgs &args) override;
     std::expected<cap::NodeBindListResult, Err> bind_list() override;
 
 private:
     posix::Device &n_;
+    net::HubList hubs_{};  // what hubs_get's result points into
 };
 
 class Device final : public net::Host
@@ -71,6 +78,11 @@ public:
     NodeCap &node_cap() { return node_cap_; }
     std::span<const uint8_t> descriptor() const { return {desc_, desc_len_}; }
     IdentityFile &ident() { return ident_; }
+    /**
+     * The TCP link that keeps the hub list (the Runner calls it): the identity file's stored list goes into the link,
+     * and what the link says to keep goes into the file. Before the link's first poll().
+     */
+    void attach_hub_link(TcpLink &tcp);
 
     /** A line for the log. */
     std::function<void(const std::string &)> log;
@@ -112,6 +124,7 @@ private:
     std::span<PortEntry> ports_;
     NodeCap node_cap_{*this};
     net::Net *net_ = nullptr;
+    TcpLink *tcp_ = nullptr;
     uint8_t desc_[proto::Descriptor::kMaxSize];
     size_t desc_len_ = 0;
     uint8_t bind_buf_[core::kBindListMax];

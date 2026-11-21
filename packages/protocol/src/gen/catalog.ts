@@ -5093,10 +5093,29 @@ export const CATALOG: Catalog = {
     {
       "id": 240,
       "name": "fr.node",
-      "version": "1.0",
+      "version": "1.1",
       "section": "system",
-      "summary": "System capability on port 0 of every device (instance \"node\"): identity, description, reboot, alias, bindings, state resync.",
+      "summary": "System capability on port 0 of every device (instance \"node\"): identity, description, reboot, alias, bindings, state resync, the hub list.",
       "types": {},
+      "messages": {
+        "Hub": {
+          "doc": "One hub the board may connect to: its host name (an mDNS `.local` name, a DNS name or a dotted IPv4) and a dotted IPv4 to fall back to when the name does not resolve (empty: none).",
+          "fields": [
+            {
+              "name": "host",
+              "id": 1,
+              "type": "string",
+              "max": 63
+            },
+            {
+              "name": "ip",
+              "id": 2,
+              "type": "string",
+              "max": 15
+            }
+          ]
+        }
+      },
       "traits": [],
       "config": [],
       "properties": [],
@@ -5353,6 +5372,65 @@ export const CATALOG: Catalog = {
               "doc": "a protobuf-wire BindingList (schema/protocol.yaml types)"
             }
           ]
+        },
+        {
+          "name": "hubs_set",
+          "id": 11,
+          "delivery": "reliable",
+          "idempotent": true,
+          "visibility": "public",
+          "doc": "Set the board's hub list (design multi-hub-m1; 1.1). Applied about 300 ms after the RESULT. A list that names the hub the board is on is kept at once; any other is on trial until one of its hubs WELCOMEs the board, and dropped for the list it had when none does within 60 s. EXPIRED for a rev at or below the one held (the same list and rev again is OK), INVALID_ARGS for a host or ip that is not one or a host named twice, BUSY while an earlier list waits to apply, UNSUPPORTED on a board without a hub IP link (a gateway, a radio-off build).",
+          "fields": [
+            {
+              "name": "hubs",
+              "id": 1,
+              "type": "array<Hub>",
+              "max": 4,
+              "doc": "in priority order, the first is the board's default hub; empty: no list, the board uses the hub it was provisioned with"
+            },
+            {
+              "name": "rev",
+              "id": 2,
+              "type": "u32",
+              "doc": "above the rev the board holds (hubs_get), so a stale push never wins"
+            }
+          ]
+        },
+        {
+          "name": "hubs_get",
+          "id": 12,
+          "delivery": "reliable",
+          "idempotent": true,
+          "visibility": "public",
+          "doc": "The board's hub list, its rev and the hub it is on now (design multi-hub-m1; 1.1).",
+          "fields": [],
+          "result": [
+            {
+              "name": "hubs",
+              "id": 1,
+              "type": "array<Hub>",
+              "max": 4,
+              "doc": "the list in force (a list on trial included); empty: none stored"
+            },
+            {
+              "name": "rev",
+              "id": 2,
+              "type": "u32",
+              "doc": "its rev; 0 with no list"
+            },
+            {
+              "name": "on",
+              "id": 3,
+              "type": "u8",
+              "doc": "the index in hubs of the hub the board's TCP session is with; 255: none of them (no TCP session, no list, or a hub found by its advert)"
+            },
+            {
+              "name": "trial",
+              "id": 4,
+              "type": "bool",
+              "doc": "the list is on trial: no hub in it has WELCOMEd the board yet"
+            }
+          ]
         }
       ],
       "events": [
@@ -5469,4 +5547,4 @@ export const CATALOG: Catalog = {
   ]
 };
 
-export const CATALOG_HASH = 0x616bf0f2;
+export const CATALOG_HASH = 0x2efa5e5e;

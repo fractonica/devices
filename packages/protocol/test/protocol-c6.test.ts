@@ -28,7 +28,7 @@ import {
   OP_NAMES,
   OPS,
   PortInfoSchema,
-  REGISTRY_HASH,
+  REGISTRY_HASH, REGISTRY_INPUTS_HASH,
   RESERVED_ALIASES,
   WsClientFrameSchema,
   WsHubFrameSchema,
@@ -345,20 +345,20 @@ describe('the browser entry (@fractonica/protocol/browser)', () => {
 describe('REGISTRY_HASH', () => {
   const hashOf = (ops: readonly OpDef[]) =>
     createHash('sha256')
-      .update(JSON.stringify(ops.map((o) => [o.name, z.toJSONSchema(o.name === 'hub_doctor' && !ops.some((x) => x.name === 'hub_doctor_fix') ? z.object({}) : o.input) /* hub_doctor had no input before the dashboard's health */])))
+      .update(JSON.stringify(ops.map((o) => [o.name, z.toJSONSchema(o.name === 'hub_doctor' && !ops.some((x) => x.name === 'hub_doctor_fix') ? z.object({}) : o.name === 'device_provision' && !ops.some((x) => x.name === 'device_enroll') ? (o.input as z.ZodObject).omit({ for_hub: true }) : o.input) /* hub_doctor had no input before the dashboard's health; device_provision no for_hub before device_enroll (protocol-for-hub.test.ts) */])))
       .digest('hex')
       .slice(0, 12);
 
   it('covers every op, the C6 ones and wait_for_event.prompt_human included', () => {
-    expect(hashOf(OPS)).toBe(REGISTRY_HASH);
+    expect(hashOf(OPS)).toBe(REGISTRY_INPUTS_HASH);
     for (const name of Object.keys(C6_OPS)) {
-      expect(hashOf(OPS.filter((o) => o.name !== name)), name).not.toBe(REGISTRY_HASH);
+      expect(hashOf(OPS.filter((o) => o.name !== name)), name).not.toBe(REGISTRY_INPUTS_HASH);
     }
     const withoutPrompt = OPS.map((o: OpDef) => (o.name === 'wait_for_event' ? { ...o, input: o.input.omit({ prompt_human: true }) } : o));
-    expect(hashOf(withoutPrompt)).not.toBe(REGISTRY_HASH);
+    expect(hashOf(withoutPrompt)).not.toBe(REGISTRY_INPUTS_HASH);
   });
 
   it('ignores tier, mcp and output', () => {
-    expect(hashOf(OPS.map((o: OpDef) => ({ ...o, tier: 'read' as const, mcp: undefined, output: undefined })))).toBe(REGISTRY_HASH);
+    expect(hashOf(OPS.map((o: OpDef) => ({ ...o, tier: 'read' as const, mcp: undefined, output: undefined })))).toBe(REGISTRY_INPUTS_HASH);
   });
 });

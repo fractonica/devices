@@ -4,9 +4,9 @@ import { join } from 'node:path';
 
 import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest';
 
-import { formatCursor, FrError, type LogLine } from '@fractonica/protocol';
+import { formatCursor, FrError, type LogLine, parseCursor, runSlot, slotRun } from '@fractonica/protocol';
 
-import { type Db, kvSet, nextHubRun, openDb } from '../src/db.ts';
+import { type Db, HUB_SLOT_KEY, kvSet, nextHubRun, openDb, runInSlot } from '../src/db.ts';
 import { LogStore } from '../src/logstore.ts';
 import { HANDLERS, type HubContext, linesWithinBudget, logDevices } from '../src/ops.ts';
 import { SerialPortManager } from '../src/serial.ts';
@@ -53,6 +53,25 @@ describe('hub run counter', () => {
     expect(nextHubRun(db)).toBe(2);
     expect(db.pragma('synchronous', { simple: true })).toBe(1);
     expect(db.pragma('fullfsync', { simple: true })).toBe(0);
+  });
+
+  it("carries the hub's slot once it has one, so two hubs of a network never give one run (design multi-hub-m2 §17)", () => {
+    const registrar = freshDb();
+    const member = freshDb();
+    kvSet(registrar, HUB_SLOT_KEY, '0');
+    expect(nextHubRun(member)).toBe(1); // alone: as it always counted
+    kvSet(member, HUB_SLOT_KEY, '1'); // it joined: from its next start its runs are slot 1's
+    const runs = [nextHubRun(registrar), nextHubRun(registrar), nextHubRun(member), nextHubRun(member)];
+    expect(runs).toEqual([1, 2, 1_000_000_002, 1_000_000_003]);
+    expect(runs.map(runSlot)).toEqual([0, 0, 1, 1]);
+    expect(runInSlot(1, null) && runInSlot(1, 0) && runInSlot(1_000_000_002, 1)).toBe(true);
+    expect(runInSlot(1, 1) || runInSlot(1_000_000_002, 0)).toBe(false);
+    // kv keeps the hub's own counter: a version from before this counts on from it, and never gives a run again.
+    expect(member.prepare("SELECT v FROM kv WHERE k = 'hub_run'").get()).toEqual({ v: '3' });
+    kvSet(member, HUB_SLOT_KEY, '3');
+    expect(nextHubRun(member)).toBe(3_000_000_004);
+    // Cursors of the two never share a run, and a cursor's run says whose it is.
+    expect(parseCursor(formatCursor({ run: slotRun(2, 7), seq: 41 }))).toEqual({ run: 2_000_000_007, seq: 41 });
   });
 });
 

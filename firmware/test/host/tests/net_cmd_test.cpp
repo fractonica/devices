@@ -384,3 +384,60 @@ TEST(net_hub_q1_msg_gets_an_ack)
     CHECK_EQ(r.udp.count(wire::kClsAck, proto::kKindAckAck), 2u);
     CHECK(r.host.calls.empty());
 }
+
+TEST(net_welcome_from_another_hub_is_a_new_run_whatever_its_epoch)
+{
+    // Design multi-hub-m1: the TCP link moved to another hub of the board's list (failover, failback). Two hubs
+    // count their runs and their seqs apart and may be at the same numbers: the link says its far end changed
+    // (Link::far_end), and Net takes the WELCOME for a new hub run all the same. What the first hub was answered
+    // is not an answer to the second.
+    NetRig r;
+    r.tcp.far = 1;
+    r.session(LinkKind::tcp);
+    int runs = 0;
+    r.host.on_dispatch = [&runs](uint8_t, uint8_t, std::span<const uint8_t>, fr::cap::Reply &reply) -> fr::Status {
+        reply.fields().field_uint(1, static_cast<uint64_t>(++runs));
+        return {};
+    };
+    uint32_t seq = 0;
+    const auto first = r.hub.cmd(2, 4, {}, wire::kFlagAckReq, {}, &seq);
+    r.deliver(LinkKind::tcp, first);
+    REQUIRE_EQ(runs, 1);
+    // The second hub, at the same epoch, reaches the same seq with a command of its own.
+    r.down(LinkKind::tcp);
+    r.tcp.far = 2;
+    r.up(LinkKind::tcp);
+    r.hub.ucast = seq - 2;  // its WELCOME takes one seq, its first command the next
+    r.deliver(LinkKind::tcp, r.hub.welcome());
+    REQUIRE(r.net.state().link(LinkKind::tcp).session);
+    uint32_t seq2 = 0;
+    const auto second = r.hub.cmd(2, 4, {}, wire::kFlagAckReq, {}, &seq2);
+    REQUIRE_EQ(seq2, seq);
+    r.clear_sent();
+    r.deliver(LinkKind::tcp, second);
+    CHECK_EQ(runs, 2);
+    r.deliver(LinkKind::tcp, second);  // its duplicate
+    CHECK_EQ(runs, 2);
+    auto res = results(r.tcp);
+    REQUIRE_EQ(res.size(), 2u);
+    // The duplicate is answered with the second hub's result, not with what the first hub's command got.
+    CHECK_BYTES(res[1].bytes, res[0].bytes);
+}
+
+TEST(net_welcome_from_the_same_hub_keeps_its_run)
+{
+    // A reconnect to the hub the link was on (the same far end, the same epoch) is the run it was: a command the
+    // hub repeats over the new connection is still answered from the cache, not run again.
+    NetRig r;
+    r.tcp.far = 1;
+    r.session(LinkKind::tcp);
+    const auto cmd = r.hub.cmd(2, 4);
+    r.deliver(LinkKind::tcp, cmd);
+    REQUIRE_EQ(r.host.calls.size(), 1u);
+    r.down(LinkKind::tcp);
+    r.up(LinkKind::tcp);
+    r.deliver(LinkKind::tcp, r.hub.welcome());
+    r.deliver(LinkKind::tcp, cmd);
+    CHECK_EQ(r.host.calls.size(), 1u);
+    CHECK_EQ(r.net.state().cached_replies, 1u);
+}

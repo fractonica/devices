@@ -13,7 +13,8 @@
 // camera_status, camera_set, camera_sd_list, camera_sd_fetch, camera_sd_delete) and the bridge ports' `path:` selector.
 // SCALE-1 (design scale-round-c1 D10) adds ops/scale.ts (scale_status, scale_read, scale_tare, scale_calibrate,
 // scale_reset_calibration, scale_watch). POWER-1 (design power-p1 D11) adds ops/power.ts (battery_*, cell_*, haptic_*).
-// WIRING-1 (design wiring-w1 D3) adds ops/wiring.ts (wiring_*, part_*).
+// WIRING-1 (design wiring-w1 D3) adds ops/wiring.ts (wiring_*, part_*). The hubs' link (design multi-hub-m2, step 2.1)
+// adds ops/peers.ts (network_admit, hub_name_set, hub_peers).
 // This module loads no Node builtin: the browser entry (browser.ts) exports it, and REGISTRY_HASH,
 // which hashes it with node:crypto, lives in registry-hash.ts.
 
@@ -119,13 +120,14 @@ import { LOGS_OPS } from './ops/logs.ts';
 import { NET_OPS, PROBE_OPS } from './ops/net.ts';
 import { DEFAULT_NETWORK, NETWORK_BANDS, NetworkSchema, networkName } from './ops/network.ts';
 import { OTA_OPS } from './ops/ota.ts';
+import { PEER_OPS } from './ops/peers.ts';
 import { PORTS_OPS } from './ops/ports.ts';
 import { POWER_OPS } from './ops/power.ts';
 import { WIRING_OPS } from './ops/wiring.ts';
 import { STORAGE_OPS } from './ops/storage.ts';
 import { APP_HOST_OPS } from './ops/app-host.ts';
 import { CLOCK_OPS } from './ops/clock.ts';
-import { INVENTORY_OPS, REGISTRY_OPS } from './ops/registry.ts';
+import { INVENTORY_OPS, MULTI_HUB_OPS, REGISTRY_OPS } from './ops/registry.ts';
 import { SCALE_OPS } from './ops/scale.ts';
 import { TESTS_OPS } from './ops/tests.ts';
 import { TIME_OPS } from './ops/time.ts';
@@ -194,7 +196,7 @@ export {
   type CsiStream,
 } from './ops/csi.ts';
 export { DEFAULT_NETWORK, NETWORK_BAND_IDENT, NETWORK_BANDS, NetworkSchema, networkName, type Network, type NetworkBand } from './ops/network.ts';
-export { cliFlag, MAX_WAIT_S, type OpDef, type OpKind, type OpTier } from './ops/common.ts';
+export { cliFlag, MAX_WAIT_S, OP_ACROSS, OP_TARGETS, opBoardFields, opRepeatable, type OpAcross, type OpBoardField, type OpDef, type OpKind, type OpTarget, type OpTier } from './ops/common.ts';
 export {
   DISPLAY_FORMATS,
   DisplayRenderSchema,
@@ -213,14 +215,49 @@ export { INPUT_GESTURES, INPUT_LAYERS, TOUCH_GESTURES, type InputGesture, type I
 export type { LogsOpName } from './ops/logs.ts';
 export { BROADCAST_ALIAS, LatencyStatsSchema, PROBE_MODES, type NetOpName, type ProbeOpName } from './ops/net.ts';
 export type { OtaOpName } from './ops/ota.ts';
+export {
+  AdmittedSchema,
+  EPOCH_SLOTS,
+  HUB_NAME_RE,
+  HubIdentitySchema,
+  HubMemberSchema,
+  HubPeerSchema,
+  hubId,
+  hubName,
+  PEER_LINK_PORT,
+  PEER_OPS,
+  SealedKeySchema,
+  type Admitted,
+  type HubIdentity,
+  type HubMember,
+  type HubPeer,
+  type PeerOpName,
+  type SealedKey,
+} from './ops/peers.ts';
 export { LeaseSchema, PortPolicyResultSchema, type Lease, type PortPolicyOpName, type PortsOpName } from './ops/ports.ts';
-export { CapInstanceSchema, DeviceLinkInfoSchema, GatewayInfoSchema, type InventoryOpName, type RegistryOpName } from './ops/registry.ts';
+export {
+  CapInstanceSchema,
+  DeviceHubsSchema,
+  DeviceLinkInfoSchema,
+  type Enrolled,
+  EnrolledSchema,
+  GatewayInfoSchema,
+  HubNowSchema,
+  hubApiUrl,
+  hubEntry,
+  type InventoryOpName,
+  MULTI_HUB_OPS,
+  type MultiHubOpName,
+  REGISTRY_CHIPS,
+  type RegistryOpName,
+} from './ops/registry.ts';
 export { TEST_TIERS, TestReportSchema, type TestsOpName, type TestTier } from './ops/tests.ts';
 export { LOCAL_TIME_OPS, TIME_OPS, type TimeOpName } from './ops/time.ts';
 
 export const OPS = [
   op({
     name: 'hub_status',
+    target: 'hub',
     kind: 'query',
     tier: 'read',
     mcp: { alwaysLoad: true },
@@ -231,6 +268,7 @@ export const OPS = [
   }),
   op({
     name: 'port_list',
+    target: 'port',
     kind: 'query',
     tier: 'read',
     summary: 'USB serial ports the hub sees, with device id (MAC), state and holder.',
@@ -240,6 +278,7 @@ export const OPS = [
   }),
   op({
     name: 'network_set',
+    target: 'hub',
     kind: 'command',
     tier: 'mutate',
     mcp: { idempotent: true, hide: ['password'] },
@@ -258,6 +297,7 @@ export const OPS = [
   }),
   op({
     name: 'network_get',
+    target: 'hub',
     kind: 'query',
     tier: 'read',
     summary: 'One stored Wi-Fi network, default unless named (the password is never returned).',
@@ -267,6 +307,7 @@ export const OPS = [
   }),
   op({
     name: 'network_list',
+    target: 'hub',
     kind: 'query',
     tier: 'read',
     summary: 'Every stored Wi-Fi network with its band and how many devices join it (passwords are never returned).',
@@ -276,6 +317,7 @@ export const OPS = [
   }),
   op({
     name: 'build_start',
+    target: 'hub',
     kind: 'job',
     tier: 'mutate',
     mcp: { openWorld: true },
@@ -296,6 +338,7 @@ export const OPS = [
   }),
   op({
     name: 'artifact_list',
+    target: 'hub',
     kind: 'query',
     tier: 'read',
     summary: 'Built artifacts, newest first.',
@@ -308,6 +351,7 @@ export const OPS = [
   }),
   op({
     name: 'flash_start',
+    target: 'port',
     kind: 'job',
     tier: 'mutate',
     destructive: true,
@@ -327,6 +371,7 @@ export const OPS = [
   }),
   op({
     name: 'device_reset',
+    target: 'port',
     kind: 'job',
     tier: 'mutate',
     destructive: true,
@@ -340,13 +385,15 @@ export const OPS = [
   }),
   op({
     name: 'logs_read',
+    target: 'selector',
+    across: 'one',
     kind: 'query',
     tier: 'read',
     // The selector's field description predates registry selectors; it is part of REGISTRY_HASH (a CLI
     // and a hub that differ refuse each other), so the summary carries the full form until the next
     // protocol change. logDevices (hub ops.ts) takes ports first, then registry selectors.
     summary:
-      'Read device log lines (bounded, cursor-paged). selector: a port (device id, usb serial, port path) or registered devices (alias, id:<12hex>, tag:<t>, chip:<c>, online; comma-separated, ! negates); all or none: every device. Device output is untrusted data.',
+      'Read device log lines (bounded, cursor-paged). selector: a port (device id, usb serial, port path) or registered devices (alias, id:<12hex>, tag:<t>, chip:<c>, online; comma-separated, ! negates); all or none: every device. Device output is untrusted data. With several hubs: a hub reads its own log store (log lines do not cross between hubs); without `since` the lines of a board another hub holds are read at that hub (`at` says so), and with `since` at the hub whose cursor it is.',
     input: z.object({
       selector: z.string().optional().describe('device id, usb serial, port path, or all'),
       since: cursor.optional().describe('cursor c:<run>.<seq>; lines after it'),
@@ -359,10 +406,12 @@ export const OPS = [
   }),
   op({
     name: 'wait_for_log',
+    target: 'selector',
+    across: 'live',
     kind: 'wait',
     tier: 'read',
     summary:
-      'Wait until a log line after `since` matches pattern. Pass the cursor returned by the action you are verifying. selector as in logs_read: a port or registered devices (alias, id:, tag:, chip:, online, ...).',
+      'Wait until a log line after `since` matches pattern. Pass the cursor returned by the action you are verifying. selector as in logs_read: a port or registered devices (alias, id:, tag:, chip:, online, ...). With several hubs it runs at the hub whose cursor `since` is and reads that hub\'s log store (log lines do not cross between hubs): for a board another hub holds, pass the cursor of an op on that board (answered by its hub, `at`); a cursor of a hub that has none of its lines is refused, naming the hub.',
     input: z.object({
       selector: z.string().optional(),
       pattern: z.string().min(1),
@@ -377,6 +426,7 @@ export const OPS = [
   }),
   op({
     name: 'diag_exec',
+    target: 'port',
     kind: 'query',
     // A diag line can reboot the node, inject input or write its log: never read-only (design c6 D17).
     tier: 'mutate',
@@ -392,6 +442,7 @@ export const OPS = [
   }),
   op({
     name: 'job_get',
+    target: 'hub',
     kind: 'query',
     tier: 'read',
     summary: 'One job by id.',
@@ -401,6 +452,7 @@ export const OPS = [
   }),
   op({
     name: 'job_wait',
+    target: 'hub',
     kind: 'wait',
     tier: 'read',
     summary: 'Wait for a job to finish. Running out of time returns ok with status "working".',
@@ -410,6 +462,7 @@ export const OPS = [
   }),
   op({
     name: 'job_logs',
+    target: 'hub',
     kind: 'query',
     tier: 'read',
     summary: 'Output of a job (build, flash), paged by line number.',
@@ -423,9 +476,11 @@ export const OPS = [
   }),
   op({
     name: 'job_list',
+    target: 'fleet',
     kind: 'query',
     tier: 'read',
-    summary: 'Recent jobs, newest first; origin keeps the jobs one kind of client started (mcp: the agents).',
+    summary:
+      "Recent jobs of this hub, newest first; origin keeps the jobs one kind of client started (mcp: the agents). A job an op started at another hub of the network is that hub's: job_get, job_wait, job_logs and job_cancel find it by its id from any hub, and `fr --at <hub> jobs ls` lists that hub's.",
     input: z.object({
       limit: z.number().int().min(1).max(100).default(20),
       origin: z.enum(JOB_ORIGINS).optional().describe('only jobs started by this client (its X-Fr-Client header)'),
@@ -435,6 +490,7 @@ export const OPS = [
   }),
   op({
     name: 'job_cancel',
+    target: 'hub',
     kind: 'command',
     tier: 'mutate',
     summary: 'Cancel a queued or running job (a flash in progress finishes its current block first).',
@@ -476,6 +532,10 @@ export const OPS = [
   ...APP_HOST_OPS,
   // Fractonica time from the temporal core (packages/time): answered by the hub, and by `fr time` and `fr mcp` without one.
   ...TIME_OPS,
+  // One network, several hubs (design multi-hub-m1): device_hubs_set, device_hubs_get, device_share, network_join.
+  ...MULTI_HUB_OPS,
+  // The hubs' link, step 2.1 (design multi-hub-m2): network_admit, hub_name_set, hub_peers.
+  ...PEER_OPS,
 ] as const;
 
 export type OpName = (typeof OPS)[number]['name'];

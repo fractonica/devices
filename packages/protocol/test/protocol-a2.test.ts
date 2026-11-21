@@ -6,23 +6,23 @@ import { createHash } from 'node:crypto';
 import { describe, expect, it } from 'vitest';
 import { z } from 'zod';
 
-import { AUDIO_MONITOR_DEFAULT_S, AUDIO_MONITOR_END_REASONS, AUDIO_MONITOR_MAX_S, AudioMonitorSchema, findOp, OPS, REGISTRY_HASH } from '../src/index.ts';
+import { AUDIO_MONITOR_DEFAULT_S, AUDIO_MONITOR_END_REASONS, AUDIO_MONITOR_MAX_S, AudioMonitorSchema, findOp, OPS, REGISTRY_HASH, REGISTRY_INPUTS_HASH } from '../src/index.ts';
 import { AUDIO_IN_CAP, AudioInMonitorEndReason } from '@fractonica/protocol/gen';
 
 const hashOf = (ops: readonly { name: string; input: z.ZodType }[]) =>
   createHash('sha256')
-    .update(JSON.stringify(ops.map((o) => [o.name, z.toJSONSchema(o.name === 'hub_doctor' && !ops.some((x) => x.name === 'hub_doctor_fix') ? z.object({}) : o.input) /* hub_doctor had no input before the dashboard's health */])))
+    .update(JSON.stringify(ops.map((o) => [o.name, z.toJSONSchema(o.name === 'hub_doctor' && !ops.some((x) => x.name === 'hub_doctor_fix') ? z.object({}) : o.name === 'device_provision' && !ops.some((x) => x.name === 'device_enroll') ? (o.input as z.ZodObject).omit({ for_hub: true }) : o.input) /* hub_doctor had no input before the dashboard's health; device_provision no for_hub before device_enroll (protocol-for-hub.test.ts) */])))
     .digest('hex')
     .slice(0, 12);
 
 describe('A2 ops (design audio-a2 D5)', () => {
   it('adds audio_monitor as a mutate job on `audio monitor <device>`, and moves REGISTRY_HASH once', () => {
-    expect(OPS.filter((o) => o.name !== 'network_list' && !/^(csi|camera|scale|battery|cell|haptic|wiring|part|storage|clock|app|time)_|^device_adopt$|^port_(lend|ignore|claim)$|^hub_doctor_fix$/.test(o.name))).toHaveLength(52); // CSI-1 adds three (protocol-csi.test.ts), CAM-1 seven (protocol-camera.test.ts)
+    expect(OPS.filter((o) => o.name !== 'network_list' && !/^(csi|camera|scale|battery|cell|haptic|wiring|part|storage|clock|app|time)_|^device_adopt$|^port_(lend|ignore|claim)$|^hub_doctor_fix$|^device_enroll$|^device_(hubs_set|hubs_get|share)$|^network_join$|^network_admit$|^hub_(name_set|peers)$/.test(o.name))).toHaveLength(52); // CSI-1 adds three (protocol-csi.test.ts), CAM-1 seven (protocol-camera.test.ts)
     expect(findOp('audio_monitor')).toMatchObject({ kind: 'job', tier: 'mutate', cli: { path: ['audio', 'monitor'], positional: ['device'] } });
     expect(findOp('audio_monitor')!.summary.length).toBeLessThan(1000);
     // A1's was 445e6697686c and A2's ee5dc36bb005; CSI-1 changed ops in place (protocol-csi.test.ts pins today's).
-    expect(hashOf(OPS.filter((o) => o.name !== 'audio_monitor'))).not.toBe(REGISTRY_HASH);
-    expect(hashOf(OPS)).toBe(REGISTRY_HASH);
+    expect(hashOf(OPS.filter((o) => o.name !== 'audio_monitor'))).not.toBe(REGISTRY_INPUTS_HASH);
+    expect(hashOf(OPS)).toBe(REGISTRY_INPUTS_HASH);
     expect(REGISTRY_HASH).not.toBe('ee5dc36bb005');
   });
 

@@ -31,6 +31,7 @@ import type { StreamRoutes } from './streams/route.ts';
 import type { AudioStreams } from './audio/streams.ts';
 import type { Db } from './db.ts';
 import type { JobRunner } from './jobs.ts';
+import type { Peers } from './peers/index.ts';
 import type { LogStore } from './logstore.ts';
 import type { PortPolicyHandle } from './ports/policy.ts';
 import type { PruneReport } from './retention.ts';
@@ -75,6 +76,16 @@ export interface Device {
    * another). Always set by the registry; optional for test doubles built before csi-c1.
    */
   network?: string;
+  /** Its hub list as device_hubs_set pushed it (devices.hubs, design multi-hub-m1); null or absent: none. */
+  hubs?: DeviceHubs | null;
+}
+
+/** A board's ordered hub list in the registry: the first hub is its default. */
+export interface DeviceHubs {
+  rev: number;
+  hubs: { host: string; ip: string | null }[];
+  /** ISO time it was pushed (or read back from the board). */
+  set_at: string;
 }
 
 /**
@@ -140,9 +151,15 @@ export interface Events {
    * false`: live only (per-frame telemetry): subscribers get it, no row is written.
    */
   publish(e: Omit<HubEvent, 'cursor' | 'seq'>, opts?: { thin?: boolean; durable?: boolean }): HubEvent;
+  /** This hub's own events. The events other hubs relayed go to a subscriber of the fleet (events/index.ts subscribeFleet). */
   subscribe(fn: (e: HubEvent) => void): () => void;
-  /** Oldest first; `devices: null` is every device. */
-  query(q: { afterSeq?: number; types?: string[]; devices?: string[] | null; excludeDevices?: string[]; limit: number }): HubEvent[];
+  /**
+   * An event another hub of the network published, live here (design multi-hub-m2 §8): this hub's seq and cursor,
+   * `hub` naming its origin, no row; only fleet subscribers get it. EventStore only.
+   */
+  relay?(e: Omit<HubEvent, 'cursor' | 'seq'> & { hub: string }): HubEvent;
+  /** Oldest first; `devices: null` is every device; `relayed`: also the relayed events still kept in memory. */
+  query(q: { afterSeq?: number; types?: string[]; devices?: string[] | null; excludeDevices?: string[]; limit: number; relayed?: boolean }): HubEvent[];
   /** Streaming STATEs replaced before being written (hub_status `events`; EventStore only). */
   readonly stateThinned?: number;
   /** Events published live only (never stored) since start. */
@@ -217,6 +234,12 @@ export interface Router {
   tcpAddress(deviceId: string): string | null;
   /** Adds C5 hooks (design c5 §4): the frames and moments the node <-> node services act on; returns the removal. */
   hooks(h: RouterHooks): () => void;
+  /**
+   * Ends the device's serial session because another hub of the network holds its session over Wi-Fi (design
+   * multi-hub-m2 §6): the board gave the USB session up when it took that hub's WELCOME, so no BYE is written, and
+   * the port stays open. Nothing happens while this hub has the board's TCP session itself. True when a session ended.
+   */
+  yieldSerial?(deviceId: string, reason: string): boolean;
 }
 
 // ---- node <-> node (design c5 §4) ----
@@ -391,6 +414,12 @@ export interface HubRunOptions {
   noAdvert: boolean;
   /** false with `--no-serial`: the USB ports belong to another hub. */
   serial: boolean;
+  /**
+   * The hubs' link listener (design multi-hub-m2 §3.1): `--peer-port`, default 7423 for a hub on the usual node port
+   * and 0 (any free one) for a test hub. It binds where the node listeners do (nodeHost), and only while the hub
+   * holds its network's key. Absent: 7423.
+   */
+  peerPort?: number;
 }
 
 /**
@@ -584,6 +613,8 @@ export interface HubContext {
   sleepGuard: { active(): boolean };
   /** The HIL fixture module (design m2-c1-hil; stream S4); absent in test contexts built for other ops. */
   fixture?: Fixture;
+  /** The hubs' link (design multi-hub-m2: members, the peer link, who is where); absent in test contexts built for other ops. */
+  peers?: Peers;
 }
 
 /** An op handler (packages/protocol/src/ops.ts): the parsed input (typed per handler) and the hub. */

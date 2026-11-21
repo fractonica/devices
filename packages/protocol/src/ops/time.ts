@@ -24,6 +24,7 @@ const level = z.string().min(1).describe('a level: its symbol (η), ASCII letter
 export const TIME_OPS = [
   op({
     name: 'time_now',
+    target: 'hub',
     kind: 'query',
     tier: 'read',
     summary:
@@ -34,6 +35,7 @@ export const TIME_OPS = [
   }),
   op({
     name: 'time_convert',
+    target: 'hub',
     kind: 'query',
     tier: 'read',
     summary:
@@ -47,6 +49,7 @@ export const TIME_OPS = [
   }),
   op({
     name: 'time_ladder',
+    target: 'hub',
     kind: 'query',
     tier: 'read',
     summary:
@@ -57,6 +60,7 @@ export const TIME_OPS = [
   }),
   op({
     name: 'time_next',
+    target: 'hub',
     kind: 'query',
     tier: 'read',
     summary:

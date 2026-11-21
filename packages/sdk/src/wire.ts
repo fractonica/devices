@@ -113,6 +113,11 @@ export interface WelcomeDevice {
   caps: WelcomeCap[];
   /** The property mirror: instance -> property -> value. */
   props: Record<string, Record<string, unknown>>;
+  /**
+   * The name of the hub that holds the board's session when that is another hub of the network than the one this app
+   * is connected to (design multi-hub-m2 §8): the board is online, its commands and events pass through the hubs' link.
+   */
+  hub?: string;
 }
 
 /** The answer to `hello`: the hub's view of the registry; the SDK refreshes its mirror from `props`. */
@@ -146,6 +151,8 @@ export interface EvtFrame {
   /** Replayed after `hello.resume` (D8), or buffered by the node during an outage. */
   replayed?: true;
   fields: Record<string, unknown>;
+  /** The hub the event came from, when another hub of the network relayed it (absent: the hub this app is connected to). */
+  hub?: string;
 }
 
 /** A property STATE: the mirror's new value. */
@@ -156,6 +163,8 @@ export interface StateFrame {
   prop: string;
   value: unknown;
   t_hub_us: number;
+  /** The hub the value came from, when another hub of the network relayed it. */
+  hub?: string;
 }
 
 /** device.online / suspect / offline. */
@@ -165,6 +174,8 @@ export interface PresenceFrame {
   state: 'online' | 'suspect' | 'offline';
   reason?: string;
   link?: string;
+  /** The hub that holds (or held) the board's session, when that is another hub of the network. */
+  hub?: string;
 }
 
 /** A MSG a node sent to the hub or broadcast (`data` parsed as UTF-8 JSON, else hex). */
@@ -181,6 +192,8 @@ export interface HubMsgFrame {
   cursor?: string;
   /** Replayed after `hello.resume` (D8). */
   replayed?: true;
+  /** The hub the message came through, when another hub of the network relayed it. */
+  hub?: string;
 }
 
 export interface DeviceAddedFrame {

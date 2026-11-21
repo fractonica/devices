@@ -561,20 +561,55 @@ void Net::on_welcome(LinkKind from, std::span<const uint8_t> body)
         ++ls(from).rx_drop;
         return;
     }
+    // Design multi-hub-m1 (c): one hub at a time. A WELCOME over USB from another hub run while the TCP session is
+    // alive comes from another hub (a restarted hub closes its TCP connections first): the board keeps the hub it
+    // chose over Wi-Fi, and the serial link sends no HELLO again until that session ends (end_session). Taking it
+    // would end the TCP session, whose next WELCOME would end this one, for ever.
+    if (from == LinkKind::serial && ls(LinkKind::tcp).session && w->hub_epoch != state_.hub_epoch && !wifi_silent()) {
+        ++state_.welcomes_refused;
+        ++ls(from).rx_drop;
+        serial_parked_ = true;
+        sess(from).hello_due = kNever;
+        return;
+    }
+    // The TCP link reached another hub than at its last WELCOME (failover, failback, a new hub list): a new hub
+    // run whatever the epochs say, as two hubs count their runs apart.
+    bool other_hub = false;
+    if (from == LinkKind::tcp) {
+        const Link *l = link(from);
+        const uint32_t far = l != nullptr ? l->far_end() : 0;
+        other_hub = far != 0 && tcp_far_ != 0 && far != tcp_far_;
+        if (far != 0) {
+            tcp_far_ = far;
+        }
+    }
     // A WELCOME from another hub run: sessions on the other link belong to the old run.
     for (LinkKind k : kSessionLinks) {
-        if (k != from && ls(k).session && w->hub_epoch != state_.hub_epoch) {
+        if (k != from && ls(k).session && (other_hub || w->hub_epoch != state_.hub_epoch)) {
             lose_session(k, DropReason::hub_restarted);
         }
     }
     // Design c6 D22: CMDs an earlier hub run scheduled are dropped unrun; their hub is gone, and its clock
     // offset with it. A WELCOME of the same run (the other link, a reconnect) keeps them.
-    drop_other_run_cmds(w->hub_epoch);
+    if (other_hub) {
+        // Whatever the other hub scheduled or was answered: its seqs and this hub's may be the same numbers.
+        for (Scheduled &x : exec_) {
+            if (x.used) {
+                x.used = false;
+                ++state_.exec_cancelled;
+            }
+        }
+        for (Cached &c : cache_) {
+            c.used = false;
+        }
+    } else {
+        drop_other_run_cmds(w->hub_epoch);
+    }
     // 05 §5.8: the node resets its hub entries on every WELCOME, with the floors the hub gives. A WELCOME of
     // the hub run the BCAST window already follows only raises its floor (design c5 §8): a broadcast
     // above bcast_base can arrive over the air or the other session ahead of this WELCOME, and moving the
     // window back would deliver it a second time when the hub's own copy follows.
-    const bool same_run = state_.hub_epoch != 0 && w->hub_epoch == state_.hub_epoch;
+    const bool same_run = !other_hub && state_.hub_epoch != 0 && w->hub_epoch == state_.hub_epoch;
     state_.hub_epoch = w->hub_epoch;
     ucast_.reset(w->ucast_floor);
     if (same_run) {
@@ -1140,6 +1175,13 @@ void Net::end_session(LinkKind k, bool lost)
         tcp_since_ = kNever;
         // A standby serial session becomes the path: its keepalive clock starts now.
         sess(LinkKind::serial).last_rx = core_.now();
+        if (serial_parked_) {
+            // Design multi-hub-m1 (c): the hub on USB was refused while this session lived; now it may have the board.
+            serial_parked_ = false;
+            if (ls(LinkKind::serial).up && !ls(LinkKind::serial).session) {
+                sess(LinkKind::serial).hello_due = core_.now();
+            }
+        }
         // Design m2-c4-gateway D12: no TCP session, so a live gateway gets its HELLO once the open rule allows it (at
         // once with the STA gone, kGatewayTcpGoneMs from now while it stays associated).
         gateway_tcp_ended(core_.now());

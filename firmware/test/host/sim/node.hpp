@@ -33,6 +33,7 @@
 #include "fr/core/port.hpp"
 #include "fr/core/worker.hpp"
 #include "fr/net/air.hpp"
+#include "fr/net/hub_plan.hpp"
 #include "fr/net/log_source.hpp"
 #include "fr/net/net.hpp"
 #include "fr/hal/analog.hpp"
@@ -188,6 +189,20 @@ public:
         out = {};
         return false;
     }
+    // Design multi-hub-m1: fr.node.hubs_set and hubs_get, for a host whose TCP link keeps a hub list (fr_net_node).
+    virtual fr::Status hubs_set(const fr::net::HubList &list)
+    {
+        static_cast<void>(list);
+        return std::unexpected(fr::Err::unsupported);
+    }
+    /** The list in force, the index of the session's hub (255: none of them) and whether the list is on trial. */
+    virtual bool hubs_now(fr::net::HubList &list, uint8_t &on, bool &trial) const
+    {
+        static_cast<void>(list);
+        static_cast<void>(on);
+        static_cast<void>(trial);
+        return false;
+    }
 
 protected:
     ~NodeLinks() = default;
@@ -290,6 +305,9 @@ public:
     fr::Status set_groups(const fr::cap::NodeSetGroupsArgs &) override { return std::unexpected(fr::Err::unsupported); }
     fr::Status net_set(const fr::cap::NodeNetSetArgs &) override { return std::unexpected(fr::Err::unsupported); }
     fr::Status get_state() override;
+    // The hub list (design multi-hub-m1): the host's links keep it (NodeLinks); UNSUPPORTED where they keep none.
+    fr::Status hubs_set(const fr::cap::NodeHubsSetArgs &args) override;
+    std::expected<fr::cap::NodeHubsGetResult, fr::Err> hubs_get() override;
     // Bindings (07 §7.11), as fr_core's NodeService: Net's table, saved through the stores.
     fr::Status bind_set(const fr::cap::NodeBindSetArgs &args) override;
     fr::Status bind_clear(const fr::cap::NodeBindClearArgs &args) override;
@@ -297,6 +315,7 @@ public:
 
 private:
     Device &d_;
+    fr::net::HubList hubs_{};  // what hubs_get's result points into
 };
 
 /** What Net asks of the node (fr_core's role on target): dispatch by port, identity and HELLO facts. */
@@ -311,6 +330,8 @@ public:
     fr::net::Net &net() { return *net_; }
     /** Where link_info()'s Wi-Fi part comes from. */
     void set_links(NodeLinks &links) { links_ = &links; }
+    /** The host's links, or null before set_links. */
+    NodeLinks *links() { return links_; }
     std::span<uint8_t> bind_buf() { return bind_buf_; }
     /** The air medium joined: HELLO caps espnow_v2. */
     void set_air(bool on) { air_ = on; }

@@ -1,0 +1,9 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:fractonica:schema:fr.node.hubs_get.args",
+  "title": "fr.node.hubs_get arguments",
+  "description": "The board's hub list, its rev and the hub it is on now (design multi-hub-m1; 1.1).",
+  "type": "object",
+  "properties": {},
+  "additionalProperties": false
+}

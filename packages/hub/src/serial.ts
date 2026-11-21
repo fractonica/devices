@@ -189,6 +189,8 @@ export class SerialPortManager {
   #binding: SerialBinding | null;
   /** Which ports to open (config.json ports, ports/policy.ts); null: all of them. */
   #policy: PortPolicy | null;
+  /** Ports a job reads for now whatever the policy's `not_adopted` (watchFor): key -> how many hold it. */
+  #jobWatch = new Map<string, number>();
 
   constructor(logs: LogStore, db: Db, opts: { holders?: PortHolders; binding?: SerialBinding; policy?: PortPolicy } = {}) {
     this.#logs = logs;
@@ -209,7 +211,7 @@ export class SerialPortManager {
     }
     const d = this.#policy.decide(policyPort(e));
     e.policy = d.why;
-    if (d.watch) {
+    if (d.watch || this.#jobWatches(e, d)) {
       if (e.state === 'unwatched' || e.state === 'ignored') {
         e.state = 'closed';
         e.nextOpenAt = 0;
@@ -236,7 +238,36 @@ export class SerialPortManager {
       return null;
     }
     const d = this.#policy.decide(policyPort(e));
-    return d.watch ? null : d.why;
+    return d.watch || this.#jobWatches(e, d) ? null : d.why;
+  }
+
+  /** Whether a job reads `e` for now (watchFor) although the policy does not adopt it; never an ignored port. */
+  #jobWatches(e: Entry, d: PortDecision): boolean {
+    return !d.watch && d.why === 'not_adopted' && this.#jobWatch.has(e.key);
+  }
+
+  /**
+   * Reads `key`'s port until the returned function is called, although the policy does not adopt it: a provisioning
+   * for another hub (device_provision `for_hub`) resets the board and reads its HELLO on a port whose board is not
+   * this hub's. The policy's own answer stays what port_list shows; an ignored port stays closed. Applied by the next
+   * poll (a lease's release starts one), and undone by the one after the release.
+   */
+  watchFor(key: string): () => void {
+    this.#jobWatch.set(key, (this.#jobWatch.get(key) ?? 0) + 1);
+    let released = false;
+    return () => {
+      if (released) {
+        return;
+      }
+      released = true;
+      const n = (this.#jobWatch.get(key) ?? 1) - 1;
+      if (n > 0) {
+        this.#jobWatch.set(key, n);
+      } else {
+        this.#jobWatch.delete(key);
+      }
+      void this.poll();
+    };
   }
 
   /** Re-applies the policy now (a port op changed config.json); resolves after that poll. */

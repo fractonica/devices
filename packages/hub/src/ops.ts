@@ -16,7 +16,7 @@ import { CAMERA_HANDLERS } from './camera/ops.ts';
 import { CSI_HANDLERS } from './csi/ops.ts';
 import { DISPLAY_HANDLERS } from './display/ops.ts';
 import { HUB_HANDLERS } from './doctor/ops.ts';
-import { mintCursor, mintTimeUs } from './events/index.ts';
+import { mintCursor, mintTimeUs, sinceSeqOf } from './events/index.ts';
 import { fenceDiag, fenceDiagDevice, portDevice } from './fixture/fence.ts';
 import { FIXTURE_HANDLERS } from './fixture/ops.ts';
 import { hardResetCapturing, runPytools } from './flash.ts';
@@ -24,10 +24,12 @@ import { PROBE_HANDLERS } from './latency/ops.ts';
 import { LOGS_HANDLERS } from './logs/ops.ts';
 import { TCP_LOG_LIMITS, tcpOnlyDevices } from './logs/source.ts';
 import { staleNetLine, type StoredLine, toLogLine } from './logstore.ts';
-import { CHIPS_5G, devicesWithout5g, listNetworks, type NetworkRecord, networkDevices, passwordNames, readNetwork, writeNetwork, writeWifiPassword } from './network.ts';
+import { CHIPS_5G, devicesWithout5g, listNetworks, type NetworkRecord, networkDevices, passwordNames, readNetwork, registrarOf, writeNetwork, writeWifiPassword } from './network.ts';
 import { assertPortFree, listPorts, nameBusyHolder } from './ports/holders.ts';
 import { dbSpace, type PruneReport, spaceWarning } from './retention.ts';
 import { PORTS_HANDLERS } from './ports/ops.ts';
+import { hubIdentity } from './peers/identity.ts';
+import { PEER_HANDLERS } from './peers/ops.ts';
 import { INVENTORY_HANDLERS } from './registry/catalog-ops.ts';
 import { type FlashStartInput, startFlash } from './registry/flashing.ts';
 import { isDeviceId, registryOf, resolvePort } from './registry/hub.ts';
@@ -52,17 +54,7 @@ export type { Handler, HubContext } from './context.ts';
 
 /** Parses `since` and rejects cursors from an earlier hub run (spec 08 §8.7). */
 function sinceSeq(since: string | undefined, hub: HubContext): number | undefined {
-  if (!since) {
-    return undefined;
-  }
-  const c = parseCursor(since);
-  if (!c) {
-    throw new FrError('INVALID_ARGS', `bad cursor ${since}; expected c:<run>.<seq>`);
-  }
-  if (c.run !== hub.logs.run) {
-    throw new FrError('HUB_RESTARTED', `cursor ${since} is from an earlier hub run`, { details: { resume_cursor: mintCursor(hub) } });
-  }
-  return c.seq;
+  return sinceSeqOf(hub, since);
 }
 
 /** hub_status `process` (design m2-c2 D16): resident set, CPU since start, open descriptors. */
@@ -89,6 +81,8 @@ function networkView(hub: HubContext, n: NetworkRecord, pw: Set<string> = passwo
     hub_host: n.hub_host,
     password_set: pw.has(n.name),
     devices: networkDevices(hub.db, n.name),
+    // Design multi-hub-m1: the hub that hands out this network's addresses when it is not this one (network_join).
+    registrar: registrarOf(hub.db)?.url ?? null,
   };
 }
 
@@ -291,7 +285,7 @@ export const HANDLERS: Record<OpName, Handler> = {
       // a registry that cannot list yet: the count is unknown, not an error of hub_status
     }
     // C6 parts (design c6 §3.3): each may add warnings (LNP_DENIED, the advert, a stale dashboard, ...).
-    for (const part of [hub.portPolicy, hub.prompts, hub.leases, hub.lnp, hub.advert, hub.appServer, hub.wsServer, hub.staticSite, hub.latencyProbe, hub.fixture]) {
+    for (const part of [hub.portPolicy, hub.prompts, hub.leases, hub.lnp, hub.advert, hub.appServer, hub.wsServer, hub.staticSite, hub.latencyProbe, hub.fixture, hub.peers]) {
       warnings.push(...(part?.warnings?.() ?? []));
     }
     const lnp = hub.lnp?.status();
@@ -302,6 +296,11 @@ export const HANDLERS: Record<OpName, Handler> = {
       registry_hash: REGISTRY_HASH,
       pid: process.pid,
       run: hub.logs.run,
+      // The `epoch` of this run's hub frames (05 §5.8); a hub that joins this one's network keeps its own apart from it
+      // (network_join, design multi-hub-m1).
+      hub_epoch: hub.hubEpoch,
+      // This hub in its network (design multi-hub-m2 §2, §9): its id, its name, its epoch slot (null while it is alone).
+      ...(hub.db?.open ? { hub: hubIdentity(hub.db) } : {}),
       uptime_s: Math.round((Date.now() - hub.startedAt) / 1000),
       node: { version: process.version, path: process.execPath },
       source_dir: hub.hubSourceDir,
@@ -322,7 +321,8 @@ export const HANDLERS: Record<OpName, Handler> = {
       jobs: hub.jobs.counts(),
       head: mintCursor(hub),
       warnings,
-      ...(hub.prompts ? { prompts: hub.prompts.pending() } : {}),
+      // Pending prompts: this hub's, then (each with `hub`) those of waits that run at another hub of the network.
+      ...(hub.prompts ? { prompts: [...hub.prompts.pending(), ...(hub.peers?.events.prompts() ?? [])] } : {}),
       ...(lnp ? { lnp: lnp.lnp, lnp_checked_at: lnp.checked_at, launched_by: lnp.launched_by } : {}),
       ...(hub.advert ? { advert: hub.advert.status() } : {}),
       ...(hub.staticSite ? { dashboard: hub.staticSite.dashboard() } : {}),
@@ -617,4 +617,6 @@ export const HANDLERS: Record<OpName, Handler> = {
   ...WIRING_HANDLERS,
   ...STORAGE_HANDLERS,
   ...CLOCK_HANDLERS,
+  // The hubs' link, step 2.1 (design multi-hub-m2): network_admit, hub_name_set, hub_peers.
+  ...PEER_HANDLERS,
 };

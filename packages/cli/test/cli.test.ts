@@ -108,6 +108,8 @@ describe('fr (subprocess)', { timeout: 20_000 }, () => {
   const requests: { op: string; body: Record<string, unknown> }[] = [];
   /** The X-Fr-Client header of each op call (design c6 D18). */
   const clients: (string | undefined)[] = [];
+  /** The X-Fr-At header of each op call (design multi-hub-m2 §7.2): the hub `fr --at` named, or undefined. */
+  const ats: (string | undefined)[] = [];
   const replies = new Map<string, { status: number; body: unknown }>();
   // The fake hub reports this pid, so a stop that wrongly went ahead would only kill a sleep. It must outlive the
   // suite (killed in afterAll): one that ended under a slow run would leave a pid the system may give to anything.
@@ -125,6 +127,7 @@ describe('fr (subprocess)', { timeout: 20_000 }, () => {
         const name = req.url!.split('/').pop()!;
         requests.push({ op: name, body: JSON.parse(raw || '{}') as Record<string, unknown> });
         clients.push(req.headers['x-fr-client'] as string | undefined);
+        ats.push(req.headers['x-fr-at'] as string | undefined);
         const reply = replies.get(name) ?? { status: 200, body: { ok: true, data: {}, cursor: 'c:1.1' } };
         res.statusCode = reply.status;
         res.end(typeof reply.body === 'string' ? reply.body : JSON.stringify(reply.body));
@@ -137,6 +140,7 @@ describe('fr (subprocess)', { timeout: 20_000 }, () => {
   beforeEach(() => {
     requests.length = 0;
     clients.length = 0;
+    ats.length = 0;
     replies.clear();
   });
   afterAll(async () => {
@@ -344,6 +348,53 @@ describe('fr (subprocess)', { timeout: 20_000 }, () => {
     // Every op call names its client: the hub records it as a job's origin (design c6 D18).
     expect(clients.length).toBeGreaterThan(0);
     expect(new Set(clients)).toEqual(new Set(['cli']));
+  });
+
+  it('fr --at <hub> names the hub beside the input (X-Fr-At), before the command only (design multi-hub-m2 §7.2)', { timeout: 60_000 }, async () => {
+    // A generated command, a hand-written one, and --json before or after: the header names the hub, the input does not.
+    for (const [args, op, body] of [
+      [['--at', 'uriel', 'ports', 'ls', '--json'], 'port_list', {}],
+      [['--json', '--at', 'uriel', 'hub', 'status'], 'hub_status', {}],
+      [['--at=uriel', 'devices', 'get', 'mic-s3', '--json'], 'device_get', { device: 'mic-s3' }],
+      [['--at', 'uriel', 'audio', 'tone', 'mic-s3', '440', '--json'], 'audio_play', { device: 'mic-s3', tone: { freq_hz: 440, ms: 500 }, wait_s: 110 }],
+    ] as const) {
+      requests.length = 0;
+      ats.length = 0;
+      const r = await fr([...args]);
+      expect(r.code, args.join(' ')).toBe(0);
+      expect(requests, args.join(' ')).toEqual([{ op, body }]);
+      expect(ats).toEqual(['uriel']);
+    }
+    // Without it nothing is named: the hub decides (the board's holder, else itself).
+    ats.length = 0;
+    expect((await fr(['ports', 'ls', '--json'])).code).toBe(0);
+    expect(ats).toEqual([undefined]);
+    // The answer says where it ran; the CLI prints the envelope as it came.
+    replies.set('hub_status', { status: 200, body: { ok: true, data: { version: 'x' }, cursor: 'c:9.1', at: 'uriel' } });
+    expect(JSON.parse((await fr(['--at', 'uriel', 'hub', 'status', '--json'])).stdout)).toMatchObject({ ok: true, at: 'uriel', cursor: 'c:9.1' });
+    // After the command, --at is the command's own option where it has one (fr time --at <instant>), and unknown elsewhere.
+    requests.length = 0;
+    const own = await fr(['time', '--at', '2026-11-21T00:00:00Z', '--json']);
+    expect(own.code).toBe(0);
+    expect(requests).toEqual([]);
+    expect((await fr(['ports', 'ls', '--at', 'uriel', '--json'])).code).toBe(64);
+    // What is not a hub's name, and commands that act on this machine, are usage errors: nothing is sent.
+    for (const [args, text] of [
+      [['--at', 'Home_Hub', 'ports', 'ls', '--json'], "--at takes a hub's name"],
+      [['--at', '--json', 'ports', 'ls'], "--at takes a hub's name"],
+      [['--at', 'uriel', 'hub', 'stop', '--json'], 'fr hub stop acts on this machine'],
+      [['--at', 'uriel', 'hub', 'restart', '--json'], 'fr hub restart acts on this machine'],
+      [['--at', 'uriel', 'doctor', '--json'], 'fr doctor acts on this machine'],
+      [['--at', 'uriel', 'serial', 'lease', 'pad', '--json'], 'fr serial acts on this machine'],
+      [['--at', 'uriel', 'time', 'now', '--json'], 'fr time acts on this machine'],
+    ] as const) {
+      requests.length = 0;
+      const r = await fr([...args]);
+      expect(r.code, args.join(' ')).toBe(64);
+      expect(JSON.parse(r.stdout).error, args.join(' ')).toMatchObject({ code: 'INVALID_ARGS' });
+      expect(JSON.parse(r.stdout).error.message).toContain(text);
+      expect(requests, args.join(' ')).toEqual([]);
+    }
   });
 
   it('has the hand-written C6 commands, each in its own module (design c6 §3.3)', { timeout: 60_000 }, async () => {

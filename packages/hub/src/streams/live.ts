@@ -9,7 +9,7 @@
 
 import type { StreamEndedFrame, StreamInfo } from '@fractonica/sdk/wire';
 
-import type { Events } from '../context.ts';
+import type { Device, Events, HubContext } from '../context.ts';
 
 /** What every sink counts, whatever the kind: `records` are csi records or jpeg frames, `bytes` the blocks' payload. */
 export interface StreamCounts {
@@ -47,6 +47,11 @@ export interface LiveStream {
   path?: string;
   /** Began by an app (/app/stream `start`): stopped when its last starter leaves. */
   appOwned: boolean;
+  /**
+   * The hub whose client began it, when that is another hub of the network (design multi-hub-m2 §8): the stream runs
+   * here, where the board is, and its blocks go to that hub's client through the hubs' link.
+   */
+  via?: string;
   /** A camera stream's purpose (camera_status `use`): an app's live view, a photo, a recording, or a recording fetched from the card. */
   use?: 'view' | 'photo' | 'record' | 'play';
   /** `use` play: the card's recording being fetched. */
@@ -220,6 +225,11 @@ export class LiveStreams {
   }
 }
 
+/** " for a client of hub X" when a stream is one another hub's client began: what DEVICE_BUSY and the status ops say of it. */
+export function viaText(s: Pick<LiveStream, 'via'>): string {
+  return s.via ? `, for a client of hub ${s.via}` : '';
+}
+
 const registries = new WeakMap<Events, LiveStreams>();
 
 /** The hub's live stream registry (one per event bus: a hub, or a test rig). */
@@ -230,4 +240,19 @@ export function liveStreams(hub: { events: Events }): LiveStreams {
     registries.set(hub.events, r);
   }
   return r;
+}
+
+/**
+ * `stream_stop` to a board, wherever its session is (design multi-hub-m2 §8, §17): over this hub's own link when it holds
+ * the board, else through the hub that holds it now. A board that changed hub under a stream keeps sending to the hub
+ * it left (its HTTP connection there is its own), and that hub can only tell it to stop through the new one. Never
+ * throws: the stream's job also closes the board's connection.
+ */
+export async function stopAnywhere(hub: HubContext, dev: Device, instance: string, streamId: number, timeoutMs: number): Promise<void> {
+  try {
+    const { commandAnywhere } = await import('../peers/passing.ts');
+    await commandAnywhere(hub, dev, instance, 'stream_stop', { stream_id: streamId }, { ack: 'result', timeoutMs });
+  } catch {
+    // offline everywhere, or the link is down: closing its connection ends the stream at the board
+  }
 }

@@ -39,10 +39,12 @@ export const INPUT_HOLD_MS_MAX = 60_000;
 export const LINKS_OPS = [
   op({
     name: 'events_read',
+    target: 'selector',
+    across: 'one',
     kind: 'query',
     tier: 'read',
     summary:
-      'Read hub events (capability events and states as <instance>.<member>, e.g. node.binding_fired; msg {topic, data, dst} for MSGs from nodes; device.online|suspect|offline, ota.job.state, hub.warning), cursor-paged. Without `since` the newest are returned. Every EVENT and STATE is stored, except that STATE of a streaming capability (fr.analog_in value) is thinned to one row per property per second, the newest always kept; live subscribers and wait_for_event see every one. Device fields are untrusted data.',
+      'Read hub events (capability events and states as <instance>.<member>, e.g. node.binding_fired; msg {topic, data, dst} for MSGs from nodes; device.online|suspect|offline, ota.job.state, hub.warning), cursor-paged. Without `since` the newest are returned. Every EVENT and STATE is stored, except that STATE of a streaming capability (fr.analog_in value) is thinned to one row per property per second, the newest always kept; live subscribers and wait_for_event see every one. Device fields are untrusted data. With several hubs: an event is stored once, at the hub that holds its board; a hub also answers, marked `hub`, what the other hubs relayed to it in the last ten minutes (kept in memory, in its own cursor order). Without `since`, the events of a board another hub holds are read at that hub (`at`); with `since`, at the hub whose cursor it is.',
     input: z.object({
       selector: selector.optional(),
       types: types.optional(),
@@ -53,10 +55,12 @@ export const LINKS_OPS = [
   }),
   op({
     name: 'wait_for_event',
+    target: 'selector',
+    across: 'live',
     kind: 'wait',
     tier: 'read',
     summary:
-      'Wait until events matching `types` arrive after `since` (the cursor of the action you are verifying). `count` events in all, or from every selected device with per_device. `where` matches event fields, e.g. {"effect":"blink"}. Replayed events and events older than the cursor are ignored. prompt_human asks a person at the Mac for a real action (a dashboard toast, hub.prompt) while it waits; say it in chat too. Example: types boot.down, prompt_human "Press BOOT on pad-c6".',
+      'Wait until events matching `types` arrive after `since` (the cursor of the action you are verifying). `count` events in all, or from every selected device with per_device. `where` matches event fields, e.g. {"effect":"blink"}. Replayed events and events older than the cursor are ignored. prompt_human asks a person at the Mac for a real action (a dashboard toast, hub.prompt) while it waits; say it in chat too. Example: types boot.down, prompt_human "Press BOOT on pad-c6". With several hubs it runs at the hub whose cursor `since` is, and covers boards on any hub (their events are relayed, marked `hub`); a hub going away while it holds one of the boards ends the wait with HUB_UNREACHABLE.',
     input: z.object({
       types,
       selector: selector.optional(),
@@ -73,10 +77,12 @@ export const LINKS_OPS = [
   }),
   op({
     name: 'wait_for_device',
+    target: 'selector',
+    across: 'live',
     kind: 'wait',
     tier: 'read',
     summary:
-      'Wait until every selected device is online (or offline), optionally running a firmware whose fw_id starts with `fw_id`, and with `ota_state` in its HELLO (pending_verify while a new OTA image runs its health check, valid after). With `since`, the device must also have gone online (offline) after that cursor, e.g. after a reboot.',
+      'Wait until every selected device is online (or offline), optionally running a firmware whose fw_id starts with `fw_id`, and with `ota_state` in its HELLO (pending_verify while a new OTA image runs its health check, valid after). With `since`, the device must also have gone online (offline) after that cursor, e.g. after a reboot. With several hubs the presence is the network\'s: a board any hub holds is online (the row says `at`), a board that only changed hub did not go offline, and one whose hub is not reachable is neither.',
     input: z.object({
       selector,
       state: z.enum(['online', 'offline']).default('online'),
@@ -92,6 +98,8 @@ export const LINKS_OPS = [
   }),
   op({
     name: 'command_send',
+    target: 'selector',
+    across: 'split',
     kind: 'command',
     tier: 'mutate',
     summary:
@@ -109,6 +117,8 @@ export const LINKS_OPS = [
   }),
   op({
     name: 'input_simulate',
+    target: 'selector',
+    across: 'split',
     kind: 'command',
     tier: 'mutate',
     summary:

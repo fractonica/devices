@@ -42,7 +42,7 @@ import { routerInfo } from '../router/index.ts';
 import { instancesOf, sendCommandTo } from '../router/ops.ts';
 import { normalizeMac } from '../serial.ts';
 import { CsiSink, sweepCsiTemps } from '../streams/csi-sink.ts';
-import { type LiveStream, liveStreams } from '../streams/live.ts';
+import { type LiveStream, liveStreams, stopAnywhere, viaText } from '../streams/live.ts';
 import type { StreamEndReason, StreamRoutes, StreamTicket } from '../streams/route.ts';
 import { guarded } from '../crash.ts';
 
@@ -155,6 +155,8 @@ export interface CsiStreamRequest {
   peerMac?: string;
   /** Began by an /app/stream `start` (stopped when its last starter leaves). */
   appOwned?: boolean;
+  /** The hub whose client asked for it through the hubs' link (design multi-hub-m2 §8). */
+  via?: string;
   origin?: JobOrigin;
 }
 
@@ -172,7 +174,7 @@ export function beginCsiStream(hub: HubContext, req: CsiStreamRequest): BegunStr
   const { dev, inst } = req;
   const running = live.get(dev.device_id, inst.name);
   if (running) {
-    throw new FrError('DEVICE_BUSY', `${dev.alias} ${inst.name} is streaming already (stream ${running.info.stream_id}${running.jobId ? `, job ${running.jobId}` : ''}): one stream per instance`, {
+    throw new FrError('DEVICE_BUSY', `${dev.alias} ${inst.name} is streaming already (stream ${running.info.stream_id}${running.jobId ? `, job ${running.jobId}` : ''}${viaText(running)}): one stream per instance`, {
       ...(running.jobId ? { remediation: [{ tool: 'job_cancel', args: { job_id: running.jobId }, cli: `fr jobs cancel ${running.jobId}` }] } : {}),
     });
   }
@@ -198,6 +200,7 @@ export function beginCsiStream(hub: HubContext, req: CsiStreamRequest): BegunStr
     counts: sink.counts,
     ...(req.out ? { path: req.out } : {}),
     appOwned: req.appOwned === true,
+    ...(req.via ? { via: req.via } : {}),
     live: req.live,
     stop: () => stopper.abort(),
     pastGaps: 0,
@@ -303,7 +306,7 @@ async function streamJob(hub: HubContext, ctx: JobCtx, req: CsiStreamRequest, p:
     } else {
       // Out of time, cancelled, or the app's last starter left: the board is told to stop, and what came is kept.
       ctx.stage('stopping');
-      await sendCommandTo(hub, dev, inst.name, 'stream_stop', { stream_id: id }, { ack: 'result', timeoutMs: CSI_CMD_TIMEOUT_MS }).catch(() => undefined);
+      await stopAnywhere(hub, dev, inst.name, id, CSI_CMD_TIMEOUT_MS);
       event = await within(ended.event, EVENT_GRACE_MS);
       if ((await within(ticket.ended, event ? POST_GRACE_MS : 0)) === undefined) {
         ticket.stop(first === 'deadline' ? 'timeout' : 'stopped');
@@ -450,6 +453,7 @@ export const CSI_HANDLERS: Record<CsiOpName, Handler> = {
             dropped: s.counts.dropped,
             blocks: s.counts.blocks,
             subscribers: s.live ? live.subscribers(dev.device_id, inst.name) : 0,
+            ...(s.via ? { via: s.via } : {}),
             gaps: live.gaps(dev.device_id, inst.name),
             ...(s.path ? { path: s.path } : {}),
             ...(s.jobId ? { job_id: s.jobId } : {}),

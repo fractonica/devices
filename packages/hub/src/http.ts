@@ -2,19 +2,20 @@
 // input returns a Result envelope (spec 09 §9.1-9.2). Loopback only, behind the web guard (web/guard.ts,
 // design c6 D9). Every cursor handed out here is minted (mintCursor), so a wait since it is dated by when
 // the caller got it (09 §9.2). The C6 web parts (/app, /ws, static serving) add their routes here once. Each op
-// call is counted with its duration, for hub_status `rest` (design m2-c2 D16).
+// call is counted with its duration, for hub_status `rest` (design m2-c2 D16). This route is the one dispatch point of
+// the ops: the CLI, `fr mcp` and the dashboard all call it, and it asks peers/passing.ts where the op runs among the
+// hubs of the network before its handler runs here (design multi-hub-m2 §7).
 
 import { performance } from 'node:perf_hooks';
 
 import websocket from '@fastify/websocket';
-import { CLIENT_HEADER, errorResult, findOp, FrError, HUB_VERSION, JOB_ORIGINS, okResult, REGISTRY_HASH, type JobOrigin } from '@fractonica/protocol';
+import { AT_HEADER, CLIENT_HEADER, errorResult, findOp, FrError, HUB_VERSION, JOB_ORIGINS, REGISTRY_HASH, type JobOrigin } from '@fractonica/protocol';
 import Fastify, { type FastifyInstance } from 'fastify';
 import { z } from 'zod';
 
 import { mintCursor } from './events/index.ts';
-import { requestClient } from './jobs.ts';
 import { HANDLERS, type HubContext } from './ops.ts';
-import { requestSignal } from './prompts.ts';
+import { runOp } from './peers/passing.ts';
 import { restStats } from './router/scale.ts';
 import { installGuard } from './web/guard.ts';
 
@@ -70,6 +71,9 @@ export function buildServer(hub: HubContext, port: number): FastifyInstance {
     }
     // A job the op starts records the calling client as its origin (design c6 D18).
     const client = clientOf(req.headers[CLIENT_HEADER]);
+    // `X-Fr-At: <hub name>` (design multi-hub-m2 §7.2): the hub of the network to run it on, beside the input.
+    const atHeader = req.headers[AT_HEADER];
+    const at = typeof atHeader === 'string' && atHeader.trim() ? atHeader.trim().toLowerCase() : undefined;
     // The op runs inside the request's abort signal (prompts.ts requestSignal), aborted when the client
     // goes away before the reply (an `fr mcp` cancel, a killed `fr wait`): a prompt_human wait then ends
     // at once and its prompt as cancelled (design c6 D3).
@@ -79,10 +83,10 @@ export function buildServer(hub: HubContext, port: number): FastifyInstance {
         gone.abort();
       }
     });
-    const call = () => requestSignal.run(gone.signal, () => handler(parsed.data, hub));
     const t0 = performance.now();
     try {
-      return okResult(await (client ? requestClient.run(client, call) : call()), cursor);
+      // The one dispatch point: where the op runs among the hubs of the network (peers/passing.ts), then its handler.
+      return await runOp(hub, op, parsed.data as Record<string, unknown>, { ...(client ? { client } : {}), ...(at ? { at } : {}), signal: gone.signal, cursor });
     } catch (err) {
       return errorResult(err, cursor);
     } finally {

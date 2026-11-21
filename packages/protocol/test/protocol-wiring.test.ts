@@ -10,7 +10,7 @@ import { findOp, OPS, parseStepList, REGISTRY_HASH, WIRING_ID_RE } from '../src/
 
 const hashOf = (ops: readonly { name: string; input: z.ZodType }[]) =>
   createHash('sha256')
-    .update(JSON.stringify(ops.map((o) => [o.name, z.toJSONSchema(o.name === 'hub_doctor' && !ops.some((x) => x.name === 'hub_doctor_fix') ? z.object({}) : o.input) /* hub_doctor had no input before the dashboard's health */])))
+    .update(JSON.stringify(ops.map((o) => [o.name, z.toJSONSchema(o.name === 'hub_doctor' && !ops.some((x) => x.name === 'hub_doctor_fix') ? z.object({}) : o.name === 'device_provision' && !ops.some((x) => x.name === 'device_enroll') ? (o.input as z.ZodObject).omit({ for_hub: true }) : o.input) /* hub_doctor had no input before the dashboard's health; device_provision no for_hub before device_enroll (protocol-for-hub.test.ts) */])))
     .digest('hex')
     .slice(0, 12);
 
@@ -30,7 +30,7 @@ const WIRING_OP_NAMES = [
 
 describe('WIRING-1 ops (design wiring-w1 D3)', () => {
   it('adds eleven ops on their CLI paths and moves REGISTRY_HASH once', () => {
-    const wiring1 = OPS.filter((o) => !/^(storage|clock|app|time)_|^device_adopt$|^port_(lend|ignore|claim)$|^hub_doctor_fix$/.test(o.name)); // LCD-1 / CLOCK-1 adds twelve (protocol-storage-clock.test.ts)
+    const wiring1 = OPS.filter((o) => !/^(storage|clock|app|time)_|^device_adopt$|^port_(lend|ignore|claim)$|^hub_doctor_fix$|^device_enroll$|^device_(hubs_set|hubs_get|share)$|^network_join$|^network_admit$|^hub_(name_set|peers)$/.test(o.name)); // LCD-1 / CLOCK-1 adds twelve (protocol-storage-clock.test.ts)
     expect(wiring1).toHaveLength(93);
     expect(wiring1.slice(-11).map((o) => o.name)).toEqual(WIRING_OP_NAMES);
     const paths: Record<string, [string[], string[] | undefined, string, string]> = {

@@ -35,6 +35,32 @@ read [plugin/AGENTS.md](plugin/AGENTS.md).
    the lock; `fr gen --check` reports drift).
 6. Do not push. Changes to `.github/workflows/*` need the owner to push them (the local token lacks that scope).
 7. Security scope: a LAN lab, unauthenticated (README "Security"). Do not describe it as more.
+8. **Every op declares where it runs among several hubs** (`target` in its definition, `packages/protocol/src/ops`;
+   design multi-hub-m2 §7.1, §15): `device` (it runs at the hub that holds the board; name the board fields with
+   `boards` when they are not `device`), `selector` (with `across`: `split`, `one`, `live` or `here`), `fleet`, `port`
+   or `hub`. An op that takes a `since` cursor runs at the hub the cursor is from (§17): add it to `SINCE_OPS` in
+   `peers/passing.ts`, and read the cursor only through `sinceSeqOf` (`events/index.ts`). An op with a path field says so in `files` (`out`: written where the op runs and pulled to the calling
+   hub; `in`: fetched from it). Add the op to the list of its target in `packages/protocol/test/protocol-targets.test.ts`.
+   An op reaches a hub through one point, `POST /api/v1/op/<name>` (`packages/hub/src/http.ts`), which asks
+   `peers/passing.ts` where it runs: do not call a handler past it for a client. Do not change an existing op's input
+   to add a feature: `REGISTRY_INPUTS_HASH` and the protocol tests' checkpoints pin them.
+
+9. **The registry is one across the hubs of a network** (design multi-hub-m2 §5, §16; `packages/hub/src/registry/sync.ts`).
+   A write to `devices` replicates by itself: nothing has to call anything, the scan finds it. A new column of
+   `devices` is this hub's own until it is added to one of the parts in `sync.ts` (and then to its wire row and its
+   tests); never add one that holds a secret or something about this machine (a port, a path). An address is only
+   ever allocated by the registrar (`registry/alloc.ts`): do not call `prepareIdentity` for a board without one
+   before `ensureAddress`. Do not move `REGISTRY_HASH` for a change that only replicates: the `registry` message has
+   its own version (`REGISTRY_WIRE`).
+
+10. **The bus carries the whole network, for those who ask** (design multi-hub-m2 §8, §17; `packages/hub/src/peers/events.ts`).
+   `hub.events.subscribe(fn)` gets this hub's own events, and is what any part that acts on this hub's sessions uses
+   (the router, bindings, OTA, a job). Only what shows a client the fleet subscribes with `subscribeFleet` and reads
+   with `relayed: true` (`/ws`, `/app`, the waits, `events_read`): it also gets what the other hubs relay, marked
+   `hub`. A new event type crosses when it has a `device`; one without a device, or one each hub makes for itself,
+   needs a line in `crosses` and in §17.1's table. Never put a secret or a path of this machine into an event: every
+   hub of the network and every `/ws` client reads it. Do not move `REGISTRY_HASH` for a change to the `event`
+   message or the stream channel: each has its own version in the hello (`EVENTS_WIRE`, `STREAMS_WIRE`).
 
 ## 2. Setup
 
@@ -132,7 +158,7 @@ node tools/dash-shoot.mjs --url "$(cat /tmp/hub.url)" --out <dir> /=hub /devices
 | `hardware/` | `boards/`, `drivers/`, `parts/`, `wiring/`; `bench/bench.example.yaml` |
 | `firmware/` | `apps/` (node, gateway, hwprobe), `components/fr_*`, `profiles/`, `partitions/`, `config/`, `test/host/` |
 | `packages/protocol` | ops registry, frames, generated types; `packages/codegen`: the YAML → C++/TS/vectors generator |
-| `packages/hub` | the daemon (serial, links, registry, jobs, OTA, bench modules: camera, audio, CSI, scale, power, fixture, app host) |
+| `packages/hub` | the daemon (serial, links, registry, jobs, OTA, bench modules: camera, audio, CSI, scale, power, fixture, app host; `src/peers`: the link between the hubs of one network, the ops, jobs, files and firmware it passes on, the registry it replicates, and the events and live streams it relays, design multi-hub-m2) |
 | `packages/cli` | `fr` and `fr mcp`; `packages/host`: doctor, IDF env, pytools; `packages/sdk`; `packages/dashboard` |
 | `packages/time` | the temporal core (vendored wasm and binding, `time.lock`), its readings and layouts: `fr time`, the `time_*` ops |
 | `tests/` | `e2e/` gate scenarios, `sim/` virtual fleet, `spikes/` |

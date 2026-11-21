@@ -5,7 +5,8 @@
 //   - the persistence of the directory (nvs:fr_dir) and the bindings (nvs:fr_bind): net::DirectoryStore and
 //     net::BindingStore over a Blob (one NVS key on target, a file or memory on the host), written on
 //     fr_worker so the core task never waits for flash;
-//   - M2-C1 (design m2-c1-hil D11): fr::core::link_info() and hub_session(), the hub link for services.
+//   - M2-C1 (design m2-c1-hil D11): fr::core::link_info() and hub_session(), the hub link for services;
+//   - fr.node hubs_set / hubs_get (design multi-hub-m1): the hub list between its wire form and fr_net's HubList.
 // It includes fr_net's Net, so only code that sees fr_net includes it: fr_core's sources, the host suite.
 #pragma once
 
@@ -26,6 +27,7 @@
 #include "fr/core/worker.hpp"
 #include "fr/hash.hpp"
 #include "fr/msg.hpp"
+#include "fr/net/hub_plan.hpp"
 #include "fr/net/net.hpp"
 #include "fr/net/stores.hpp"
 #include "fr/wire.hpp"
@@ -113,6 +115,38 @@ inline net::LinkInfo hub_link_info(net::LinkInfo li, const net::Net &net)
     li.hub_heard_at = net.hub_heard_at();
     li.hub_epoch = net.hub_epoch();
     return li;
+}
+
+// ---- fr.node hub list (design multi-hub-m1) ----
+
+/** fr.node.hubs_set's arguments as a HubList; false for a host or ip with a NUL in it (the rest is HubPlan's check). */
+inline bool hubs_from_args(const cap::NodeHubsSetArgs &args, net::HubList &out)
+{
+    out = {};
+    out.rev = args.rev;
+    for (const cap::NodeHub &h : args.hubs) {
+        if (out.count >= net::kHubsMax || h.host.size() > net::kHubHostMax || h.ip.size() > net::kHubIpMax ||
+            h.host.find('\0') != std::string_view::npos || h.ip.find('\0') != std::string_view::npos) {
+            return false;
+        }
+        std::memcpy(out.hubs[out.count].host, h.host.data(), h.host.size());
+        std::memcpy(out.hubs[out.count].ip, h.ip.data(), h.ip.size());
+        ++out.count;
+    }
+    return true;
+}
+
+/** fr.node.hubs_get's result over `list`, which must live until the reply is encoded (its strings are views). */
+inline cap::NodeHubsGetResult hubs_result(const net::HubList &list, uint8_t on, bool trial)
+{
+    cap::NodeHubsGetResult r;
+    for (size_t i = 0; i < list.count; ++i) {
+        r.hubs.push_back(cap::NodeHub{.host = list.hubs[i].host, .ip = list.hubs[i].ip});
+    }
+    r.rev = list.rev;
+    r.on = on;
+    r.trial = trial;
+    return r;
 }
 
 // ---- MSG (fr::msg) ----

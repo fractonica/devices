@@ -4,6 +4,8 @@
 // advert: an mDNS PTR query for `_fractonica._tcp`, the SRV (and TXT) of the instance it names, then the SRV
 // target's address and the SRV port. Every lookup goes through Resolver, which hub_link.cpp implements with
 // lwIP and espressif/mdns and the tests fake. Private to fr_net/src/esp.
+// With a hub list (design multi-hub-m1) each of its hubs has that chain's first three steps to itself
+// (resolve_entry), and the advert is the list's last resort (any_hub); which hub is tried is HubPlan's.
 #pragma once
 
 #include <array>
@@ -116,19 +118,7 @@ public:
 
     Resolved resolve(const char *hub_host, Resolver &r)
     {
-        const size_t len = hub_host != nullptr ? std::strlen(hub_host) : 0;
-        Resolved out{.ip = 0, .port = port_, .how = How::none};
-        if (len > 0 && (out.ip = parse_ipv4(hub_host)) != 0) {
-            out.how = How::literal;
-        } else if (is_local(hub_host, len)) {
-            char name[kNameMax];
-            copy_name(name, hub_host, len - kLocalSuffixLen);
-            if ((out.ip = r.mdns_a(name)) != 0) {
-                out.how = How::mdns;
-            }
-        } else if (len > 0 && (out.ip = r.dns(hub_host)) != 0) {
-            out.how = How::dns;
-        }
+        Resolved out = lookup(hub_host, r);
         if (out.ip != 0) {
             last_ip_ = out.ip;
             return out;
@@ -142,9 +132,64 @@ public:
         return advert(r);
     }
 
+    /**
+     * Hub `i` of a hub list (design multi-hub-m1, fr/net/hub_plan.hpp): its host, then the address that host last
+     * resolved to this boot, then its own fallback `ip` (network order, 0: none). Never the advert: with a list that
+     * lookup is a step of its own (any_hub), after every hub of the list had its turn.
+     */
+    Resolved resolve_entry(size_t i, const char *host, uint32_t ip, Resolver &r)
+    {
+        if (i >= kEntries) {
+            return {};
+        }
+        Resolved out = lookup(host, r);
+        if (out.ip != 0) {
+            entry_last_[i] = out.ip;
+            return out;
+        }
+        if (entry_last_[i] != 0) {
+            return {.ip = entry_last_[i], .port = port_, .how = How::last};
+        }
+        if (ip != 0) {
+            return {.ip = ip, .port = port_, .how = How::hub_ip};
+        }
+        return {};
+    }
+
+    /** The advert alone: whichever hub answers `_fractonica._tcp` (the last resort of a hub list's round). */
+    Resolved any_hub(Resolver &r) { return advert(r); }
+
+    /** A new hub list: the addresses the old one's hosts had are not the new one's. */
+    void forget_entries()
+    {
+        for (uint32_t &ip : entry_last_) {
+            ip = 0;
+        }
+    }
+
 private:
     static constexpr size_t kNameMax = 64;
     static constexpr size_t kLocalSuffixLen = 6;  // ".local"
+    static constexpr size_t kEntries = 4;         // fr::net::kHubsMax
+
+    /** A host by its own name: a literal, mDNS for `.local`, else DNS. ip 0: it does not resolve now. */
+    Resolved lookup(const char *host, Resolver &r)
+    {
+        const size_t len = host != nullptr ? std::strlen(host) : 0;
+        Resolved out{.ip = 0, .port = port_, .how = How::none};
+        if (len > 0 && (out.ip = parse_ipv4(host)) != 0) {
+            out.how = How::literal;
+        } else if (is_local(host, len)) {
+            char name[kNameMax];
+            copy_name(name, host, len - kLocalSuffixLen);
+            if ((out.ip = r.mdns_a(name)) != 0) {
+                out.how = How::mdns;
+            }
+        } else if (len > 0 && (out.ip = r.dns(host)) != 0) {
+            out.how = How::dns;
+        }
+        return out;
+    }
 
     static bool is_local(const char *s, size_t len)
     {
@@ -197,6 +242,7 @@ private:
     uint16_t port_ = 7421;
     uint32_t fallback_ip_ = 0;  // fr_ident hub_ip
     uint32_t last_ip_ = 0;      // hub_host's last address this boot
+    uint32_t entry_last_[kEntries] = {};  // ... and each hub list entry's
 };
 
 }  // namespace fr::net::esp::detail

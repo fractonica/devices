@@ -1,6 +1,9 @@
 // Bus events as fr-app/1 frames (design c6 §4.2, D7): a capability EVENT becomes `evt`, a STATE `state`
 // (told apart by the router's `part`, design c6 §3.3), device.online|suspect|offline `presence`, a node's
 // MSG `msg`. Each event is serialized once, to the bytes every socket that wants it is sent.
+// With several hubs (design multi-hub-m2 §8, §17) the bus also carries what the other hubs relay: such a frame says
+// `hub`. An app sees one fleet: a board's session ending at one hub while another hub holds it (the event says `at`)
+// is not the board going offline, so that presence frame is not sent.
 
 import type { EvtFrame, HubFrame, HubMsgFrame, PresenceFrame, StateFrame } from '@fractonica/sdk/wire';
 
@@ -44,18 +47,22 @@ export function appFrame(e: HubEvent): AppEventFrame | null {
         ...(e.epoch !== undefined ? { epoch: e.epoch } : {}),
         ...(e.replayed ? { replayed: true as const } : {}),
         fields,
+        ...(e.hub ? { hub: e.hub } : {}),
       };
       return { kind: 'evt', dev, match: e.type, frame };
     }
     // A named property's STATE fields are {<prop>: value}; an unnamed port's are its raw bytes.
     const value = member in fields ? fields[member] : fields;
-    return { kind: 'state', dev, match: e.type, frame: { t: 'state', dev, inst, prop: member, value, t_hub_us: Math.round(e.t_hub_us) }, key: `${dev}/${e.type}` };
+    return { kind: 'state', dev, match: e.type, frame: { t: 'state', dev, inst, prop: member, value, t_hub_us: Math.round(e.t_hub_us), ...(e.hub ? { hub: e.hub } : {}) }, key: `${dev}/${e.type}` };
   }
   const state = PRESENCE[e.type];
   if (state) {
     const f = e.fields ?? {};
+    if (state !== 'online' && typeof f.at === 'string') {
+      return null; // its session with one hub ended while hub `at` holds it: for the fleet it did not go away
+    }
     const reason = typeof f.reason === 'string' ? f.reason : typeof f.silent_ms === 'number' ? `silent ${f.silent_ms} ms` : undefined;
-    const frame: PresenceFrame = { t: 'presence', dev, state, ...(reason ? { reason } : {}), ...(typeof f.link === 'string' ? { link: f.link } : {}) };
+    const frame: PresenceFrame = { t: 'presence', dev, state, ...(reason ? { reason } : {}), ...(typeof f.link === 'string' ? { link: f.link } : {}), ...(e.hub ? { hub: e.hub } : {}) };
     return { kind: 'presence', dev, match: 'presence', frame };
   }
   if (e.type === 'msg') {
@@ -68,6 +75,7 @@ export function appFrame(e: HubEvent): AppEventFrame | null {
       dst: typeof f.dst === 'number' ? f.dst : 0,
       t_hub_us: Math.round(e.t_hub_us),
       cursor: e.cursor,
+      ...(e.hub ? { hub: e.hub } : {}),
     };
     return { kind: 'msg', dev, match: 'msg', frame };
   }

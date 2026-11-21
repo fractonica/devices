@@ -6,7 +6,7 @@
 import type { CallOptions, CapMeta, CmdResult, Sent } from '../types.ts';
 
 /** FNV-1a 32 of the canonical catalog JSON (the hub's CATALOG_HASH): what an app's hello says it was built against. */
-export const CATALOG_HASH = 0x616bf0f2;
+export const CATALOG_HASH = 0x2efa5e5e;
 
 // ---- fr.button ----
 
@@ -1509,6 +1509,26 @@ export interface NodeBindListResult {
   bindings: string;
 }
 
+/** fr.node.hubs_set arguments (all optional: the device applies the defaults). */
+export interface NodeHubsSetArgs {
+  /** in priority order, the first is the board's default hub; empty: no list, the board uses the hub it was provisioned with (<= 4 items) */
+  hubs?: readonly { host?: string; ip?: string }[];
+  /** above the rev the board holds (hubs_get), so a stale push never wins */
+  rev?: number;
+}
+
+/** fr.node.hubs_get RESULT fields. */
+export interface NodeHubsGetResult {
+  /** the list in force (a list on trial included); empty: none stored (<= 4 items) */
+  hubs: { host: string; ip: string }[];
+  /** its rev; 0 with no list */
+  rev: number;
+  /** the index in hubs of the hub the board's TCP session is with; 255: none of them (no TCP session, no list, or a hub found by its advert) */
+  on: number;
+  /** the list is on trial: no hub in it has WELCOMEd the board yet */
+  trial: boolean;
+}
+
 /** fr.node commands, as methods of an instance. */
 export interface NodeClient {
   /** Reliable: resolves on the RESULT ok, rejects with CommandError otherwise. */
@@ -1531,6 +1551,10 @@ export interface NodeClient {
   bindClear(args?: NodeBindClearArgs, opts?: CallOptions): Promise<CmdResult>;
   /** Returns the stored bindings, encoded (like describe). BULK: TCP or serial only. Reliable: resolves on the RESULT ok, rejects with CommandError otherwise. */
   bindList(opts?: CallOptions): Promise<CmdResult<NodeBindListResult>>;
+  /** Set the board's hub list (design multi-hub-m1; 1.1). Applied about 300 ms after the RESULT. A list that names the hub the board is on is kept at once; any other is on trial until one of its hubs WELCOMEs the board, and dropped for the list it had when none does within 60 s. EXPIRED for a rev at or below the one held (the same list and rev again is OK), INVALID_ARGS for a host or ip that is not one or a host named twice, BUSY while an earlier list waits to apply, UNSUPPORTED on a board without a hub IP link (a gateway, a radio-off build). Reliable: resolves on the RESULT ok, rejects with CommandError otherwise. */
+  hubsSet(args?: NodeHubsSetArgs, opts?: CallOptions): Promise<CmdResult>;
+  /** The board's hub list, its rev and the hub it is on now (design multi-hub-m1; 1.1). Reliable: resolves on the RESULT ok, rejects with CommandError otherwise. */
+  hubsGet(opts?: CallOptions): Promise<CmdResult<NodeHubsGetResult>>;
 }
 
 /** fr.node.boot event fields (normal). Sent once per boot right after the first WELCOME; exempt from the event-age rule. */
@@ -1727,7 +1751,7 @@ export const CAP_META: Readonly<Record<string, CapMeta>> = {
   'fr.storage': { commands: { info: { method: 'info', delivery: 'reliable' }, list: { method: 'list', delivery: 'reliable', args: true }, stat: { method: 'stat', delivery: 'reliable', args: true }, read: { method: 'read', delivery: 'reliable', args: true }, write: { method: 'write', delivery: 'reliable', args: true }, remove: { method: 'remove', delivery: 'reliable', args: true }, mkdir: { method: 'mkdir', delivery: 'reliable', args: true }, rename: { method: 'rename', delivery: 'reliable', args: true }, remount: { method: 'remount', delivery: 'reliable' } }, events: ['mounted', 'unmounted'], props: ['state', 'total_mb', 'free_mb', 'card_type', 'busy'] },
   'fr.clock': { commands: { read: { method: 'read', delivery: 'reliable' }, set: { method: 'set', delivery: 'reliable', args: true }, set_aging: { method: 'setAging', delivery: 'reliable', args: true }, inject: { method: 'inject', delivery: 'reliable', args: true, test: true } }, events: ['lost_power', 'set'], props: ['unix', 'valid', 'temp_c10', 'offset_ms'] },
   'fr.stepper': { commands: { move_to: { method: 'moveTo', delivery: 'reliable', args: true }, move_by: { method: 'moveBy', delivery: 'reliable', args: true }, jog: { method: 'jog', delivery: 'reliable', args: true }, stop: { method: 'stop', delivery: 'reliable' }, halt: { method: 'halt', delivery: 'reliable' }, hold: { method: 'hold', delivery: 'reliable' }, release: { method: 'release', delivery: 'reliable' }, zero: { method: 'zero', delivery: 'reliable', args: true }, configure: { method: 'configure', delivery: 'reliable', args: true }, reset_settings: { method: 'resetSettings', delivery: 'reliable' }, inject_fault: { method: 'injectFault', delivery: 'reliable', test: true } }, events: ['done', 'fault'], props: ['position', 'target', 'speed_hz', 'motion', 'position_known', 'step_mode', 'max_speed_hz', 'accel', 'start_hz', 'coil_ohm', 'run_ma', 'hold_pct', 'release_ms', 'supply_mv', 'invert', 'limits', 'limit_min', 'limit_max', 'run_duty_pct', 'steps_per_rev'] },
-  'fr.node': { commands: { identify: { method: 'identify', delivery: 'reliable', args: true }, describe: { method: 'describe', delivery: 'reliable' }, reboot: { method: 'reboot', delivery: 'reliable', args: true }, set_alias: { method: 'setAlias', delivery: 'reliable', args: true }, set_groups: { method: 'setGroups', delivery: 'reliable', args: true }, net_set: { method: 'netSet', delivery: 'reliable', args: true }, get_state: { method: 'getState', delivery: 'reliable' }, bind_set: { method: 'bindSet', delivery: 'reliable', args: true }, bind_clear: { method: 'bindClear', delivery: 'reliable', args: true }, bind_list: { method: 'bindList', delivery: 'reliable' } }, events: ['boot', 'binding_fired'], props: [] },
+  'fr.node': { commands: { identify: { method: 'identify', delivery: 'reliable', args: true }, describe: { method: 'describe', delivery: 'reliable' }, reboot: { method: 'reboot', delivery: 'reliable', args: true }, set_alias: { method: 'setAlias', delivery: 'reliable', args: true }, set_groups: { method: 'setGroups', delivery: 'reliable', args: true }, net_set: { method: 'netSet', delivery: 'reliable', args: true }, get_state: { method: 'getState', delivery: 'reliable' }, bind_set: { method: 'bindSet', delivery: 'reliable', args: true }, bind_clear: { method: 'bindClear', delivery: 'reliable', args: true }, bind_list: { method: 'bindList', delivery: 'reliable' }, hubs_set: { method: 'hubsSet', delivery: 'reliable', args: true }, hubs_get: { method: 'hubsGet', delivery: 'reliable' } }, events: ['boot', 'binding_fired'], props: [] },
   'fr.ota': { commands: {}, events: [], props: [] },
   'fr.diag': { commands: { exec: { method: 'exec', delivery: 'reliable', args: true } }, events: ['mark'], props: [] },
 };

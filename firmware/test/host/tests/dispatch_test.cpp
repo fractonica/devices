@@ -176,7 +176,28 @@ public:
     Status bind_set(const fr::cap::NodeBindSetArgs &) override { return std::unexpected(Err::unsupported); }
     Status bind_clear(const fr::cap::NodeBindClearArgs &) override { return std::unexpected(Err::unsupported); }
     std::expected<fr::cap::NodeBindListResult, Err> bind_list() override { return std::unexpected(Err::unsupported); }
+    Status hubs_set(const fr::cap::NodeHubsSetArgs &a) override
+    {
+        hubs.clear();
+        for (const fr::cap::NodeHub &h : a.hubs) {
+            hubs.push_back(std::string(h.host) + "/" + std::string(h.ip));
+        }
+        hubs_rev = a.rev;
+        return {};
+    }
+    std::expected<fr::cap::NodeHubsGetResult, Err> hubs_get() override
+    {
+        fr::cap::NodeHubsGetResult r;
+        r.hubs.push_back(fr::cap::NodeHub{.host = "lab-hub.local", .ip = "192.168.1.20"});
+        r.hubs.push_back(fr::cap::NodeHub{.host = "home-hub.local", .ip = ""});
+        r.rev = 7;
+        r.on = 1;
+        r.trial = false;
+        return r;
+    }
 
+    std::vector<std::string> hubs;
+    uint32_t hubs_rev = 0;
     uint16_t identify_ms = 0;
     bool reboot_bootloader = true;
     int reboots = 0;
@@ -717,4 +738,49 @@ TEST(diag_json_frees_what_it_allocates)
     }
     cJSON_InitHooks(nullptr);
     CHECK_EQ(g_live_json_allocs, 0);
+}
+
+TEST(dispatch_node_hub_list)
+{
+    // fr.node 1.1 (design multi-hub-m1): hubs_set carries an array of Hub {host, ip} and a rev; hubs_get answers
+    // the list, its rev, the index of the hub the board is on and whether the list is on trial.
+    FakeNode node;
+    CHECK_EQ(node.version().major, 1);
+    CHECK_EQ(node.version().minor, 1);
+    fr::cap::NodeHubsSetArgs args;
+    args.hubs.push_back(fr::cap::NodeHub{.host = "lab-hub.local", .ip = "192.168.1.20"});
+    args.hubs.push_back(fr::cap::NodeHub{.host = "home-hub.local", .ip = ""});
+    args.rev = 3;
+    uint8_t buf[fr::cap::NodeHubsSetArgs::kMaxSize];
+    fr::wire::Writer w(buf, sizeof(buf));
+    encode(args, w);
+    StaticReply<> reply;
+    REQUIRE(node.dispatch(fr::cap::Node::kCmdHubsSet, w.bytes(), reply).has_value());
+    REQUIRE_EQ(node.hubs.size(), 2u);
+    CHECK_EQ(node.hubs[0], "lab-hub.local/192.168.1.20");
+    CHECK_EQ(node.hubs[1], "home-hub.local/");
+    CHECK_EQ(node.hubs_rev, 3u);
+    // An empty list with a rev takes the list away.
+    REQUIRE(run(node, fr::cap::Node::kCmdHubsSet, "10 04").has_value());
+    CHECK(node.hubs.empty());
+    CHECK_EQ(node.hubs_rev, 4u);
+    // A fifth hub does not decode.
+    fr::cap::NodeHubsSetArgs four = args;
+    four.hubs.push_back(fr::cap::NodeHub{.host = "a.local", .ip = ""});
+    four.hubs.push_back(fr::cap::NodeHub{.host = "b.local", .ip = ""});
+    CHECK(four.hubs.full());
+    CHECK(!four.hubs.push_back(fr::cap::NodeHub{.host = "c.local", .ip = ""}));
+
+    StaticReply<> got;
+    REQUIRE(node.dispatch(fr::cap::Node::kCmdHubsGet, {}, got).has_value());
+    const auto r = fr::cap::decode_node_hubs_get_result(got.fields().bytes());
+    REQUIRE(r.has_value());
+    REQUIRE_EQ(r->hubs.size(), 2u);
+    CHECK_EQ(r->hubs[0].host, "lab-hub.local");
+    CHECK_EQ(r->hubs[0].ip, "192.168.1.20");
+    CHECK_EQ(r->hubs[1].host, "home-hub.local");
+    CHECK_EQ(r->hubs[1].ip, "");
+    CHECK_EQ(r->rev, 7u);
+    CHECK_EQ(r->on, 1);
+    CHECK(!r->trial);
 }

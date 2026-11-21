@@ -171,6 +171,8 @@ constexpr MemberInfo kNodeCommands[] = {
     {8, "bind_set"},
     {9, "bind_clear"},
     {10, "bind_list"},
+    {11, "hubs_set"},
+    {12, "hubs_get"},
 };
 constexpr MemberInfo kNodeEvents[] = {{1, "boot"}, {2, "binding_fired"}};
 constexpr MemberInfo kDiagCommands[] = {{1, "exec"}};
@@ -194,7 +196,7 @@ constexpr CapInfo kCaps[] = {
     {0x000F, "fr.storage", {1, 0}, kStorageCommands, kStorageEvents, kStorageProperties},
     {0x0010, "fr.clock", {1, 0}, kClockCommands, kClockEvents, kClockProperties},
     {0x0012, "fr.stepper", {1, 0}, kStepperCommands, kStepperEvents, kStepperProperties},
-    {0x00F0, "fr.node", {1, 0}, kNodeCommands, kNodeEvents, {}},
+    {0x00F0, "fr.node", {1, 1}, kNodeCommands, kNodeEvents, {}},
     {0x00F1, "fr.ota", {1, 0}, {}, {}, {}},
     {0x00F2, "fr.diag", {1, 0}, kDiagCommands, kDiagEvents, {}},
 };

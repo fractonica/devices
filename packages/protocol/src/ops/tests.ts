@@ -30,6 +30,7 @@ export const TestReportSchema = z.looseObject({
 export const TESTS_OPS = [
   op({
     name: 'test_run',
+    target: 'hub',
     kind: 'job',
     tier: 'mutate',
     summary:
@@ -51,6 +52,7 @@ export const TESTS_OPS = [
   }),
   op({
     name: 'test_report',
+    target: 'hub',
     kind: 'query',
     tier: 'read',
     summary: "A finished test job's report (test_run), by job id: the tier's pass/fail per gate or suite, with measured values and evidence. Example: fr test report j_0a1b2c3d4e5f.",

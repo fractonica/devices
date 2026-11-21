@@ -16,6 +16,7 @@ export type GeneratedFile = z.infer<typeof GeneratedFileSchema>;
 export const APPS_OPS = [
   op({
     name: 'client_generate',
+    target: 'hub',
     kind: 'query',
     tier: 'read',
     summary:

@@ -54,8 +54,13 @@ export interface Result<T = unknown> {
   ok: boolean;
   data?: T;
   error?: ToolError;
+  /**
+   * The cursor of the hub that ran the op: a wait `since` it is asked of the same hub (a cursor is one hub's own).
+   */
   cursor: string;
   warnings?: string[];
+  /** The name of the hub that ran the op, when that is not the hub that was asked (design multi-hub-m2 §7). */
+  at?: string;
 }
 
 const RETRYABLE: ReadonlySet<ErrorCode> = new Set<ErrorCode>([

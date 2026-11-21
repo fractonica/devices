@@ -18,10 +18,19 @@
 // Live-only events (`durable: false`): per-frame telemetry, such as a camera's frame counter, which changes with every
 // frame a stream takes. Subscribers (/ws, /app, a wait already subscribed) get them; no row is written, so they never
 // fill hub.db. A wait that reads the backlog does not find them.
+//
+// Relayed events (design multi-hub-m2 §8, §17): what another hub of the network published and sent over the hubs' link
+// (peers/events.ts hands them to relay()). An event is stored once, at the hub that published it; here it is live: it
+// takes this hub's own seq and cursor (one order for a client of this hub), carries `hub` (where it came from) and
+// `hub_cursor` (its cursor there), and goes only to the subscribers that asked for the fleet (`subscribe(fn, {relayed:
+// true})`: /ws, /app, the waits), never to the parts that act on this hub's own sessions (the router, bindings, OTA).
+// No row is written. The newest RELAYED_KEPT of them stay in memory for RELAYED_MAX_AGE_MS, so a read that asks for
+// them (`relayed: true`: events_read, a wait's backlog, a /ws or /app resume) finds what crossed since its cursor;
+// STATEs are thinned there as rows are (one per property per STATE_ROW_MS, and the newest).
 
 import { performance } from 'node:perf_hooks';
 
-import { formatCursor } from '@fractonica/protocol';
+import { formatCursor, FrError, parseCursor } from '@fractonica/protocol';
 
 import type { Events, HubContext, HubEvent, Lifecycle, Seq } from '../context.ts';
 import type { Db } from '../db.ts';
@@ -40,6 +49,8 @@ export interface EventQuery {
   /** Events of these devices are left out; events with no device stay (`all` without the fixture, design m2-c1-hil D6). */
   excludeDevices?: string[];
   limit: number;
+  /** Also the events other hubs relayed that are still kept in memory (never stored here). Default: this hub's own. */
+  relayed?: boolean;
 }
 
 interface Row {
@@ -60,6 +71,9 @@ const FLUSH_MS = 50;
 export const STATE_ROW_MS = 1000;
 /** Cursors whose mint time is kept (the newest distinct seqs handed out); older ones are dated by rows. */
 const MINTS_KEPT = 1024;
+/** Relayed events kept in memory for the reads that ask for them: the newest this many, none older than the age. */
+export const RELAYED_KEPT = 8192;
+export const RELAYED_MAX_AGE_MS = 10 * 60_000;
 
 export class EventStore implements Events, Lifecycle {
   readonly run: number;
@@ -67,7 +81,14 @@ export class EventStore implements Events, Lifecycle {
   #seq: Seq;
   #pending: Row[] = [];
   #timer: NodeJS.Timeout | null = null;
-  #listeners = new Set<(e: HubEvent) => void>();
+  /** Subscribers in the order they came; `true`: it also gets the events other hubs relayed. */
+  #listeners = new Map<(e: HubEvent) => void, boolean>();
+  /** Relayed events kept in memory, by seq, oldest first, with when each came (ms). */
+  #relayed = new Map<number, { e: HubEvent; at: number }>();
+  /** Relayed STATE windows by `<device>\0<type>`: when the window opened, and the seq of its pending event. */
+  #relayedStates = new Map<string, { at: number; pending: number | null }>();
+  /** Events other hubs relayed and this hub published live, since start. */
+  relayedIn = 0;
   /** seq -> when that cursor was first handed out (µs since the Unix epoch), oldest first. */
   #mints = new Map<number, number>();
   /** How long each batched write took (ms), in 1 s windows (design m2-c2 D16 events_flush_ms). */
@@ -112,7 +133,7 @@ export class EventStore implements Events, Lifecycle {
     } else {
       this.#queue(row);
     }
-    for (const fn of this.#listeners) {
+    for (const fn of this.#listeners.keys()) {
       try {
         fn(event);
       } catch (err) {
@@ -121,6 +142,73 @@ export class EventStore implements Events, Lifecycle {
       }
     }
     return event;
+  }
+
+  /**
+   * An event another hub published, live here (design multi-hub-m2 §8): this hub's own seq and cursor, `hub` naming
+   * where it came from, no row. Only the subscribers that asked for relayed events get it.
+   */
+  relay(e: Omit<HubEvent, 'cursor' | 'seq'> & { hub: string }): HubEvent {
+    const seq = this.#seq.next();
+    const event: HubEvent = { ...e, seq, cursor: formatCursor({ run: this.run, seq }) };
+    this.relayedIn++;
+    this.#keep(event);
+    for (const [fn, fleet] of this.#listeners) {
+      if (!fleet) {
+        continue;
+      }
+      try {
+        fn(event);
+      } catch (err) {
+        console.error(JSON.stringify({ event: 'event_subscriber_failed', message: (err as Error).message }));
+      }
+    }
+    return event;
+  }
+
+  /** Keeps a relayed event for the reads that ask for them; a STATE as the store thins rows (first of a window, and the newest). */
+  #keep(event: HubEvent): void {
+    const now = Date.now();
+    if (event.part === 'state') {
+      const key = `${event.device ?? ''}\0${event.type}`;
+      const w = this.#relayedStates.get(key);
+      if (w && now - w.at < STATE_ROW_MS) {
+        if (w.pending !== null) {
+          this.#relayed.delete(w.pending);
+        }
+        w.pending = event.seq;
+      } else {
+        this.#relayedStates.set(key, { at: now, pending: null });
+        if (this.#relayedStates.size > 4 * RELAYED_KEPT) {
+          this.#relayedStates.clear(); // only the thinning's memory: the next STATE of each opens a window again
+        }
+      }
+    }
+    this.#relayed.set(event.seq, { e: event, at: now });
+    for (const [seq, kept] of this.#relayed) {
+      if (this.#relayed.size <= RELAYED_KEPT && now - kept.at <= RELAYED_MAX_AGE_MS) {
+        break;
+      }
+      this.#relayed.delete(seq);
+    }
+  }
+
+  /** The kept relayed events that match `q`, oldest first. */
+  #relayedMatching(q: EventQuery): HubEvent[] {
+    const out: HubEvent[] = [];
+    const oldest = Date.now() - RELAYED_MAX_AGE_MS;
+    for (const { e, at } of this.#relayed.values()) {
+      if (
+        at >= oldest &&
+        (q.afterSeq === undefined || e.seq > q.afterSeq) &&
+        (!q.devices || (e.device !== undefined && q.devices.includes(e.device))) &&
+        (!q.excludeDevices?.length || e.device === undefined || !q.excludeDevices.includes(e.device)) &&
+        (!q.types?.length || matchTypes(q.types, e.type))
+      ) {
+        out.push(e);
+      }
+    }
+    return out;
   }
 
   #queue(row: Row): void {
@@ -159,8 +247,12 @@ export class EventStore implements Events, Lifecycle {
     this.#stateWindows.set(key, w);
   }
 
-  subscribe(fn: (e: HubEvent) => void): () => void {
-    this.#listeners.add(fn);
+  /**
+   * `fn` gets every event this hub publishes, in the publish tick; with `relayed` also the events other hubs of the
+   * network relayed (each marked `hub`): what a client of this hub sees as one fleet.
+   */
+  subscribe(fn: (e: HubEvent) => void, opts: { relayed?: boolean } = {}): () => void {
+    this.#listeners.set(fn, opts.relayed === true);
     return () => this.#listeners.delete(fn);
   }
 
@@ -237,11 +329,12 @@ export class EventStore implements Events, Lifecycle {
   #select(q: EventQuery, order: 'ASC' | 'DESC'): HubEvent[] {
     const rows = this.#selectRows(q, order);
     const extra = this.#pendingStates(q);
-    if (!extra.length) {
+    const relayed = q.relayed ? this.#relayedMatching(q) : [];
+    if (!extra.length && !relayed.length) {
       return rows.map(toEvent);
     }
-    const all = [...rows, ...extra].sort((a, b) => (order === 'ASC' ? a.seq - b.seq : b.seq - a.seq));
-    return all.slice(0, q.limit).map(toEvent);
+    const all = [...rows.map(toEvent), ...extra.map(toEvent), ...relayed].sort((a, b) => (order === 'ASC' ? a.seq - b.seq : b.seq - a.seq));
+    return all.slice(0, q.limit);
   }
 
   #selectRows(q: EventQuery, order: 'ASC' | 'DESC'): Row[] {
@@ -293,6 +386,14 @@ export function createEvents(db: Db, seq: Seq, run: number): EventStore {
   return new EventStore(db, seq, run);
 }
 
+/**
+ * Subscribes `fn` to the fleet: this hub's events and those other hubs relayed (an Events that knows none of that,
+ * a test's, gives its own).
+ */
+export function subscribeFleet(events: Events, fn: (e: HubEvent) => void): () => void {
+  return (events.subscribe as (fn: (e: HubEvent) => void, opts?: { relayed?: boolean }) => () => void).call(events, fn, { relayed: true });
+}
+
 /** The newest events through any Events (tail reads need the store; another implementation pages forward). */
 export function tailEvents(events: Events, q: EventQuery): HubEvent[] {
   if (events instanceof EventStore) {
@@ -337,4 +438,30 @@ export function cursorTimeUs(db: Db, seq: number): number {
     )
     .get(seq, seq) as { ts: number | null };
   return row.ts ?? 0;
+}
+
+/**
+ * The seq of a `since` cursor, for a read of this hub's stores (spec 08 §8.7; design multi-hub-m2 §17). A cursor is one
+ * hub's own: one of an earlier run of this hub is HUB_RESTARTED with a cursor to resume from; one that another hub of
+ * the network gave (its run carries that hub's slot) is refused naming that hub, and never read as a position here.
+ */
+export function sinceSeqOf(hub: Pick<HubContext, 'logs' | 'events'> & Partial<Pick<HubContext, 'peers'>>, since: string | undefined): number | undefined {
+  if (!since) {
+    return undefined;
+  }
+  const c = parseCursor(since);
+  if (!c) {
+    throw new FrError('INVALID_ARGS', `bad cursor ${since}; expected c:<run>.<seq>`);
+  }
+  if (c.run !== hub.logs.run) {
+    const other = hub.peers?.hubOfRun(c.run);
+    if (other && !other.self) {
+      throw new FrError('INVALID_ARGS', `cursor ${since} is hub ${other.name}'s, not this hub's: a cursor is one hub's own, and this one says nothing about what this hub stored`, {
+        hint: `read it where it came from (fr --at ${other.name} …), or take a cursor of this hub (the cursor of any answer of its own, or fr hub status)`,
+        details: { cursor: since, cursor_hub: other.name, resume_cursor: mintCursor(hub) },
+      });
+    }
+    throw new FrError('HUB_RESTARTED', `cursor ${since} is from an earlier hub run`, { details: { resume_cursor: mintCursor(hub) } });
+  }
+  return c.seq;
 }

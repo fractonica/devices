@@ -12,7 +12,7 @@ export const JOB_KINDS = ['build', 'flash', 'reset', 'provision', 'ota', 'deploy
  */
 export const JOB_ORIGINS = ['cli', 'mcp', 'dashboard', 'app'] as const;
 export type JobOrigin = (typeof JOB_ORIGINS)[number];
-export { CLIENT_HEADER } from './constants.ts';
+export { AT_HEADER, CLIENT_HEADER } from './constants.ts';
 
 export const JobSchema = z.object({
   job_id: z.string(),
@@ -29,6 +29,8 @@ export const JobSchema = z.object({
   ended_at: z.string().optional(),
   result: z.unknown().optional(),
   error: z.unknown().optional(),
+  /** The name of the hub the job runs on, when that is not the hub that answers (design multi-hub-m2 §7.3). */
+  at: z.string().optional(),
 });
 export type Job = z.infer<typeof JobSchema>;
 
@@ -102,6 +104,10 @@ export type Presence = (typeof PRESENCES)[number];
 export const DEVICE_ROLES = ['node', 'gateway', 'fixture'] as const;
 export type DeviceRole = (typeof DEVICE_ROLES)[number];
 
+/** One hub of a board's hub list (design multi-hub-m1): its host name and a dotted IPv4 to fall back to. */
+export const DeviceHubSchema = z.looseObject({ host: z.string(), ip: z.string().nullable() });
+export type DeviceHub = z.infer<typeof DeviceHubSchema>;
+
 /** A registry row (spec 08 §8.8 `devices`; the hub's context.ts Device). */
 export const DeviceSchema = z.looseObject({
   device_id: z.string(),
@@ -119,6 +125,11 @@ export const DeviceSchema = z.looseObject({
   last_seen: z.string().nullable(),
   last_epoch: z.number().int().nullable(),
   created_at: z.string(),
+  /**
+   * The hub list the registry holds for it (device_hubs_set; design multi-hub-m1), in priority order with its rev;
+   * null or absent: none, the board uses the hub it was provisioned with.
+   */
+  hubs: z.looseObject({ rev: z.number().int(), hubs: z.array(DeviceHubSchema), set_at: z.string() }).nullable().optional(),
 });
 
 /** A registry row as device_list and device_get return it: plus presence and, when attached, its USB port. */
@@ -126,6 +137,12 @@ export const DeviceViewSchema = DeviceSchema.extend({
   presence: z.enum(PRESENCES),
   port: z.string().optional(),
   port_state: z.enum(PORT_STATES).optional(),
+  /**
+   * The name of the hub that holds the board's session (design multi-hub-m2 §6): this hub's own name when it is here,
+   * a peer's when that hub reports it, null when no hub this hub can see holds it. `presence` is still this hub's own:
+   * `online` means this hub can command it now. Absent from a hub older than the hubs' link.
+   */
+  at: z.string().nullable().optional(),
 });
 export type DeviceView = z.infer<typeof DeviceViewSchema>;
 
@@ -146,6 +163,8 @@ export const ProvisionResultSchema = z.looseObject({
   wifi: z.enum(PROVISION_WIFI),
   /** How a joined device showed it: its HELLO over TCP, or a gateway's GW_STATUS naming the AP (it opens no TCP). */
   via: z.enum(['tcp', 'gateway_status']).optional(),
+  /** With `for_hub`: the other hub's API the board was provisioned for; `hub_host` is then that hub's. */
+  for_hub: z.string().optional(),
   duration_ms: z.number().optional(),
   warnings: z.array(z.string()).optional(),
 });

@@ -2,7 +2,7 @@
 // read-only `fr_ident` NVS partition. Without that partition the device is UNASSIGNED (addr 0xFFFE).
 // Also the node's other persistent link settings, so every NVS layout lives here: the network part of
 // fr_ident (fr_net namespace), the RW overrides in the default `nvs` partition (fr_ovr alias, fr_net2
-// pushed Wi-Fi, fr_link pinned AP) and the boot epoch (fr_boot).
+// pushed Wi-Fi, fr_hubs pushed hub list, fr_link pinned AP) and the boot epoch (fr_boot).
 #pragma once
 
 #include <stdbool.h>
@@ -19,6 +19,8 @@ extern "C" {
 #define FR_ID_SSID_MAX 32  // 802.11 SSID
 #define FR_ID_PASS_MAX 64  // WPA passphrase (8-63) or 64 hex digits
 #define FR_ID_HOST_MAX 63
+#define FR_ID_HUBS_MAX 4     // fr.node.hubs_set (design multi-hub-m1)
+#define FR_ID_HUB_IP_MAX 15  // a dotted IPv4
 
 typedef enum {
     FR_ID_UNASSIGNED = 0,
@@ -69,6 +71,26 @@ typedef struct {
     bool confirmed;
 } fr_net_override_t;
 
+/** One hub of the list: its host name and a dotted IPv4 fallback (empty: none). NUL-terminated. */
+typedef struct {
+    char host[FR_ID_HOST_MAX + 1];
+    char ip[FR_ID_HUB_IP_MAX + 1];
+} fr_hub_t;
+
+/**
+ * RW `nvs:fr_hubs`: the hub list pushed by fr.node.hubs_set (06 §6.3, design multi-hub-m1), in priority order. It
+ * is written once a hub of the list has WELCOMEd the board, never while the list is on trial, so a reboot during a
+ * trial returns to the list before it. count 0 is a stored "no list": its rev still stands.
+ */
+typedef struct {
+    uint8_t count;
+    fr_hub_t hubs[FR_ID_HUBS_MAX];
+    /** Only grows: a push with a rev at or below it is refused. */
+    uint32_t rev;
+    /** fr_net_config_t.prov_ts when it was pushed; another prov_ts (a reprovision) supersedes the list. */
+    uint32_t base_prov_ts;
+} fr_hub_list_t;
+
 /** RW `nvs:fr_link`: the AP of the last association (05 §5.4), for the pinned channel-C reconnect. */
 typedef struct {
     uint8_t channel;
@@ -115,6 +137,11 @@ esp_err_t fr_id_load_net(fr_net_config_t *out);
 esp_err_t fr_id_load_net_override(fr_net_override_t *out);
 esp_err_t fr_id_save_net_override(const fr_net_override_t *o);
 esp_err_t fr_id_clear_net_override(void);
+
+/** `nvs:fr_hubs`; ESP_ERR_NOT_FOUND when there is none (or it is unreadable: a list is whole or absent). */
+esp_err_t fr_id_load_hubs(fr_hub_list_t *out);
+esp_err_t fr_id_save_hubs(const fr_hub_list_t *list);
+esp_err_t fr_id_clear_hubs(void);
 
 /** `nvs:fr_link`; ESP_ERR_NOT_FOUND when nothing is pinned yet. */
 esp_err_t fr_id_load_link(fr_link_pin_t *out);

@@ -8,11 +8,11 @@ import { join } from 'node:path';
 
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 
-import { FrError } from '@fractonica/protocol';
+import { FrError, parseCursor, runSlot, slotRun } from '@fractonica/protocol';
 
 import type { HubContext, HubEvent, Presence, Router } from '../src/context.ts';
 import { type Db, openDb } from '../src/db.ts';
-import { createEvents, cursorTimeUs, EventStore, matchType, matchWhere, mintCursor, mintTimeUs, parseTypes, tailEvents } from '../src/events/index.ts';
+import { createEvents, cursorTimeUs, EventStore, matchType, matchWhere, mintCursor, mintTimeUs, parseTypes, RELAYED_KEPT, RELAYED_MAX_AGE_MS, sinceSeqOf, STATE_ROW_MS, tailEvents } from '../src/events/index.ts';
 import { sqliteGlob } from '../src/events/match.ts';
 import { buildServer } from '../src/http.ts';
 import { LogStore } from '../src/logstore.ts';
@@ -497,5 +497,87 @@ describe('log selectors from the registry', () => {
     logs.append(A, '/dev/cu.usbmodem1', 'I (2) app: ready'); // another device
     logs.append(B, '/dev/cu.usbmodem2', 'I (2) app: ready');
     expect((await wait).matches.map((m) => m.device)).toEqual([B]);
+  });
+});
+
+describe('relayed events (design multi-hub-m2 §8, §17)', () => {
+  const store = () => {
+    const db = freshDb();
+    const seq = new CursorSeq(db);
+    const events = new EventStore(db, seq, 3);
+    cleanups.push(() => events.stop());
+    return { db, events };
+  };
+  const rows = (db: Db) => (db.prepare('SELECT COUNT(*) AS n FROM events').get() as { n: number }).n;
+
+  it("an event another hub sent takes this hub's seq and cursor, keeps its origin, and is no row", () => {
+    const { db, events } = store();
+    const own: HubEvent[] = [];
+    const fleet: HubEvent[] = [];
+    events.subscribe((e) => own.push(e));
+    events.subscribe((e) => fleet.push(e), { relayed: true });
+    const first = events.publish({ type: 'boot.down', device: A, t_hub_us: nowUs() });
+    const relayed = events.relay({ type: 'boot.down', device: B, t_hub_us: nowUs(), hub: 'hub-b', hub_cursor: 'c:1000000002.77' });
+    const last = events.publish({ type: 'boot.up', device: A, t_hub_us: nowUs() });
+    // One order for a client of this hub.
+    expect([first.seq, relayed.seq, last.seq]).toEqual([first.seq, first.seq + 1, first.seq + 2]);
+    expect(relayed).toMatchObject({ cursor: `c:3.${relayed.seq}`, hub: 'hub-b', hub_cursor: 'c:1000000002.77' });
+    // The parts that act on this hub's own sessions never see it; the fleet's subscribers do, in order.
+    expect(own.map((e) => e.seq)).toEqual([first.seq, last.seq]);
+    expect(fleet.map((e) => e.seq)).toEqual([first.seq, relayed.seq, last.seq]);
+    // Not stored: a read of this hub's own events does not have it; one that asks for relayed ones does, in seq order.
+    events.flush();
+    expect(rows(db)).toBe(2);
+    expect(events.query({ limit: 10 }).map((e) => e.seq)).toEqual([first.seq, last.seq]);
+    expect(events.query({ limit: 10, relayed: true }).map((e) => [e.seq, e.hub])).toEqual([[first.seq, undefined], [relayed.seq, 'hub-b'], [last.seq, undefined]]);
+    expect(events.tail({ limit: 2, relayed: true }).map((e) => e.seq)).toEqual([relayed.seq, last.seq]);
+    expect(events.query({ limit: 10, relayed: true, afterSeq: relayed.seq }).map((e) => e.seq)).toEqual([last.seq]);
+    expect(events.query({ limit: 10, relayed: true, devices: [B] }).map((e) => e.seq)).toEqual([relayed.seq]);
+    expect(events.query({ limit: 10, relayed: true, excludeDevices: [B] }).map((e) => e.seq)).toEqual([first.seq, last.seq]);
+    expect(events.query({ limit: 10, relayed: true, types: ['boot.up'] }).map((e) => e.seq)).toEqual([last.seq]);
+    expect(events.relayedIn).toBe(1);
+  });
+
+  it('keeps the newest relayed events only, thins their STATEs as rows are thinned, and forgets them after ten minutes', () => {
+    vi.useFakeTimers();
+    try {
+      const { events } = store();
+      // A streaming STATE: the first of a window and the newest are kept, never the ones between.
+      for (let i = 0; i < 50; i++) {
+        events.relay({ type: 'knob.value', device: B, t_hub_us: nowUs(), part: 'state', member: 'value', fields: { value: i }, hub: 'hub-b' });
+      }
+      expect(events.query({ limit: 100, relayed: true }).map((e) => e.fields?.value)).toEqual([0, 49]);
+      vi.advanceTimersByTime(STATE_ROW_MS + 1);
+      events.relay({ type: 'knob.value', device: B, t_hub_us: nowUs(), part: 'state', member: 'value', fields: { value: 50 }, hub: 'hub-b' });
+      expect(events.query({ limit: 100, relayed: true }).map((e) => e.fields?.value)).toEqual([0, 49, 50]);
+      // At most RELAYED_KEPT, the oldest going first.
+      for (let i = 0; i < RELAYED_KEPT + 10; i++) {
+        events.relay({ type: 'boot.down', device: B, t_hub_us: nowUs(), fields: { i }, hub: 'hub-b' });
+      }
+      const kept = events.query({ limit: 20_000, relayed: true });
+      expect(kept).toHaveLength(RELAYED_KEPT);
+      expect(kept[0].fields).toEqual({ i: 10 });
+      expect(events.tail({ limit: 1, relayed: true })[0].fields).toEqual({ i: RELAYED_KEPT + 9 });
+      // Ten minutes later a read finds none of them: they are at the hub that stored them.
+      vi.advanceTimersByTime(RELAYED_MAX_AGE_MS + 1);
+      expect(events.query({ limit: 20_000, relayed: true })).toEqual([]);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("a cursor of another hub is refused by name, one of an earlier run of this hub is HUB_RESTARTED", () => {
+    const h = hubWith({ run: slotRun(1, 4) });
+    const head = mintCursor(h.hub);
+    expect(sinceSeqOf(h.hub, head)).toBe(parseCursor(head)!.seq);
+    expect(sinceSeqOf(h.hub, undefined)).toBeUndefined();
+    const peers = { hubOfRun: (run: number) => (run === slotRun(1, 4) ? { self: true, name: 'hub-b' } : runSlot(run) === 0 ? { self: false, name: 'hub-a' } : null) };
+    const hub = { ...h.hub, peers } as unknown as HubContext;
+    const theirs = `c:${slotRun(0, 9)}.120`;
+    expect(() => sinceSeqOf(hub, theirs)).toThrow(expect.objectContaining({ code: 'INVALID_ARGS', details: expect.objectContaining({ cursor_hub: 'hub-a' }) }));
+    expect(() => sinceSeqOf(hub, `c:${slotRun(1, 3)}.120`)).toThrow(expect.objectContaining({ code: 'HUB_RESTARTED' }));
+    // A hub that is alone (no peers part) knows no other hub: any other run is an earlier one of its own.
+    expect(() => sinceSeqOf(h.hub, theirs)).toThrow(expect.objectContaining({ code: 'HUB_RESTARTED' }));
+    expect(() => sinceSeqOf(h.hub, 'nonsense')).toThrow(expect.objectContaining({ code: 'INVALID_ARGS' }));
   });
 });

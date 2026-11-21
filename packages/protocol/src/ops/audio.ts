@@ -110,6 +110,8 @@ export type AudioMonitor = z.infer<typeof AudioMonitorSchema>;
 export const AUDIO_OPS = [
   op({
     name: 'audio_record',
+    target: 'device',
+    files: { out: ['out'] },
     kind: 'job',
     tier: 'mutate',
     summary:
@@ -127,6 +129,8 @@ export const AUDIO_OPS = [
   }),
   op({
     name: 'audio_play',
+    target: 'device',
+    files: { in: ['file'] },
     kind: 'job',
     tier: 'mutate',
     summary:
@@ -150,6 +154,7 @@ export const AUDIO_OPS = [
   }),
   op({
     name: 'audio_level',
+    target: 'device',
     kind: 'query',
     tier: 'read',
     summary:
@@ -164,6 +169,7 @@ export const AUDIO_OPS = [
   }),
   op({
     name: 'audio_monitor',
+    target: 'device',
     kind: 'job',
     tier: 'mutate',
     summary:

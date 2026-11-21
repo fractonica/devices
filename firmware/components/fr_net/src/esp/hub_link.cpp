@@ -5,6 +5,13 @@
 // lives for the whole run, so only one task ever writes to each socket. The address chain, with the hub's
 // `_fractonica._tcp` advert as its last step (design c6 D26), is hub_resolve.hpp's.
 //
+// Design multi-hub-m1: with a hub list (fr.node.hubs_set, nvs:fr_hubs) the task also chooses the hub. HubPlan
+// (fr/net/hub_plan.hpp) says which hub of the list to try, when to give one up, when to probe a hub above the
+// current one and when a pushed list's trial is over; this file resolves, connects and probes as it says. What
+// addresses "the hub" (TCP, UDP, and through status() the OTA download and the HTTP streams) reads hub_ip_ and
+// hub_port_, which only ever name the hub of the current connection attempt: a probe has its own socket and
+// address. With no list nothing here differs from before: one hub, the old chain, no WELCOME timeout, no probes.
+//
 // M2-C4 (design m2-c4-gateway D8): a gateway (CONFIG_FR_ROLE 1) never resolves the hub nor opens TCP or UDP (its hub
 // link is USB), while its STA joins as any node's does. Spike S2's `air txpower` and `wifi proto` hooks (D19) end here.
 #include <fcntl.h>
@@ -27,8 +34,10 @@
 #include "esp_vfs_eventfd.h"
 #include "esp_wifi.h"
 #include "fr/net/esp.hpp"
+#include "fr/net/hub_plan.hpp"
 #include "fr/net/limits.hpp"
 #include "fr/net/tx_fifo.hpp"
+#include "fr/wire.hpp"
 #include "freertos/FreeRTOS.h"
 #include "freertos/queue.h"
 #include "freertos/task.h"
@@ -66,6 +75,10 @@ constexpr TimeUs kStableUs = 10'000'000;  // a connection that lasted this long 
 constexpr TimeUs kConnectTimeoutUs = 3'000'000;
 constexpr TimeUs kIdleWaitUs = 1'000'000;  // longest select() wait, so deadlines are never far off
 constexpr uint32_t kMdnsTimeoutMs = 1000;
+// A failback probe's lookup (design multi-hub-m1): the task is in it instead of in select(), so the session's frames
+// wait behind it; a hub that is back answers within tens of ms.
+constexpr uint32_t kProbeMdnsTimeoutMs = 300;
+constexpr TimeUs kListApplyDelayUs = 300'000;  // hubs_set: let its RESULT leave first (as net_set)
 // The hub's advert (05 §5.12.5 step 4, 08 §8.10): SRV port 7421, TXT http=7422 api=7420.
 constexpr const char *kAdvertService = "_fractonica";
 constexpr const char *kAdvertProto = "_tcp";
@@ -92,8 +105,11 @@ enum class Close : uint8_t {
     bad_frame,  // a length of 0 or above the bulk MTU from the hub
     session,    // Net lost the session (Link::drop) and asked for a fresh connection
     wifi,       // Wi-Fi association or address lost
+    // Design multi-hub-m1, with a hub list only; logged, not in a diag counter of their own (closes_ counts them).
+    no_welcome,  // connected, but no WELCOME within HubTiming::welcome_wait_us: this hub does not take the board
+    hubs,        // the board goes to another hub: a hub above this one answers again, or the list changed
 };
-constexpr size_t kCloseKinds = static_cast<size_t>(Close::wifi) + 1;
+constexpr size_t kCloseKinds = static_cast<size_t>(Close::hubs) + 1;
 
 const char *drop_text(DropReason why)
 {
@@ -112,10 +128,13 @@ const char *drop_text(DropReason why)
 class EspResolver final : public detail::Resolver
 {
 public:
+    /** How long an mDNS A query waits (a probe's is shorter). */
+    uint32_t timeout_ms = kMdnsTimeoutMs;
+
     uint32_t mdns_a(const char *name) override
     {
         esp_ip4_addr_t a{};
-        esp_err_t err = mdns_query_a(name, kMdnsTimeoutMs, &a);
+        esp_err_t err = mdns_query_a(name, timeout_ms, &a);
         if (err != ESP_OK || a.addr == 0) {
             ESP_LOGD(TAG, "hub: mDNS %s.local: %s", name, esp_err_to_name(err));
             return 0;
@@ -190,12 +209,7 @@ private:
 class Hub
 {
 public:
-    void configure(const Settings &s)
-    {
-        default_port_ = s.hub_port;
-        hub_port_.store(s.hub_port, std::memory_order_relaxed);
-        address_.configure(s.hub_port, detail::parse_ipv4(s.hub_ip));
-    }
+    void configure(const Settings &s);
 
     bool open_udp()
     {
@@ -235,6 +249,13 @@ public:
 
     void fill(Status &s) const;
 
+    // Design multi-hub-m1. Core task unless noted.
+    fr::Status request_hubs(const HubList &list);
+    HubsNow hubs_now() const;
+    /** Any task. */
+    void set_busy(bool on) { busy_.store(on, std::memory_order_relaxed); }
+    uint32_t far_end() const { return far_.load(std::memory_order_acquire); }
+
 private:
     enum class Phase : uint8_t { idle, waiting, connecting, connected };
 
@@ -258,6 +279,19 @@ private:
     void flush(TimeUs now);
     void set_tcp_up(bool v);
     void set_udp_up(bool v);
+    // Design multi-hub-m1 (fr_net task).
+    /** The hub of the list the plan names, for a log line. */
+    const char *hub_name(uint8_t i) const;
+    /** A WELCOME on the current connection: the session is with this hub; a list on trial is kept. */
+    void on_welcome(TimeUs now);
+    /** A pushed list whose time has come: kept at once when it names the hub of the session, else tried. */
+    void take_list(TimeUs now, const WifiSta &wifi);
+    void revert_list(TimeUs now);
+    void store_list();
+    /** What hubs_get reads: the list, the session's hub and the trial. */
+    void publish();
+    void probe_poll(TimeUs now);
+    void probe_done(TimeUs now, bool ok);
 
     uint16_t default_port_ = 7421;  // CONFIG_FR_HUB_PORT
     detail::HubAddress address_;     // the chain: hub_host, its last address, hub_ip, the advert
@@ -296,6 +330,26 @@ private:
     std::atomic<uint32_t> tx_dropped_{0};
     std::atomic<uint32_t> rx_bad_{0};
     std::atomic<uint32_t> udp_fail_{0};
+
+    // Design multi-hub-m1 (fr_net task unless noted).
+    HubPlan plan_;
+    HubList list_{};  // the list in force, a list on trial included; count 0: none, the provisioned hub
+    HubList prev_{};  // what a failed trial returns to
+    uint32_t prov_ts_ = 0;        // fr_ident's, stored with a list (a later provisioning supersedes it)
+    bool conn_session_ = false;   // the current connection got a WELCOME
+    int probe_fd_ = -1;           // a failback probe's connect, -1: none out
+    TimeUs probe_deadline_ = 0;
+    uint32_t far_ip_ = 0;         // where the last connection went ...
+    uint16_t far_port_ = 0;
+    std::atomic<uint32_t> far_{0};     // ... counted up when the next one goes elsewhere (Link::far_end)
+    std::atomic<bool> busy_{false};    // an OTA runs over this hub: no failback
+    fr_hub_list_t stored_{};           // scratch for nvs:fr_hubs, off the task's stack
+    // The handover from the core task (hubs_set) and what hubs_get reads, under list_mux_.
+    mutable portMUX_TYPE list_mux_ = portMUX_INITIALIZER_UNLOCKED;
+    HubList next_list_{};
+    bool next_list_set_ = false;
+    TimeUs next_list_at_ = 0;
+    HubsNow pub_{};
 };
 
 WifiSta s_wifi;
@@ -308,6 +362,256 @@ std::atomic<uint32_t> s_events_lost{0};
 int8_t s_profile_qdbm = 0;  // the TX power in force once start() applied the board cap (`air txpower profile`)
 
 // ---- Hub ----
+
+void Hub::configure(const Settings &s)
+{
+    default_port_ = s.hub_port;
+    hub_port_.store(s.hub_port, std::memory_order_relaxed);
+    address_.configure(s.hub_port, detail::parse_ipv4(s.hub_ip));
+    prov_ts_ = s.prov_ts;
+    if (kHubIp && fr_id_load_hubs(&stored_) == ESP_OK) {
+        if (hub_list_superseded(stored_.base_prov_ts, prov_ts_)) {
+            // fr_ident was written again since (a reprovision): the hub it names wins (as nvs:fr_net2).
+            ESP_LOGI(TAG, "hub: dropping a hub list from an earlier provisioning");
+            fr_id_clear_hubs();
+        } else {
+            list_.rev = stored_.rev;
+            list_.count = stored_.count;
+            for (size_t i = 0; i < stored_.count; ++i) {
+                std::snprintf(list_.hubs[i].host, sizeof(list_.hubs[i].host), "%s", stored_.hubs[i].host);
+                std::snprintf(list_.hubs[i].ip, sizeof(list_.hubs[i].ip), "%s", stored_.hubs[i].ip);
+            }
+            if (list_.count != 0) {
+                ESP_LOGI(TAG, "hub: list rev %" PRIu32 ": %u hub(s), first %s", list_.rev, static_cast<unsigned>(list_.count),
+                         list_.hubs[0].host);
+            }
+        }
+    }
+    prev_ = list_;
+    plan_.reset(list_.count);
+    publish();
+}
+
+const char *Hub::hub_name(uint8_t i) const
+{
+    if (i == HubPlan::kAdvert) {
+        return "any hub that advertises itself";
+    }
+    return i < list_.count ? list_.hubs[i].host : "(the provisioned hub)";
+}
+
+void Hub::publish()
+{
+    const uint8_t on = plan_.on();
+    portENTER_CRITICAL(&list_mux_);
+    pub_.list = list_;
+    pub_.on = conn_session_ && on < list_.count ? on : 0xFF;
+    pub_.trial = plan_.trial();
+    portEXIT_CRITICAL(&list_mux_);
+}
+
+HubsNow Hub::hubs_now() const
+{
+    portENTER_CRITICAL(&list_mux_);
+    HubsNow now = pub_;
+    portEXIT_CRITICAL(&list_mux_);
+    return now;
+}
+
+fr::Status Hub::request_hubs(const HubList &list)
+{
+    if constexpr (!kHubIp) {
+        return std::unexpected(Err::unsupported);  // a gateway's hub link is USB: no hub to choose
+    }
+    fr::Status st{};
+    portENTER_CRITICAL(&list_mux_);
+    switch (hub_push_check(pub_.list, list)) {
+    case HubPush::invalid:
+        st = std::unexpected(Err::invalid_args);
+        break;
+    case HubPush::stale:
+        st = std::unexpected(Err::expired);
+        break;
+    case HubPush::same:
+        break;
+    case HubPush::apply:
+        if (next_list_set_) {
+            st = std::unexpected(Err::busy);
+            break;
+        }
+        next_list_ = list;
+        next_list_set_ = true;
+        next_list_at_ = now_us() + kListApplyDelayUs;
+        break;
+    }
+    portEXIT_CRITICAL(&list_mux_);
+    detail::wake();
+    return st;
+}
+
+void Hub::store_list()
+{
+    stored_ = {};
+    stored_.count = list_.count;
+    stored_.rev = list_.rev;
+    stored_.base_prov_ts = prov_ts_;
+    for (size_t i = 0; i < list_.count; ++i) {
+        std::snprintf(stored_.hubs[i].host, sizeof(stored_.hubs[i].host), "%s", list_.hubs[i].host);
+        std::snprintf(stored_.hubs[i].ip, sizeof(stored_.hubs[i].ip), "%s", list_.hubs[i].ip);
+    }
+    esp_err_t err = fr_id_save_hubs(&stored_);
+    if (err != ESP_OK) {
+        // It is in force all the same; a reboot then returns to the list stored before it.
+        ESP_LOGW(TAG, "hub: list rev %" PRIu32 " not stored (%s)", list_.rev, esp_err_to_name(err));
+    }
+    prev_ = list_;
+}
+
+void Hub::take_list(TimeUs now, const WifiSta &wifi)
+{
+    portENTER_CRITICAL(&list_mux_);
+    const bool due = next_list_set_ && now >= next_list_at_;
+    portEXIT_CRITICAL(&list_mux_);
+    if (!due) {
+        return;
+    }
+    // The hub the session is with, under the name the board has for it (none for a hub found by its advert).
+    char cur[FR_ID_HOST_MAX + 1] = {};
+    if (conn_session_) {
+        const uint8_t on = plan_.on();
+        std::snprintf(cur, sizeof(cur), "%s", plan_.count() == 0 ? wifi.hub_host() : on < list_.count ? list_.hubs[on].host : "");
+    }
+    if (!plan_.trial()) {
+        prev_ = list_;  // a list pushed over one still on trial falls back to the last one that worked
+    }
+    portENTER_CRITICAL(&list_mux_);
+    list_ = next_list_;
+    next_list_set_ = false;
+    portEXIT_CRITICAL(&list_mux_);
+    address_.forget_entries();
+    if (probe_fd_ >= 0) {
+        close(probe_fd_);
+        probe_fd_ = -1;
+    }
+    // No list (count 0) is the provisioned hub again: hub_host as the override or fr_ident give it.
+    const int keep = cur[0] == '\0' ? -1 : list_.count == 0 ? (hub_host_eq(cur, wifi.hub_host()) ? 0 : -1) : hub_index_of(list_, cur);
+    if (keep >= 0) {
+        plan_.adopt(list_.count, static_cast<uint8_t>(keep), now);
+        ESP_LOGI(TAG, "hub: list rev %" PRIu32 " (%u hub(s)) taken; it names %s, where the board is", list_.rev,
+                 static_cast<unsigned>(list_.count), cur);
+        store_list();
+    } else {
+        ESP_LOGI(TAG, "hub: list rev %" PRIu32 " (%u hub(s)) on trial: trying %s (reverted unless one of them answers in 60 s)",
+                 list_.rev, static_cast<unsigned>(list_.count), list_.count != 0 ? list_.hubs[0].host : wifi.hub_host());
+        if (fd_ >= 0) {
+            close_tcp(now, Close::hubs);
+        }
+        plan_.reset(list_.count);
+        plan_.begin_trial(now);
+        backoff_ = kBackoffMinUs;
+        next_at_ = now;
+        fail_streak_ = 0;
+    }
+    publish();
+}
+
+void Hub::revert_list(TimeUs now)
+{
+    ESP_LOGW(TAG, "hub: no hub of list rev %" PRIu32 " answered in 60 s; back to rev %" PRIu32 " (%u hub(s))", list_.rev,
+             prev_.rev, static_cast<unsigned>(prev_.count));
+    if (fd_ >= 0) {
+        close_tcp(now, Close::hubs);
+    }
+    list_ = prev_;
+    address_.forget_entries();
+    plan_.reset(list_.count);
+    backoff_ = kBackoffMinUs;
+    next_at_ = now;
+    fail_streak_ = 0;
+    publish();
+}
+
+void Hub::on_welcome(TimeUs now)
+{
+    if (conn_session_) {
+        return;  // a second WELCOME on this connection (a HELLO that was repeated)
+    }
+    const bool trial = plan_.trial();
+    conn_session_ = true;
+    plan_.session(now);
+    if (plan_.count() != 0) {
+        const uint8_t on = plan_.on();
+        ESP_LOGI(TAG, "hub: session with %s (%s%u of %u)", hub_name(on), on < list_.count ? "hub " : "outside the list of ",
+                 on < list_.count ? static_cast<unsigned>(on + 1) : static_cast<unsigned>(list_.count),
+                 static_cast<unsigned>(list_.count));
+    }
+    if (trial) {
+        ESP_LOGI(TAG, "hub: list rev %" PRIu32 " confirmed", list_.rev);
+        store_list();
+    }
+    publish();
+}
+
+void Hub::probe_poll(TimeUs now)
+{
+    if (probe_fd_ >= 0) {
+        if (now >= probe_deadline_) {
+            probe_done(now, false);
+        }
+        return;
+    }
+    if (phase_ != Phase::connected || !conn_session_) {
+        return;
+    }
+    const uint8_t i = plan_.probe(now, busy_.load(std::memory_order_relaxed));
+    if (i == HubPlan::kNone || i >= list_.count) {
+        return;
+    }
+    // The probe has its own address and socket: hub_ip_ and hub_port_ stay the session's.
+    resolver_.timeout_ms = kProbeMdnsTimeoutMs;
+    const detail::Resolved r = address_.resolve_entry(i, list_.hubs[i].host, detail::parse_ipv4(list_.hubs[i].ip), resolver_);
+    resolver_.timeout_ms = kMdnsTimeoutMs;
+    now = now_us();
+    if (r.ip == 0) {
+        probe_done(now, false);
+        return;
+    }
+    probe_fd_ = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
+    if (probe_fd_ < 0) {
+        probe_done(now, false);
+        return;
+    }
+    set_nonblocking(probe_fd_);
+    sockaddr_in a{};
+    a.sin_family = AF_INET;
+    a.sin_port = htons(r.port);
+    a.sin_addr.s_addr = r.ip;
+    if (connect(probe_fd_, reinterpret_cast<const sockaddr *>(&a), sizeof(a)) == 0) {
+        probe_done(now, true);
+    } else if (errno != EINPROGRESS) {
+        probe_done(now, false);
+    } else {
+        probe_deadline_ = now + kConnectTimeoutUs;
+    }
+}
+
+void Hub::probe_done(TimeUs now, bool ok)
+{
+    if (probe_fd_ >= 0) {
+        close(probe_fd_);  // a connect is the whole probe: the hub sees a connection that says nothing
+        probe_fd_ = -1;
+    }
+    if (!plan_.probed(now, ok)) {
+        return;
+    }
+    // It answered twice: the board returns to the hub that ranks above the one it is on.
+    ESP_LOGI(TAG, "hub: %s answers again; returning to it", hub_name(plan_.target()));
+    close_tcp(now, Close::hubs);
+    backoff_ = kBackoffMinUs;
+    next_at_ = now;
+    fail_streak_ = 0;
+    publish();
+}
 
 void Hub::set_tcp_up(bool v)
 {
@@ -338,11 +642,21 @@ void Hub::resolve(const WifiSta &wifi)
     // 05 §5.12.5: hub_host by mDNS on every attempt (macOS answers for <LocalHostName>.local whatever
     // Local Network Privacy says), then the address it last had, then fr_ident's hub_ip, then the hub's
     // _fractonica._tcp advert (design c6 D26; a C6 node with no hub_host finds the hub by itself).
-    const char *host = wifi.hub_host();
-    const detail::Resolved r = address_.resolve(host, resolver_);
-    const char *shown = host[0] != '\0' ? host : "(no hub_host)";
+    // With a hub list (design multi-hub-m1) the plan names the hub: one of the list by its own host, last address
+    // and ip, or, after a round of them all, whichever hub the advert finds.
+    const uint8_t target = plan_.target();
+    const bool listed = plan_.count() != 0;
+    const char *host = !listed ? wifi.hub_host() : target < list_.count ? list_.hubs[target].host : "";
+    plan_.attempt(now_us());
+    const detail::Resolved r =
+        !listed ? address_.resolve(host, resolver_)
+        : target < list_.count ? address_.resolve_entry(target, host, detail::parse_ipv4(list_.hubs[target].ip), resolver_)
+                               : address_.any_hub(resolver_);
+    const char *shown = host[0] != '\0' ? host : listed ? "(any hub)" : "(no hub_host)";
     if (r.ip == 0) {
-        if (!unresolved_said_) {
+        if (listed) {
+            ESP_LOGD(TAG, "hub: %s does not resolve", shown);
+        } else if (!unresolved_said_) {
             ESP_LOGW(TAG, "hub: %s does not resolve, there is no fallback address and no %s.%s advert answers",
                      shown, kAdvertService, kAdvertProto);
             unresolved_said_ = true;
@@ -431,6 +745,13 @@ void Hub::on_connected(TimeUs now)
     const uint8_t *q = reinterpret_cast<const uint8_t *>(&ip);
     const unsigned port = hub_port_.load(std::memory_order_relaxed);
     ESP_LOGI(TAG, "hub: connected to %u.%u.%u.%u:%u", q[0], q[1], q[2], q[3], port);
+    conn_session_ = false;
+    if (ip != far_ip_ || port != far_port_) {
+        // Another hub than the last connection reached (or the first one): Net takes its WELCOME for a new hub run.
+        far_ip_ = ip;
+        far_port_ = static_cast<uint16_t>(port);
+        far_.fetch_add(1, std::memory_order_release);
+    }
     set_tcp_up(true);
 }
 
@@ -471,6 +792,12 @@ void Hub::close_tcp(TimeUs now, Close why, int detail)
                 std::snprintf(text, sizeof(text), "Wi-Fi lost (address lost)");
             }
             break;
+        case Close::no_welcome:
+            std::snprintf(text, sizeof(text), "no WELCOME from this hub");
+            break;
+        case Close::hubs:
+            std::snprintf(text, sizeof(text), "going to another hub of the list");
+            break;
         case Close::none:
             break;
         }
@@ -506,6 +833,28 @@ void Hub::close_tcp(TimeUs now, Close why, int detail)
     phase_ = Phase::waiting;
     next_at_ = now + backoff_;
     backoff_ = std::min(backoff_ * 2, kBackoffMaxUs);
+    // Design multi-hub-m1: what this end means for the choice of hub. A session that ended is tried again where it
+    // was; an attempt that got none counts against its hub, and when the plan gives that hub up the next one is tried
+    // at once. Wi-Fi going away says nothing about a hub (poll() pauses the plan); Close::hubs is the caller's move.
+    const bool had_session = conn_session_;
+    conn_session_ = false;
+    if (why == Close::hubs || why == Close::wifi) {
+        return;
+    }
+    if (had_session) {
+        plan_.lost(now);
+        publish();
+        return;
+    }
+    const uint8_t gave_up = plan_.target();
+    if (plan_.failed(now)) {
+        if (gave_up != HubPlan::kAdvert) {
+            ESP_LOGW(TAG, "hub: no session with %s; trying %s", hub_name(gave_up), hub_name(plan_.target()));
+        }
+        backoff_ = kBackoffMinUs;
+        next_at_ = now;
+        fail_streak_ = 0;
+    }
 }
 
 void Hub::poll(TimeUs now, const WifiSta &wifi)
@@ -522,7 +871,21 @@ void Hub::poll(TimeUs now, const WifiSta &wifi)
     held_ = hold;
     if (!wifi.ip_up()) {
         if (fd_ >= 0) {
+            const bool had_session = conn_session_;
             close_tcp(now, Close::wifi, wifi.disconnect_reason());
+            if (had_session) {
+                plan_.lost(now);
+                publish();
+            }
+        }
+        if (probe_fd_ >= 0) {
+            probe_done(now, false);
+        }
+        // No network: no hub is at fault, and a list on trial gets its 60 s from when the network is back (as a
+        // net_set trial gets them after a `wifi_down` hold).
+        plan_.pause();
+        if (plan_.trial()) {
+            plan_.begin_trial(now);
         }
         set_udp_up(false);
         phase_ = Phase::idle;
@@ -533,6 +896,11 @@ void Hub::poll(TimeUs now, const WifiSta &wifi)
     if (drop_req_.exchange(false, std::memory_order_acq_rel) && fd_ >= 0) {
         // Net lost the session (05 §5.11): a fresh connection and a fresh HELLO.
         close_tcp(now, Close::session);
+    }
+    // Design multi-hub-m1: a pushed list whose RESULT has left, and a trial that ran out.
+    take_list(now, wifi);
+    if (plan_.trial_expired(now)) {
+        revert_list(now);
     }
     switch (phase_) {
     case Phase::idle:
@@ -551,8 +919,14 @@ void Hub::poll(TimeUs now, const WifiSta &wifi)
         }
         break;
     case Phase::connected:
+        // With a hub list a hub that connects but never WELCOMEs (another network's, found by its advert; a hub
+        // without this board's row answers all the same) is a failed attempt. With none the board waits, as before.
+        if (plan_.count() != 0 && !conn_session_ && now - connected_at_ >= plan_.timing().welcome_wait_us) {
+            close_tcp(now, Close::no_welcome);
+        }
         break;
     }
+    probe_poll(now_us());
 }
 
 void Hub::receive(TimeUs now)
@@ -581,8 +955,15 @@ void Hub::receive(TimeUs now)
         if (rx_fill_ - off - 2 < len) {
             break;
         }
+        const std::span<const uint8_t> env{rx_ + off + 2, len};
+        if (!conn_session_) {
+            // The session's first frame (design multi-hub-m1): the plan follows the WELCOME on this connection.
+            if (const auto h = wire::unpack_header(env); h && h->cls == wire::kClsNet && h->kind == fr::proto::kKindNetWelcome) {
+                on_welcome(now);
+            }
+        }
         if (s_hooks.deliver != nullptr) {
-            s_hooks.deliver(LinkKind::tcp, {rx_ + off + 2, len});  // it counts what it could not take
+            s_hooks.deliver(LinkKind::tcp, env);  // it counts what it could not take
         }
         off += 2 + len;
     }
@@ -630,6 +1011,11 @@ void Hub::wait(TimeUs now, TimeUs deadline, int efd)
     } else if (phase_ == Phase::connecting) {
         consider(deadline_);
     }
+    if (probe_fd_ >= 0) {
+        consider(probe_deadline_);
+    } else if (const TimeUs at = plan_.probe_at(); at != HubPlan::kNever) {
+        consider(at);
+    }
     TimeUs wait_us = kIdleWaitUs;
     if (deadline != 0) {
         wait_us = std::clamp(deadline - now, TimeUs{0}, kIdleWaitUs);
@@ -655,6 +1041,10 @@ void Hub::wait(TimeUs now, TimeUs deadline, int efd)
         }
         maxfd = std::max(maxfd, fd_);
     }
+    if (probe_fd_ >= 0) {
+        FD_SET(probe_fd_, &wr);
+        maxfd = std::max(maxfd, probe_fd_);
+    }
     timeval tv{};
     tv.tv_sec = static_cast<time_t>(wait_us / 1'000'000);
     tv.tv_usec = static_cast<suseconds_t>(wait_us % 1'000'000);
@@ -669,6 +1059,11 @@ void Hub::wait(TimeUs now, TimeUs deadline, int efd)
         read(efd, &v, sizeof(v));  // reset the counter; the loop looks at everything anyway
     }
     TimeUs t = now_us();
+    if (probe_fd_ >= 0 && FD_ISSET(probe_fd_, &wr)) {
+        int err = 0;
+        socklen_t len = sizeof(err);
+        probe_done(t, getsockopt(probe_fd_, SOL_SOCKET, SO_ERROR, &err, &len) == 0 && err == 0);
+    }
     if (fd_ >= 0 && phase_ == Phase::connecting && FD_ISSET(fd_, &wr)) {
         finish_connect(t);
     }
@@ -747,6 +1142,7 @@ public:
     void drop(DropReason why) override { s_hub.request_drop(why); }
     void hold(bool on) override { s_hub.request_hold(on); }
     size_t queued() const override { return s_hub.tcp_queued(); }
+    uint32_t far_end() const override { return s_hub.far_end(); }
 };
 
 class UdpLink final : public Link
@@ -994,6 +1390,24 @@ fr::Status net_set(const fr_net_creds_t &creds)
         return std::unexpected(Err::busy);
     }
     return {};
+}
+
+fr::Status hubs_set(const HubList &list)
+{
+    if (!s_started) {
+        return std::unexpected(Err::failed);
+    }
+    return s_hub.request_hubs(list);
+}
+
+HubsNow hubs_now()
+{
+    return s_hub.hubs_now();
+}
+
+void hub_busy(bool on)
+{
+    s_hub.set_busy(on);
 }
 
 fr::Status wifi_down(uint32_t seconds)

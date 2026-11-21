@@ -5,6 +5,8 @@
 // stays written as a copy of default's password.
 // Every network shares the fleet's net_id (the logical frame net, D4): a random u16 != 0 created with the first record
 // and kept by later changes; hub_host is the Mac's mDNS name, which nodes resolve on every connect.
+// One network, several hubs (design multi-hub-m1): network_join gives this hub another hub's net_id (joinNetwork) and
+// records that hub as the network's registrar (kv `net.registrar`), the one hub that hands out addresses.
 
 import { execFileSync } from 'node:child_process';
 import { randomInt } from 'node:crypto';
@@ -15,7 +17,7 @@ import { dirname } from 'node:path';
 import { paths } from '@fractonica/host';
 import { DEFAULT_NETWORK, FrError, NETWORK_BANDS, type NetworkBand } from '@fractonica/protocol';
 
-import type { Db } from './db.ts';
+import { type Db, kvGet, kvSet } from './db.ts';
 
 export interface NetworkRecord {
   name: string;
@@ -121,6 +123,62 @@ export function writeNetwork(
 /** Registered devices whose row names `name` (devices.network). */
 export function networkDevices(db: Db, name: string): number {
   return (db.prepare('SELECT COUNT(*) AS n FROM devices WHERE network = ?').get(name) as { n: number }).n;
+}
+
+// ---- one network, several hubs (design multi-hub-m1) ----
+
+/** The hub whose network this hub joined: its API as network_join called it, its host name, and when. */
+export interface Registrar {
+  url: string;
+  hub_host: string | null;
+  net_id: number;
+  joined_at: string;
+}
+
+const REGISTRAR_KEY = 'net.registrar';
+
+/** The network's registrar when it is another hub; null when this hub hands out the addresses itself. */
+export function registrarOf(db: Db): Registrar | null {
+  const text = kvGet(db, REGISTRAR_KEY);
+  if (!text) {
+    return null;
+  }
+  try {
+    const v = JSON.parse(text) as Partial<Registrar> | null;
+    return v && typeof v.url === 'string' && typeof v.net_id === 'number'
+      ? { url: v.url, hub_host: typeof v.hub_host === 'string' ? v.hub_host : null, net_id: v.net_id, joined_at: typeof v.joined_at === 'string' ? v.joined_at : '' }
+      : null;
+  } catch {
+    return null;
+  }
+}
+
+/** What an op that would allocate an address answers on a hub that joined a network: the registrar does that. */
+export function notRegistrar(registrar: Registrar, what: string): FrError {
+  const who = registrar.hub_host ? `${registrar.hub_host} (${registrar.url})` : registrar.url;
+  return new FrError('INVALID_ARGS', `${what}, and this hub joined the network of ${who}: only that hub, the network's registrar, hands out addresses`, {
+    hint: `this hub asks ${who} for the address over the hubs' link when it has one (fr hub peers); without a link, provision or enroll the board on ${who}: its row then reaches this hub by itself`,
+    details: { registrar: registrar.url, registrar_host: registrar.hub_host, net: registrar.net_id },
+  });
+}
+
+/**
+ * network_join: every stored network takes `netId` (the fleet has one), a network record is made from `from` when this
+ * hub has none (never a password), and `registrar` is recorded. One transaction.
+ */
+export function joinNetwork(
+  db: Db,
+  netId: number,
+  registrar: Omit<Registrar, 'net_id' | 'joined_at'>,
+  from: { name: string; ssid: string; country: string | null; band: NetworkBand },
+): void {
+  db.transaction(() => {
+    if (!listNetworks(db).length) {
+      writeNetwork(db, { name: from.name, ssid: from.ssid, bssid: null, country: from.country, band: from.band });
+    }
+    db.prepare('UPDATE networks SET net_id = ?').run(netId);
+    kvSet(db, REGISTRAR_KEY, JSON.stringify({ ...registrar, net_id: netId, joined_at: new Date().toISOString() } satisfies Registrar));
+  })();
 }
 
 // ---- secrets.json (spec 08 §8.8): the passwords, never in SQLite, results, logs or errors ----

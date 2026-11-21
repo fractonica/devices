@@ -118,6 +118,7 @@ export type ScaleWatch = z.infer<typeof ScaleWatchSchema>;
 export const SCALE_OPS = [
   op({
     name: 'scale_status',
+    target: 'device',
     kind: 'query',
     tier: 'read',
     summary:
@@ -128,6 +129,7 @@ export const SCALE_OPS = [
   }),
   op({
     name: 'scale_read',
+    target: 'device',
     kind: 'query',
     tier: 'read',
     summary:
@@ -138,6 +140,7 @@ export const SCALE_OPS = [
   }),
   op({
     name: 'scale_tare',
+    target: 'device',
     kind: 'command',
     tier: 'mutate',
     summary:
@@ -148,6 +151,7 @@ export const SCALE_OPS = [
   }),
   op({
     name: 'scale_calibrate',
+    target: 'device',
     kind: 'command',
     tier: 'mutate',
     summary:
@@ -163,6 +167,7 @@ export const SCALE_OPS = [
   }),
   op({
     name: 'scale_reset_calibration',
+    target: 'device',
     kind: 'command',
     tier: 'mutate',
     destructive: true,
@@ -173,6 +178,8 @@ export const SCALE_OPS = [
   }),
   op({
     name: 'scale_watch',
+    target: 'device',
+    files: { out: ['out'] },
     kind: 'job',
     tier: 'mutate',
     summary:

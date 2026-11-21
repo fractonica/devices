@@ -22,28 +22,28 @@ import {
   NETWORK_BANDS,
   NetworkSchema,
   OPS,
-  REGISTRY_HASH,
+  REGISTRY_HASH, REGISTRY_INPUTS_HASH,
   STREAM_KINDS,
 } from '../src/index.ts';
 import { CATALOG_HASH, ChipId, CSI_CAP, CSI_CONFIG_DEFAULTS, CsiStreamEndReason, RADIO_TX_CAP } from '@fractonica/protocol/gen';
 
 const hashOf = (ops: readonly { name: string; input: z.ZodType }[]) =>
   createHash('sha256')
-    .update(JSON.stringify(ops.map((o) => [o.name, z.toJSONSchema(o.name === 'hub_doctor' && !ops.some((x) => x.name === 'hub_doctor_fix') ? z.object({}) : o.input) /* hub_doctor had no input before the dashboard's health */])))
+    .update(JSON.stringify(ops.map((o) => [o.name, z.toJSONSchema(o.name === 'hub_doctor' && !ops.some((x) => x.name === 'hub_doctor_fix') ? z.object({}) : o.name === 'device_provision' && !ops.some((x) => x.name === 'device_enroll') ? (o.input as z.ZodObject).omit({ for_hub: true }) : o.input) /* hub_doctor had no input before the dashboard's health; device_provision no for_hub before device_enroll (protocol-for-hub.test.ts) */])))
     .digest('hex')
     .slice(0, 12);
 
 describe('CSI-1 ops (design csi-c1 D4, D5, D13)', () => {
   it('adds network_list, csi_stream and csi_status, and moves REGISTRY_HASH once for every op change', () => {
-    expect(OPS.filter((o) => !/^(camera|scale|battery|cell|haptic|wiring|part|storage|clock|app|time)_|^device_adopt$|^port_(lend|ignore|claim)$|^hub_doctor_fix$/.test(o.name))).toHaveLength(55); // CAM-1 adds seven (protocol-camera.test.ts)
+    expect(OPS.filter((o) => !/^(camera|scale|battery|cell|haptic|wiring|part|storage|clock|app|time)_|^device_adopt$|^port_(lend|ignore|claim)$|^hub_doctor_fix$|^device_enroll$|^device_(hubs_set|hubs_get|share)$|^network_join$|^network_admit$|^hub_(name_set|peers)$/.test(o.name))).toHaveLength(55); // CAM-1 adds seven (protocol-camera.test.ts)
     expect(findOp('network_list')).toMatchObject({ kind: 'query', tier: 'read', cli: { path: ['net', 'ls'] } });
     expect(findOp('csi_stream')).toMatchObject({ kind: 'job', tier: 'mutate', cli: { path: ['csi', 'stream'], positional: ['device'] } });
     expect(findOp('csi_status')).toMatchObject({ kind: 'query', tier: 'read', cli: { path: ['csi', 'status'], positional: ['device'] } });
     for (const name of ['network_set', 'network_list', 'csi_stream', 'csi_status']) {
       expect(findOp(name)!.summary.length, name).toBeLessThan(1000);
-      expect(hashOf(OPS.filter((o) => o.name !== name)), name).not.toBe(REGISTRY_HASH);
+      expect(hashOf(OPS.filter((o) => o.name !== name)), name).not.toBe(REGISTRY_INPUTS_HASH);
     }
-    expect(hashOf(OPS)).toBe(REGISTRY_HASH);
+    expect(hashOf(OPS)).toBe(REGISTRY_INPUTS_HASH);
     expect(REGISTRY_HASH).not.toBe('ee5dc36bb005'); // A2's; CSI-1's was 6dcd17ef8882, CAM-1 pins the current one
     expect(JOB_KINDS).toContain('csi');
   });

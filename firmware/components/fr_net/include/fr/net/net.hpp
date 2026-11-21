@@ -431,6 +431,7 @@ struct State {
     uint32_t cached_replies = 0;   // DUP requests answered from the response cache
     uint32_t sessions_lost = 0;    // sessions ended by timeout, link loss or a hub BYE
     uint32_t sessions_timed_out = 0;  // of those: 3.5 intervals with nothing from the hub (05 §5.11)
+    uint32_t welcomes_refused = 0;  // serial WELCOMEs of another hub than the live TCP session's (design multi-hub-m1)
     uint32_t hook_drops = 0;       // envelopes the debug hooks swallowed, both ways
     bool hub_link_dropped = false;  // drop_hub_link() active
     bool udp_blocked = false;       // udp_block() active
@@ -1439,6 +1440,10 @@ private:
     uint32_t gw_wait_ms_ = 0;       // kGatewayAssocWaitMs or kGatewayTcpGoneMs from gw_wait_from_
     TimeUs gw_poll_due_ = kNever;   // the next look while the rule holds a live gateway back
     TimeUs tcp_since_ = kNever;  // the TCP session's WELCOME (D12's close); kNever without one
+    // Design multi-hub-m1: the TCP link's far_end() at its last WELCOME (0: none yet), and whether the serial link
+    // waits without a HELLO because the hub on it is not the one the TCP session is with.
+    uint32_t tcp_far_ = 0;
+    bool serial_parked_ = false;
     AirTap *tap_ = nullptr;
     std::array<RawSend, kRawInFlight> raw_{};
 

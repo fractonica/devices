@@ -191,3 +191,113 @@ TEST(esp_hub_resolve_advert_failures_find_nothing)
     CHECK_EQ(h.resolve("", r).ip, 0u);
     CHECK_EQ(r.log.back(), std::string("a:x"));
 }
+
+// ---- with a hub list (design multi-hub-m1): each hub its own chain, the advert a step of its own ----
+
+TEST(esp_hub_list_entry_has_its_own_chain_without_the_advert)
+{
+    HubAddress a;
+    a.configure(7421, ipv4(192, 168, 1, 9));  // fr_ident's hub_ip: the provisioned hub's, not a list entry's
+    FakeResolver r;
+    r.ptr = Advert{};
+    std::snprintf(r.ptr->instance, sizeof(r.ptr->instance), "%s", "Fractonica lab-hub");
+    std::snprintf(r.ptr->host, sizeof(r.ptr->host), "%s", "lab-hub.local");
+    r.ptr->port = 7421;
+    r.ptr->ip = ipv4(192, 168, 1, 20);
+    // An entry that does not resolve and has no address of its own is no address: neither fr_ident's hub_ip nor
+    // the advert stands in for it (the plan moves on to the next hub instead).
+    Resolved got = a.resolve_entry(1, "home-hub.local", 0, r);
+    CHECK_EQ(got.ip, 0u);
+    CHECK(got.how == How::none);
+    REQUIRE_EQ(r.log.size(), 1u);
+    CHECK_EQ(r.log[0], "a:home-hub");
+    // Its own ip is its fallback.
+    got = a.resolve_entry(1, "home-hub.local", ipv4(192, 168, 1, 30), r);
+    CHECK_EQ(got.ip, ipv4(192, 168, 1, 30));
+    CHECK_EQ(got.port, 7421);
+    CHECK(got.how == How::hub_ip);
+    // Its name, once it resolves, wins and is remembered for this entry.
+    r.a.push_back({"home-hub", ipv4(192, 168, 1, 31)});
+    got = a.resolve_entry(1, "home-hub.local", ipv4(192, 168, 1, 30), r);
+    CHECK_EQ(got.ip, ipv4(192, 168, 1, 31));
+    CHECK(got.how == How::mdns);
+    r.a.clear();
+    got = a.resolve_entry(1, "home-hub.local", ipv4(192, 168, 1, 30), r);
+    CHECK_EQ(got.ip, ipv4(192, 168, 1, 31));
+    CHECK(got.how == How::last);
+    // Another entry does not inherit it.
+    got = a.resolve_entry(0, "lab-hub.local", 0, r);
+    CHECK_EQ(got.ip, 0u);
+    // A literal and a DNS name work as hub_host does.
+    got = a.resolve_entry(2, "10.0.0.7", 0, r);
+    CHECK_EQ(got.ip, ipv4(10, 0, 0, 7));
+    CHECK(got.how == How::literal);
+    r.dns_ip = ipv4(10, 0, 0, 8);
+    got = a.resolve_entry(3, "hub.example.org", 0, r);
+    CHECK_EQ(got.ip, ipv4(10, 0, 0, 8));
+    CHECK(got.how == How::dns);
+    // Beyond the four entries of a list: nothing.
+    CHECK_EQ(a.resolve_entry(4, "10.0.0.7", 0, r).ip, 0u);
+    // A new list forgets what the old one's hosts resolved to.
+    a.forget_entries();
+    got = a.resolve_entry(1, "home-hub.local", 0, r);
+    CHECK_EQ(got.ip, 0u);
+}
+
+TEST(esp_hub_list_round_ends_with_the_advert)
+{
+    HubAddress a;
+    a.configure(7421, 0);
+    FakeResolver r;
+    // Nobody advertises: no address.
+    CHECK_EQ(a.any_hub(r).ip, 0u);
+    r.ptr = Advert{};
+    std::snprintf(r.ptr->instance, sizeof(r.ptr->instance), "%s", "Fractonica home-hub");
+    std::snprintf(r.ptr->host, sizeof(r.ptr->host), "%s", "home-hub.local");
+    r.ptr->port = 7521;
+    r.ptr->ip = ipv4(192, 168, 1, 40);
+    const Resolved got = a.any_hub(r);
+    CHECK_EQ(got.ip, ipv4(192, 168, 1, 40));
+    CHECK_EQ(got.port, 7521);  // the SRV port, as in the old chain
+    CHECK(got.how == How::advert);
+}
+
+TEST(esp_hub_without_a_list_the_chain_is_the_old_one)
+{
+    // What a list's entries resolved to never leaks into the provisioned hub's chain, and the reverse: a board
+    // with no list (or whose list was taken away) finds its hub exactly as before.
+    HubAddress a;
+    a.configure(7421, ipv4(192, 168, 1, 9));
+    FakeResolver r;
+    r.a.push_back({"home-hub", ipv4(192, 168, 1, 31)});
+    CHECK_EQ(a.resolve_entry(0, "home-hub.local", 0, r).ip, ipv4(192, 168, 1, 31));
+    r.a.clear();
+    r.log.clear();
+    // hub_host does not resolve: no last address of its own yet, so fr_ident's hub_ip, and no advert query.
+    Resolved got = a.resolve("lab-hub.local", r);
+    CHECK_EQ(got.ip, ipv4(192, 168, 1, 9));
+    CHECK(got.how == How::hub_ip);
+    REQUIRE_EQ(r.log.size(), 1u);
+    CHECK_EQ(r.log[0], "a:lab-hub");
+    // It resolves: its last address is its own.
+    r.a.push_back({"lab-hub", ipv4(192, 168, 1, 20)});
+    CHECK_EQ(a.resolve("lab-hub.local", r).ip, ipv4(192, 168, 1, 20));
+    r.a.clear();
+    got = a.resolve("lab-hub.local", r);
+    CHECK_EQ(got.ip, ipv4(192, 168, 1, 20));
+    CHECK(got.how == How::last);
+    a.forget_entries();  // a list change does not touch it
+    CHECK_EQ(a.resolve("lab-hub.local", r).ip, ipv4(192, 168, 1, 20));
+    // With no hub_ip and nothing resolved, the advert is the last step of the same call.
+    HubAddress b;
+    b.configure(7421, 0);
+    r.log.clear();
+    r.ptr = Advert{};
+    std::snprintf(r.ptr->instance, sizeof(r.ptr->instance), "%s", "Fractonica lab-hub");
+    std::snprintf(r.ptr->host, sizeof(r.ptr->host), "%s", "lab-hub.local");
+    r.ptr->port = 7421;
+    r.ptr->ip = ipv4(192, 168, 1, 20);
+    got = b.resolve("", r);
+    CHECK_EQ(got.ip, ipv4(192, 168, 1, 20));
+    CHECK(got.how == How::advert);
+}

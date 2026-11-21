@@ -99,7 +99,15 @@ export function openApiDocument(): Schema {
             description: 'who calls (design c6 D18): a job it starts records it as its origin',
             schema: { type: 'string', enum: [...JOB_ORIGINS] },
           },
+          {
+            in: 'header',
+            name: 'X-Fr-At',
+            required: false,
+            description: "the name of the hub of the network to run the op on (design multi-hub-m2 §7.2; hub_peers lists them). Without it an op for a board runs at the hub that holds the board, and anything else on this hub",
+            schema: { type: 'string', pattern: '^[a-z0-9]([a-z0-9-]{0,29}[a-z0-9])?$' },
+          },
         ],
+        'x-fr-target': op.target,
         requestBody: { required: true, content: { 'application/json': { schema: jsonSchema(op.input, 'input') } } },
         responses: {
           200: { description: 'a Result: ok with data, or not ok with error', content: { 'application/json': { schema: result(data) } } },

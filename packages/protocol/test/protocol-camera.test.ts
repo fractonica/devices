@@ -27,14 +27,14 @@ import {
   JOB_KINDS,
   OPS,
   PortInfoSchema,
-  REGISTRY_HASH,
+  REGISTRY_HASH, REGISTRY_INPUTS_HASH,
   STREAM_KINDS,
 } from '../src/index.ts';
 import { CAMERA_CAP, CAMERA_CONFIG_DEFAULTS, CameraStreamEndReason, CATALOG_HASH, ChipId } from '@fractonica/protocol/gen';
 
 const hashOf = (ops: readonly { name: string; input: z.ZodType }[]) =>
   createHash('sha256')
-    .update(JSON.stringify(ops.map((o) => [o.name, z.toJSONSchema(o.name === 'hub_doctor' && !ops.some((x) => x.name === 'hub_doctor_fix') ? z.object({}) : o.input) /* hub_doctor had no input before the dashboard's health */])))
+    .update(JSON.stringify(ops.map((o) => [o.name, z.toJSONSchema(o.name === 'hub_doctor' && !ops.some((x) => x.name === 'hub_doctor_fix') ? z.object({}) : o.name === 'device_provision' && !ops.some((x) => x.name === 'device_enroll') ? (o.input as z.ZodObject).omit({ for_hub: true }) : o.input) /* hub_doctor had no input before the dashboard's health; device_provision no for_hub before device_enroll (protocol-for-hub.test.ts) */])))
     .digest('hex')
     .slice(0, 12);
 
@@ -42,7 +42,7 @@ const CAMERA_OP_NAMES = ['camera_snap', 'camera_stream', 'camera_status', 'camer
 
 describe('CAM-1 ops (design camera-c1 D11)', () => {
   it('adds the seven camera ops and moves REGISTRY_HASH once for every op change (and the selector texts)', () => {
-    expect(OPS.filter((o) => !/^(scale|battery|cell|haptic|wiring|part|storage|clock|app|time)_|^device_adopt$|^port_(lend|ignore|claim)$|^hub_doctor_fix$/.test(o.name))).toHaveLength(62); // POWER-1 adds fourteen (protocol-power.test.ts) // SCALE-1 adds six (protocol-scale.test.ts)
+    expect(OPS.filter((o) => !/^(scale|battery|cell|haptic|wiring|part|storage|clock|app|time)_|^device_adopt$|^port_(lend|ignore|claim)$|^hub_doctor_fix$|^device_enroll$|^device_(hubs_set|hubs_get|share)$|^network_join$|^network_admit$|^hub_(name_set|peers)$/.test(o.name))).toHaveLength(62); // POWER-1 adds fourteen (protocol-power.test.ts) // SCALE-1 adds six (protocol-scale.test.ts)
     expect(findOp('camera_snap')).toMatchObject({ kind: 'job', tier: 'mutate', cli: { path: ['camera', 'snap'], positional: ['device'] } });
     expect(findOp('camera_stream')).toMatchObject({ kind: 'job', tier: 'mutate', cli: { path: ['camera', 'stream'], positional: ['device'] } });
     expect(findOp('camera_status')).toMatchObject({ kind: 'query', tier: 'read', cli: { path: ['camera', 'status'], positional: ['device'] } });
@@ -52,11 +52,11 @@ describe('CAM-1 ops (design camera-c1 D11)', () => {
     expect(findOp('camera_sd_delete')).toMatchObject({ kind: 'command', tier: 'mutate', cli: { path: ['camera', 'sd', 'rm'], positional: ['device', 'recording'] } });
     for (const name of CAMERA_OP_NAMES) {
       expect(findOp(name)!.summary.length, name).toBeLessThan(1000);
-      expect(hashOf(OPS.filter((o) => o.name !== name)), name).not.toBe(REGISTRY_HASH);
+      expect(hashOf(OPS.filter((o) => o.name !== name)), name).not.toBe(REGISTRY_INPUTS_HASH);
     }
-    expect(hashOf(OPS)).toBe(REGISTRY_HASH);
+    expect(hashOf(OPS)).toBe(REGISTRY_INPUTS_HASH);
     // CAM-1's own hash, with SCALE-1's ops left out (protocol-scale.test.ts pins the current one).
-    expect(hashOf(OPS.filter((o) => !/^(scale|battery|cell|haptic|wiring|part|storage|clock|app|time)_|^device_adopt$|^port_(lend|ignore|claim)$|^hub_doctor_fix$/.test(o.name)))).toBe('b62397012231'); // the fix round's camera_stream `out` text; '45d33d0f924f' was stream C's
+    expect(hashOf(OPS.filter((o) => !/^(scale|battery|cell|haptic|wiring|part|storage|clock|app|time)_|^device_adopt$|^port_(lend|ignore|claim)$|^hub_doctor_fix$|^device_enroll$|^device_(hubs_set|hubs_get|share)$|^network_join$|^network_admit$|^hub_(name_set|peers)$/.test(o.name)))).toBe('b62397012231'); // the fix round's camera_stream `out` text; '45d33d0f924f' was stream C's
     expect(REGISTRY_HASH).not.toBe('6dcd17ef8882'); // CSI-1's
     expect(JOB_KINDS).toContain('camera');
     // The selector texts name the new target and the bridge ports (D1, D3).
@@ -192,8 +192,10 @@ describe('CAM-1 capability and chip (design camera-c1 D1, D7)', () => {
     // (stale readings, load renewal, max_on without a break) made it 0xa9d281fe. LCD-1 / CLOCK-1 (fr.storage 0x000F,
     // fr.clock 0x0010, fr.display 1.2's max_brightness) made it 0xec1ad81e; LCD-1/CLOCK-1's review fixes (doc strings,
     // max_brightness range [1, 255], fr.clock set's example dropped) made it 0x95782421. STEPPER-1 (fr.stepper 0x0012)
-    // made it 0x9a291431; its review fix (the doc: nFAULT reports no under-voltage) made it 0x616bf0f2.
-    expect(CATALOG_HASH).toBe(0x616bf0f2);
+    // made it 0x9a291431; its review fix (the doc: nFAULT reports no under-voltage) made it 0x616bf0f2. fr.node 1.1
+    // (design multi-hub-m1: the Hub type, hubs_set and hubs_get) made it 0x2efa5e5e.
+    expect(CATALOG_HASH).toBe(0x2efa5e5e);
+    expect(CATALOG_HASH).not.toBe(0x616bf0f2); // STEPPER-1's
     expect(CATALOG_HASH).not.toBe(0x9a291431); // STEPPER-1 as first built
     expect(CATALOG_HASH).not.toBe(0x95782421); // LCD-1/CLOCK-1's
     expect(CATALOG_HASH).not.toBe(0xa9d281fe); // POWER-1's

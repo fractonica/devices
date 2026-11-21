@@ -84,6 +84,7 @@ export type BenchStatus = z.infer<typeof BenchStatusSchema>;
 export const BENCH_OPS = [
   op({
     name: 'bench_get',
+    target: 'hub',
     kind: 'query',
     tier: 'read',
     summary:

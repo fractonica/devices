@@ -7,7 +7,9 @@ import { DEFAULT_NETWORK, FrError } from '@fractonica/protocol';
 
 import type { HubContext } from '../context.ts';
 import { readNetwork, listNetworks } from '../network.ts';
+import { ensureAddress } from '../registry/alloc.ts';
 import { presenceOf, resolveOne } from '../registry/hub.ts';
+import { checkAlias } from '../registry/names.ts';
 import { markIdentWritten, prepareIdentity } from '../registry/store.ts';
 
 export const ADOPT_TOPIC = 'fr.adopt';
@@ -27,6 +29,8 @@ export async function adopt(hub: HubContext, input: { device: string; alias?: st
       remediation: [{ tool: 'network_set', args: { name }, cli: `fr net set${name === DEFAULT_NETWORK ? '' : ` --name ${name}`} --ssid <ssid>` }],
     });
   }
+  // On a member of a network the address is the registrar's to give: asked over the hubs' link (registry/alloc.ts).
+  await ensureAddress(hub, { device_id: d.device_id, ...(input.alias !== undefined ? { alias: checkAlias(input.alias) } : {}), profile: d.profile, board: d.board, chip: d.chip, net: net.net_id, network: net.name });
   const prep = prepareIdentity(hub.db, {
     deviceId: d.device_id,
     alias: input.alias ?? (d.alias || undefined),
@@ -63,6 +67,6 @@ export async function adopt(hub: HubContext, input: { device: string; alias?: st
     ssid: net.ssid,
     network: net.name,
     prov_ts: Math.floor(Date.now() / 1000),
-  });
+  }, { keepHubs: true }); // nothing was flashed: a hub list the node holds stands
   return { ...done, presence: presenceOf(hub)(d.device_id) };
 }

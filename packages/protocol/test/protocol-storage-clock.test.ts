@@ -7,12 +7,12 @@ import { createHash } from 'node:crypto';
 import { describe, expect, it } from 'vitest';
 import { z } from 'zod';
 
-import { findOp, JOB_KINDS, OPS, REGISTRY_HASH, storagePathProblem } from '../src/index.ts';
+import { findOp, JOB_KINDS, OPS, REGISTRY_HASH, REGISTRY_INPUTS_HASH, storagePathProblem } from '../src/index.ts';
 import { CATALOG } from '../src/gen/catalog.ts';
 
 const hashOf = (ops: readonly { name: string; input: z.ZodType }[]) =>
   createHash('sha256')
-    .update(JSON.stringify(ops.map((o) => [o.name, z.toJSONSchema(o.name === 'hub_doctor' && !ops.some((x) => x.name === 'hub_doctor_fix') ? z.object({}) : o.input) /* hub_doctor had no input before the dashboard's health */])))
+    .update(JSON.stringify(ops.map((o) => [o.name, z.toJSONSchema(o.name === 'hub_doctor' && !ops.some((x) => x.name === 'hub_doctor_fix') ? z.object({}) : o.name === 'device_provision' && !ops.some((x) => x.name === 'device_enroll') ? (o.input as z.ZodObject).omit({ for_hub: true }) : o.input) /* hub_doctor had no input before the dashboard's health; device_provision no for_hub before device_enroll (protocol-for-hub.test.ts) */])))
     .digest('hex')
     .slice(0, 12);
 
@@ -54,9 +54,9 @@ describe('LCD-1 / CLOCK-1 ops (design lcd-clock-c1 D9)', () => {
       const op = findOp(name)!;
       expect(op, name).toMatchObject({ kind, tier, cli: { path, positional } });
       expect(op.summary.length, name).toBeLessThan(1000);
-      expect(hashOf(OPS.filter((o) => o.name !== name)), name).not.toBe(REGISTRY_HASH);
+      expect(hashOf(OPS.filter((o) => o.name !== name)), name).not.toBe(REGISTRY_INPUTS_HASH);
     }
-    expect(hashOf(OPS)).toBe(REGISTRY_HASH);
+    expect(hashOf(OPS)).toBe(REGISTRY_INPUTS_HASH);
     expect(REGISTRY_HASH).not.toBe('e37bcd657cfb'); // WIRING-1's
     expect(JOB_KINDS).toContain('storage');
     expect(JOB_KINDS).toContain('clock');

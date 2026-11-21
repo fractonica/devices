@@ -7,6 +7,9 @@
 // before it starts too (registerImage, D9), with FR_HOME pointing at the temp home, since the blob store lives there.
 // restart() is `fr hub restart` on the same ports (a new hub run and hub epoch), for clients and nodes that must come
 // back to it. REST goes through tests/e2e/lib/hub.ts, the client the gate harnesses use.
+// The hubs' link (design multi-hub-m2 §3.1) is on an ephemeral loopback port too (--peer-port 0), bound only once the
+// hub holds a network key (after a network_join); a restart then asks for the port it had, as for the node ports, so
+// the other hubs of a test find it where their member list says.
 //
 // Two callers: the interop and gate suites under vitest (packages/hub/test/real-hub.ts re-exports this module, its API
 // unchanged), and the sim runner (tests/sim/lib/runner.ts), which starts the hub `detached` (a process group of its
@@ -89,6 +92,8 @@ export interface RealHub {
   port: number;
   /** The node links (UDP on TCP's number) and the node HTTP port, as bound. */
   node: { tcp: number; udp: number; http: number };
+  /** The hubs' link port while its listener is up (the hub prints when it binds and when it closes it); null otherwise. */
+  peerPort(): number | null;
   /** FR_HOME of the hub (hub.db, secrets.json, latency samples). */
   home: string;
   /** device_id -> the addr it was provisioned with. */
@@ -285,7 +290,15 @@ async function launchHub(opts: PrivateHubOptions, dir: string, home: string, tmp
   const lines: Record<string, unknown>[] = [];
   let err = '';
 
-  const launch = (ports: { api: number; node: number; http: number }): Proc => {
+  /** The hubs' link port the hub last said it bound (`peer_link_listening`); 0 before any. A restart asks for it again. */
+  const peerPort = () => Number(lines.findLast((x) => x.event === 'peer_link_listening')?.port ?? 0);
+  /** The same while that listener is up: null once the hub said it closed it (`peer_link_closed`), or before any. */
+  const peerPortNow = () => {
+    const last = lines.findLast((x) => x.event === 'peer_link_listening' || x.event === 'peer_link_closed');
+    return last?.event === 'peer_link_listening' ? Number(last.port) : null;
+  };
+
+  const launch = (ports: { api: number; node: number; http: number; peer?: number }): Proc => {
     const proc = spawn(
       process.execPath,
       [
@@ -294,6 +307,7 @@ async function launchHub(opts: PrivateHubOptions, dir: string, home: string, tmp
         '--node-host', '127.0.0.1',
         '--node-port', String(ports.node),
         '--node-http-port', String(ports.http),
+        '--peer-port', String(ports.peer ?? 0),
         ...(opts.serialBridge ? ['--serial-bridge', opts.serialBridge] : ['--no-serial']),
         '--no-advert',
       ],
@@ -369,13 +383,14 @@ async function launchHub(opts: PrivateHubOptions, dir: string, home: string, tmp
     const node = { tcp: Number(l.node_port), udp: Number(l.node_udp_port), http: Number(l.node_http_port) };
     const relaunch = async () => {
       const from = lines.length;
-      current = launch({ api: port, node: node.tcp, http: node.http });
+      current = launch({ api: port, node: node.tcp, http: node.http, peer: peerPort() });
       await listening(current, from);
     };
     return {
       url,
       port,
       node,
+      peerPort: peerPortNow,
       home,
       addrs: new Map([...prov.rows].map(([mac, r]) => [mac, r.addr])),
       rows: prov.rows,

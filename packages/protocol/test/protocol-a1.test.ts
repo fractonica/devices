@@ -10,7 +10,7 @@ import { AUDIO_RATES, AudioLevelSchema, AudioPlaySchema, AudioRecordSchema, find
 
 const hashOf = (ops: readonly { name: string; input: z.ZodType }[]) =>
   createHash('sha256')
-    .update(JSON.stringify(ops.map((o) => [o.name, z.toJSONSchema(o.name === 'hub_doctor' && !ops.some((x) => x.name === 'hub_doctor_fix') ? z.object({}) : o.input) /* hub_doctor had no input before the dashboard's health */])))
+    .update(JSON.stringify(ops.map((o) => [o.name, z.toJSONSchema(o.name === 'hub_doctor' && !ops.some((x) => x.name === 'hub_doctor_fix') ? z.object({}) : o.name === 'device_provision' && !ops.some((x) => x.name === 'device_enroll') ? (o.input as z.ZodObject).omit({ for_hub: true }) : o.input) /* hub_doctor had no input before the dashboard's health; device_provision no for_hub before device_enroll (protocol-for-hub.test.ts) */])))
     .digest('hex')
     .slice(0, 12);
 
@@ -18,7 +18,7 @@ describe('A1 ops (design audio-a1 D8)', () => {
   it('adds audio_record and audio_play as mutate jobs and audio_level as a read query, and moves REGISTRY_HASH once', () => {
     // A2 (design audio-a2 D5) adds audio_monitor: protocol-a2.test.ts; CSI-1 network_list and the csi_ ops
     // (protocol-csi.test.ts).
-    const a1 = OPS.filter((o) => o.name !== 'audio_monitor' && o.name !== 'network_list' && !/^(csi|camera|scale|battery|cell|haptic|wiring|part|storage|clock|app|time)_|^device_adopt$|^port_(lend|ignore|claim)$|^hub_doctor_fix$/.test(o.name)); // CAM-1 adds seven camera_ ops
+    const a1 = OPS.filter((o) => o.name !== 'audio_monitor' && o.name !== 'network_list' && !/^(csi|camera|scale|battery|cell|haptic|wiring|part|storage|clock|app|time)_|^device_adopt$|^port_(lend|ignore|claim)$|^hub_doctor_fix$|^device_enroll$|^device_(hubs_set|hubs_get|share)$|^network_join$|^network_admit$|^hub_(name_set|peers)$/.test(o.name)); // CAM-1 adds seven camera_ ops
     expect(a1).toHaveLength(51);
     expect(findOp('audio_record')).toMatchObject({ kind: 'job', tier: 'mutate', cli: { path: ['audio', 'record'], positional: ['device', 'out'] } });
     expect(findOp('audio_play')).toMatchObject({ kind: 'job', tier: 'mutate', cli: { path: ['audio', 'play'], positional: ['device', 'file'] } });

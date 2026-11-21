@@ -665,6 +665,340 @@ The dashboard does the same without a command: **Provision** › New board ([sec
 
 For an ESP32-CAM, take the SD card out before provisioning (see 3.4).
 
+### 13.1 A board for another hub
+
+A hub that cannot flash (no USB ports, no builds: a home hub on a small Linux board) gets its ESP32 boards flashed at
+the hub that can. The board is plugged into this Mac, flashed here, and then belongs to the other hub: it joins Wi-Fi
+and connects there.
+
+Before the first one:
+
+- Both hubs run the same version of this checkout.
+- The other hub has a network stored (on that hub: `fr net set --ssid <ssid>`; it needs no password). The Wi-Fi the
+  board joins is **this** hub's stored network (`fr net get`), so the other hub must be on that same Wi-Fi.
+- This Mac reaches the other hub's API. A hub answers only as `127.0.0.1` at its own port, so open an SSH tunnel on that
+  same port and leave it running:
+
+  ```bash
+  ssh -N -L 7520:127.0.0.1:7520 <user>@home-hub.local
+  curl http://127.0.0.1:7520/api/v1/health      # the other hub answers
+  ```
+
+Then provision as in step 4, naming the other hub:
+
+```bash
+fr devices provision --port /dev/cu.usbserial-110 --profile e32a-cam --for-hub http://127.0.0.1:7520
+```
+
+The other hub registers the board (address, alias, its own network id) and marks it with the tag `new`; this hub writes
+that identity and its own Wi-Fi into the board. The result says `for_hub`, the alias the other hub gave, and
+`wifi: joined` once the other hub sees the board online (it waits 30 seconds). Nothing is written to the board when the
+other hub does not answer or refuses (an alias another device has, no stored network).
+
+On the other hub the board now waits to be named and accepted: `fr devices ls tag:new`, then
+`fr devices set <alias> --alias kitchen-cam --tag -new`. `--alias` on the provision command names it at once.
+
+On this hub the board is not a device: a new board gets no row here. A board that was registered here (one you move)
+stays in `fr devices ls` as seen only, with the tag `moved`, and the hub stops watching its USB port (in the default
+port mode, `adopted`), so the board can stay plugged in for power. Its bindings on this hub are yours to clear
+(`fr bind ls`). To take it back, provision it again without `--for-hub`.
+
+To put a newer build on such a board from this Mac, provision it for the other hub again: it keeps its address and
+alias there. Do not `fr flash --plan full` it from this hub: that erases the identity the other hub gave it
+(`--plan app` keeps it).
+
+All of this is for a hub with a network of its own. When the other hub has joined this hub's network (§13.2), the
+same command makes a board of the network: this hub keeps its row (no `moved` tag, its port stays watched), every hub
+of the network holds the same row (§13.5), and the board connects to the other hub first. The result then says
+`shared`.
+
+### 13.2 A second hub in the same network
+
+Two hubs can serve one network. A board then has one address and one alias on both, and an ordered list of hubs: it
+connects to the first, moves to the next when that one goes away, and comes back by itself. Example: the Mac
+(`lab-hub.local`) and a home hub (`home-hub.local`).
+
+The hubs keep a link to each other (§13.3): each knows which hub a board is on, a command for a board runs at
+the hub that has it, whichever hub you send it to (§13.4), and every hub holds every board's row (§13.5). What is not
+there yet: each hub keeps its own bindings and apps, and a live view or a wait for an event works only at the hub the
+board is on.
+
+**Once: make the home hub a member.** One hub of a network hands out the addresses (its registrar); the other joins
+it. On the home hub, with a tunnel to the Mac's API open (as in §13.1, here on port 7420):
+
+```bash
+fr net join --hub http://127.0.0.1:7420
+fr hub restart              # when the answer asks for it
+fr net get                  # registrar: http://127.0.0.1:7420
+fr hub peers                # both hubs, and whether the link between them is up (§13.3)
+```
+
+The home hub takes the Mac's network id (and its Wi-Fi name, when it had none stored; never the password). From then
+on the Mac gives every new board its address: `fr devices provision`, `adopt` and `enroll` on the home hub ask the
+Mac for it over the link, and refuse while the Mac's hub is not reachable (§13.5). If the home hub already had boards
+of its own, the join is refused and lists them; `--force` joins anyway, and each of those boards then needs a new
+identity (an ESP32 a flash, the answer says how).
+
+**Per board: set its hubs.** The home hub holds the board's row by itself (§13.5). On either hub:
+
+```bash
+fr devices hubs set pad-c6 --hub lab-hub.local --hub home-hub.local
+fr devices hubs get pad-c6                                    # the list, its rev, and "on": 0 (the first hub)
+```
+
+The first `--hub` is the board's default. `--hub home-hub.local/192.168.1.30` adds an address to fall back to when the
+name does not resolve. A list that names the hub the board is on is kept at once. Any other is tried: the board goes
+to its first hub, and if no hub of the list takes it within 60 seconds it returns to the list it had. `--none` takes
+the list away (the board uses the hub it was flashed for). A board needs firmware from this version on; an older one
+answers `CAPABILITY_UNSUPPORTED`.
+
+A new board is provisioned on whichever hub has its USB cable (`fr devices provision --port <port>`), then
+`fr devices hubs set` as above. `--for-hub http://127.0.0.1:7520` (§13.1) only chooses the hub the board connects to
+first.
+
+**What failover looks like.** Stop the Mac's hub: the board keeps trying it for about 10 to 15 seconds, then connects
+to the home hub, where `fr devices get pad-c6` shows it online with the same address and alias. Start the Mac's hub
+again: within a minute or two the board notices (it looks once a minute and wants two answers 10 seconds apart) and
+returns; the home hub shows it offline. It does not return while a firmware update is running over the hub it is on.
+On either hub, `fr devices get` shows `hubs` (the list that hub recorded) and `hub_now.here` (whether the board is
+connected to this hub right now).
+
+Things to know:
+
+- Both hubs must run the same version of this checkout.
+- A board on one hub's USB cable and the other hub's Wi-Fi stays on the Wi-Fi one. The hub with the cable has it
+  until its Wi-Fi is up, then shows it offline (reason `held by hub <name> over Wi-Fi`) and `at` the other hub; it
+  still reads its serial log and can flash it (§13.3). While the link between the hubs is down, a board with
+  **older firmware** in that position flips between the two hubs every few seconds: update its firmware before you
+  give it a second hub, or unplug the cable.
+- A flash from a hub (`fr flash --plan full`, `fr devices provision`) makes that hub the board's hub again and drops
+  the list; set it again afterwards.
+- A rename, a tag or a hub list is the same on every hub within a moment (§13.5). While the board is connected it is
+  made at the hub that has the board, which tells the board its new name. Bindings are per hub.
+
+### 13.3 The link between the hubs
+
+The hubs of a network keep one encrypted connection between each pair, on port 7423 of the LAN. Over it each hub
+tells the others which boards it has, so every hub can say where a board is, and passes on the commands for a board
+that another hub has (§13.4).
+
+**It starts with the join.** `fr net join` (§13.2) gives the joining hub three things from the registrar: the
+network's key, its name in the network and an epoch slot. The key is 32 random bytes that only the hubs hold; it is
+kept in `~/.fractonica/secrets.json` (like the Wi-Fi passwords) and no command ever prints it. The link starts by
+itself afterwards, and comes back by itself after a restart, a sleep or a network change.
+
+**Two hubs that joined before this version** need the join once more. Update both hubs, restart both, then on the
+member (the hub that joined), with the tunnel to the registrar open:
+
+```bash
+fr net join --hub http://127.0.0.1:7420     # the same command as the first time; nothing else changes
+fr hub peers
+```
+
+Until then `fr hub status` on the member warns that it holds no network key, and nothing else is different.
+
+**A hub's name.** Each hub has a short name, shown wherever a board's place is shown. It is the host name without
+its domain unless you give it one, and two hubs of a network cannot share a name:
+
+```bash
+fr hub name lab             # lowercase letters, digits and "-", at most 31
+```
+
+Name a hub before it joins when two machines are named alike. Later, the registrar renames itself at once; a member
+asks the registrar, so the tunnel to it must be open.
+
+**Who is where.**
+
+```bash
+fr hub peers
+# network 41235: this hub is lab (5d1c20a0b1c2, slot 0); registrar lab; link listening on 7423
+# HUB             ID            ROLE       SLOT  REACHABLE  SINCE                EPOCH  REGISTRY      BOARDS  ADDRESS
+# lab (this hub)  5d1c20a0b1c2  registrar  0     -          2026-11-21 10:00:00  12     8910d0ce4075  3       192.168.1.20:7423
+# home            a0b1c2d3e4f5  member     1     yes        2026-11-21 10:00:04  16390  8910d0ce4075  1       192.168.1.30:51234
+# registry: 14 rows; home in step, 10 sent, 0 received
+
+fr devices ls               # each board has `at`: the name of the hub it is connected to
+fr devices get pad-c6       # answered by home: presence online, at: home
+```
+
+`at` is this hub's own name for a board that is connected here and another hub's name for a board that hub reports.
+Such a board is `online`: a command for it is passed to that hub. When the hub that had a board cannot be reached,
+the board is `unknown`, `at` still names that hub, and `presence_reason` says `hub home is not reachable`. `at` is
+`null` when no hub has reported the board. A hub that stops is given up at once; one that falls silent (a sleeping
+Mac, a pulled network cable) after 6 seconds. REGISTRY is the version of the commands each hub runs: keep both the
+same, or the hubs still say who is where but pass no command to each other (§13.4).
+
+**A board on one hub's cable and the other's Wi-Fi.** While the other hub reports the board over Wi-Fi, the hub with
+the cable does not take the board's session on USB, so the board no longer shows up online there for a few seconds
+each time it connects. It keeps the port: `fr logs`, `fr flash` and `fr diag` work. When the board leaves the other
+hub, or that hub goes away, the hub with the cable takes it within a second or two.
+
+**When the link does not come up.** `fr hub peers` says why for each hub (`not reachable (…)`):
+
+- `the two hubs hold different network keys`, or `holds no network key`: join again on the member.
+- `is not in the member list`: the hub that says so has not heard of the other yet. The registrar tells it when the
+  two are next connected.
+- `ECONNREFUSED`, `no TLS session`: the other hub is stopped, asleep, or port 7423 is closed between them. Either
+  hub may open the connection, so one direction is enough. On a Mac, the hub needs the Local Network permission to
+  open it (`fr hub status`, `lnp`); the firewall must let `node` accept it.
+- `fr hub status` warns when this hub's epoch is outside its slot: `fr hub restart` once.
+
+A network has at most four hubs. Leaving a network, and moving the registrar, are not built yet.
+
+### 13.4 A board on another hub
+
+With the link up, any hub is a way in to every board of the network. No tunnel and no `FR_HUB` are needed for it.
+
+```bash
+fr devices get mic-s3                       # the Mac asks; home, which has the board, answers
+fr audio level mic-s3
+fr audio record mic-s3 ~/.fractonica/audio/take.wav --seconds 10     # the WAV ends up on the Mac
+fr camera snap cam-esp32 --out ~/.fractonica/captures/shot.jpg
+fr devices hubs set mic-s3 --hub home-hub.local --hub lab-hub.local
+fr ota mic-s3                               # the Mac's newest build; home fetches it, then updates the board
+```
+
+The answer is the other hub's, as if you had asked there. In `--json` the envelope has `at` (the hub that ran the
+command) when that is not the hub you asked.
+
+**Naming a hub.** `--at <hub>` before the command runs it on that hub, whatever it is about. This is how you reach
+another hub's own things: its USB ports, its status, its builds, its jobs.
+
+```bash
+fr --at home hub status
+fr --at home ports ls
+fr --at home jobs ls
+fr --at home flash pad-c6 --plan app        # a board on the home hub's USB cable
+```
+
+The name is the one in `fr hub peers`. `--at` goes before the command: some commands have an `--at` of their own
+(`fr time --at <instant>`). Over REST it is the header `X-Fr-At: <hub>`; an agent passes `at_hub` to any tool.
+`--at` with this hub's own name runs the command here and passes nothing on.
+
+**Jobs and files.** A job runs on the hub that has the board. `fr jobs get`, `wait`, `logs` and `cancel` find it by
+its id from any hub (the answer says `at`); `fr jobs ls` lists this hub's own jobs, `fr --at home jobs ls` the other
+hub's. A file you asked for with a path (`--out`, the WAV of `fr audio record`) is written on the other hub first and
+copied over the link when the job ends, so it is where you ran the command; the path must be under `~/.fractonica` on
+this hub, as always. Without a path the file stays on the other hub, and the result says where. A file a command
+reads (`fr audio play mic-s3 chime.wav`) is copied the other way first.
+
+**Firmware.** `fr ota <board>` uses the newest build of the hub you ask. The hub that has the board fetches it over
+the link, checks it and serves it to the board itself. `fr deploy` (build, then update) works only for boards on the
+hub you ask: for a board on another hub run `fr build`, then `fr ota`.
+
+**Several boards.** `fr send` and `fr input` (a command to several boards) are split between the hubs and the
+answers joined; each row says `at`. What answers one page, one job or one set of files (`fr logs`, `fr events`,
+`fr ota`, `fr latency`, `fr display snapshot`) needs its boards on one hub and says where each is otherwise.
+
+**Live: events, waits, the camera.** Each hub sends the others what its boards do, as it happens. So:
+
+```bash
+fr wait device pad-c6 --state online                 # the Mac waits; pad-c6 may come up on any hub
+fr send pad-c6 status.blink                          # answered by home; the cursor in the answer is home's
+fr wait event status.effect_done --selector pad-c6 --since <that cursor>    # runs on home, where the cursor is from
+fr events                                            # the Mac's own events, and the last ten minutes of the others', marked hub
+```
+
+- `fr wait event` and `fr wait device` cover boards on any hub, boards on several hubs at once, and a board that
+  changes hub while you wait. A dashboard or an app connected to one hub sees every board live; each event from
+  another hub says `hub`.
+- A wait runs on the hub its `--since` cursor came from. You do not have to think about it: pass the cursor you were
+  given. A cursor of a hub that is off answers `HUB_UNREACHABLE`: take a new one (`fr hub status`).
+- Logs stay on the hub that reads them. `fr logs <board>` and `fr logs <board> --follow` read them there by
+  themselves. `fr wait log` and `fr assert logs` need a cursor of that hub: the cursor of a command to that board,
+  or `fr --at home hub status`. With another cursor they say which hub to ask.
+- A camera or CSI view (the dashboard's panel, an app's `streams.subscribe`) works from any hub: the hub with the
+  board runs the stream and the link carries it. If the link is slow, pictures are skipped, not delayed. Closing the
+  view stops the stream at the board. When the board changes hub, the view goes on there by itself after a moment;
+  when its hub goes away the view says so and waits.
+- One stream per board, wherever you ask: `DEVICE_BUSY … for a client of hub home` names the hub whose view has it.
+
+**What it refuses, and what it says.**
+
+| You see | It means |
+|---|---|
+| `HUB_VERSION_MISMATCH … hub home runs another version` | The two hubs' REGISTRY differ (`fr hub peers`). Update both and restart each. |
+| `HUB_UNREACHABLE … hub home is not reachable` | The link is down, or the hub went away while the command ran. A command that only reads is safe to run again (`retryable`); one that changes something may have run there. |
+| `DEVICE_OFFLINE … it is at hub lab now` | The board moved while the command was on its way. A command that only reads was already tried again at the new hub; run another one again yourself. |
+| `… log lines do not cross the hubs' link: mic-s3 is at hub home …` | `fr wait log` or `fr assert logs` with a cursor of this hub for a board whose log is on another. Take a cursor there (`fr --at home hub status`, or the cursor of a command to the board) and use it. |
+| `cursor c:… is hub home's, not this hub's` | A cursor of one hub given to another with `--at`. Without `--at` the command goes to the right hub by itself. |
+| `hub home went away while wait_for_event waited` | The hub with the board stopped or its link dropped during the wait. Run it again when `fr hub peers` shows it. |
+| `… which does not relay its events (… before step 2.4 …)` | The other hub runs an older version. Update it and restart it; meanwhile `fr --at home wait …`. |
+| `… is at hub home, which does not relay live streams` | The same, for a camera view. |
+| `both boards must be on one hub` | A binding or a latency probe between boards on two hubs. |
+| `no hub named …` | `--at` with a name that is not in `fr hub peers`. |
+| `HUB_UNREACHABLE … the network's registrar, hands out addresses, and it is not reachable` | A new board on a member while the registrar's hub is off or the link is down (§13.5). |
+
+A cursor (`c:<run>.<seq>`) belongs to the hub that gave it, and its run number says which hub that is (the
+registrar's runs count from 1, the first member's from 1,000,000,001, the next one's from 2,000,000,001). A command
+answered by another hub returns that hub's cursor; a wait or a read with `--since` goes to the hub the cursor is from.
+After a hub first joins a network, `fr hub status` asks for one restart so that its cursors carry its number.
+
+`fr hub peers` ends with the live data: `events: home 1240 sent, 318 received`, and `dropped` or `missed` when a
+slow link lost some (`fr hub status` then warns on both hubs; the events themselves are stored on the hub that has
+the board). `fr hub status` also warns while another hub runs a version that relays no events.
+
+### 13.5 One registry
+
+Every hub of a network holds every board of it: its address, alias, tags, hub list, board, profile and firmware.
+A board made, renamed, tagged or deleted on one hub is the same on the others within a moment, and a hub that was
+off, asleep or restarted gets what it missed when its link comes back. Nothing has to be shared by hand:
+`fr devices share` toward a hub of the network answers that the row is there already.
+
+What stays each hub's own: when it last saw a board, the USB port, what it wrote into a board's flash (`provision` in
+`fr devices get`), boards it has only seen (`provisioned: false`), bindings, apps, logs, events and jobs. No Wi-Fi
+password and nothing else of `secrets.json` ever crosses.
+
+```bash
+fr hub peers                # last line: registry: 14 rows; home in step, 10 sent, 0 received
+fr devices get pad-c6       # replication: { row_rev, row_hub }: when the row was last written, and by which hub
+```
+
+**A new board on a member.** The registrar (the hub the others joined) still gives every address. A member asks it
+over the link, so `fr devices provision`, `adopt` and `enroll` work on any hub while the registrar is reachable. While
+it is not, they answer `HUB_UNREACHABLE … only that hub, the network's registrar, hands out addresses, and it is not
+reachable over the hubs' link now`: start that hub and run the command again. Everything else (renames, tags, hub
+lists, commands, updates) works without the registrar.
+
+**Two edits at once.** A rename on one hub and a tag on another both stay. Of two renames of one board the one with
+the higher `alias_rev` stays (a hub that renamed twice wins over one that renamed once), then the later one. Of two
+other edits of one row the later stays.
+
+**Two boards given one name** on two hubs that could not see each other: the later one keeps it. The other becomes
+`<name>-<3 hex digits of its id>` with the tag `renamed`, its board is told, and `fr hub status` on every hub says so
+until you settle it:
+
+```bash
+fr devices set kitchen-a1f --alias pantry --tag -renamed
+```
+
+**An address that differs.** If two hubs hold one board at two addresses (a database restored from a backup, two
+networks merged by hand), neither is changed. `fr hub status` and `fr hub peers` on both name the board and the two
+addresses, and `fr hub peers` shows `differs` until it is settled. The registrar's is the network's. On the other hub:
+
+```bash
+fr devices enroll <device id> --addr <the registrar's addr> --net <net id> --alias <alias>
+```
+
+A board that carries the other address in its flash needs its identity written again (`fr flash <board> --plan identity`).
+
+**A hub that was not updated** does not replicate. `fr hub status` on the updated hub says
+`hub home does not replicate the registry`, `fr hub peers` shows `does not replicate`, commands for its boards still
+pass, and `fr devices share` still gives it a row by hand. Update it and restart it.
+
+**The first time two hubs from before this version meet**, each takes the rows it lacks. For a row both hold, nothing
+changes where the two copies agree. Where they differ: the registrar's tags, board and profile stay, the alias with
+the higher `alias_rev`, the hub list with the higher rev, the firmware of the hub that saw the board last, and never
+another address (above). Boards connected to a hub that gained rows receive the network's address table (the
+DIRECTORY, as after any provisioning); no board is told a new name or hub list unless its row's really differed.
+
+**Deleting a board.** There is no command for it yet. A row removed from one hub's database is removed from the
+others and stays removed: a hub that returns with an older copy within a year does not bring it back. A board that
+still connects afterwards shows up again as seen only.
+
+Not yet through the link: the dashboard's live pages and an app's events and streams for a board on another hub
+(the dashboard lists such a board as online, and its buttons reach it), and the registry itself (§13.2).
+
 ---
 
 ## 14. Firmware updates

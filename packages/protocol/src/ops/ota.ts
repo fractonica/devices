@@ -15,6 +15,8 @@ const via = z
 export const OTA_OPS = [
   op({
     name: 'ota_deploy',
+    target: 'selector',
+    across: 'one',
     kind: 'job',
     tier: 'mutate',
     destructive: true,
@@ -36,6 +38,7 @@ export const OTA_OPS = [
   }),
   op({
     name: 'ota_status',
+    target: 'hub',
     kind: 'query',
     tier: 'read',
     summary: 'OTA jobs: per-device state (QUEUED .. SUCCEEDED, FAILED, ROLLED_BACK, TIMED_OUT, CANCELLED), bytes and timings, by job or by selector.',
@@ -49,6 +52,8 @@ export const OTA_OPS = [
   // ---- deploy (stream H2) ----
   op({
     name: 'deploy',
+    target: 'selector',
+    across: 'here',
     kind: 'job',
     tier: 'mutate',
     destructive: true,

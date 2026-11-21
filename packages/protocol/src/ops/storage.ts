@@ -155,6 +155,7 @@ export type StorageBench = z.infer<typeof StorageBenchSchema>;
 export const STORAGE_OPS = [
   op({
     name: 'storage_info',
+    target: 'device',
     kind: 'query',
     tier: 'read',
     summary:
@@ -165,6 +166,7 @@ export const STORAGE_OPS = [
   }),
   op({
     name: 'storage_ls',
+    target: 'device',
     kind: 'query',
     tier: 'read',
     summary:
@@ -175,6 +177,8 @@ export const STORAGE_OPS = [
   }),
   op({
     name: 'storage_get',
+    target: 'device',
+    files: { out: ['out'] },
     kind: 'job',
     tier: 'mutate',
     summary:
@@ -191,6 +195,8 @@ export const STORAGE_OPS = [
   }),
   op({
     name: 'storage_put',
+    target: 'device',
+    files: { in: ['file'] },
     kind: 'job',
     tier: 'mutate',
     destructive: true,
@@ -208,6 +214,7 @@ export const STORAGE_OPS = [
   }),
   op({
     name: 'storage_rm',
+    target: 'device',
     kind: 'command',
     tier: 'mutate',
     destructive: true,
@@ -218,6 +225,7 @@ export const STORAGE_OPS = [
   }),
   op({
     name: 'storage_mkdir',
+    target: 'device',
     kind: 'command',
     tier: 'mutate',
     summary: "Make a directory on a board's card (fr.storage mkdir), with the directories on the way; OK when it is there already.",
@@ -227,6 +235,7 @@ export const STORAGE_OPS = [
   }),
   op({
     name: 'storage_bench',
+    target: 'device',
     kind: 'job',
     tier: 'mutate',
     summary:

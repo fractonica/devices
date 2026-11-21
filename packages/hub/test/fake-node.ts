@@ -1614,14 +1614,20 @@ export async function rig(
     logNow?: () => number;
     /** BEACON hub_ipv4 (design m2-c4-gateway D11). */
     hubIpv4?: () => string | null;
+    /** The hubs' link's answer to "does a peer hub hold this board's TCP session" (design multi-hub-m2 §6). */
+    heldOverTcp?: (deviceId: string) => string | null;
+    /** The hubs' link's answer to "which peer hub holds this board" (design multi-hub-m2 §8: device.offline `at`). */
+    heldByPeer?: (deviceId: string) => string | null;
+    /** The hub run of its cursors (default 1; a member of a network counts in its slot, db.ts nextHubRun). */
+    run?: number;
   } = {},
 ): Promise<Rig> {
   const dir = mkdtempSync(join(tmpdir(), 'fr-router-'));
   const db = openDb(join(dir, 'hub.db'));
   const seq = new CursorSeq(db);
-  const logs = new LogStore(db, 1, { retention: false, seq, ...(opts.logNow ? { now: opts.logNow } : {}) });
+  const logs = new LogStore(db, opts.run ?? 1, { retention: false, seq, ...(opts.logNow ? { now: opts.logNow } : {}) });
   const scale = opts.scale ?? createScaleCounters();
-  const events = new EventStore(db, seq, 1);
+  const events = new EventStore(db, seq, opts.run ?? 1);
   const registry = opts.registry ?? new FakeRegistry();
   const serial = new FakeSerial();
   const sessions: number[] = [];
@@ -1640,6 +1646,8 @@ export async function rig(
     logIngest: createLogIngest(logs, scale),
     scale,
     ...(opts.hubIpv4 ? { hubIpv4: opts.hubIpv4 } : {}),
+    ...(opts.heldOverTcp ? { heldOverTcp: opts.heldOverTcp } : {}),
+    ...(opts.heldByPeer ? { heldByPeer: opts.heldByPeer } : {}),
   });
   serial.deliver = (device, line) => router.serialLine(device, line);
   await router.start();
@@ -1830,8 +1838,10 @@ export const PAD_CAPS = [
  * rig() plus a job runner and a started binding service in the HubContext the op handlers get, with the
  * router as the HubBroadcast (design c5 §4): what message_send, binding_* and latency_stats run on.
  */
-export async function netRig(opts: { config?: Partial<RouterConfig>; registry?: FakeRegistry; pushTimeoutMs?: number } = {}): Promise<NetRig> {
-  const r = await rig({ config: opts.config, registry: opts.registry });
+export async function netRig(
+  opts: { config?: Partial<RouterConfig>; registry?: FakeRegistry; pushTimeoutMs?: number; hubEpoch?: number; run?: number; heldOverTcp?: (deviceId: string) => string | null; heldByPeer?: (deviceId: string) => string | null } = {},
+): Promise<NetRig> {
+  const r = await rig({ config: opts.config, registry: opts.registry, hubEpoch: opts.hubEpoch, run: opts.run, heldOverTcp: opts.heldOverTcp, heldByPeer: opts.heldByPeer });
   const jobs = new JobRunner(r.db);
   // The fixture fence on resolved ends and stored rows (D15): here a role:fixture registry row.
   const bindings = createBindings({ db: r.db, registry: r.registry, router: r.router, events: r.events, pushTimeoutMs: opts.pushTimeoutMs ?? 1000, isFixture: (id) => r.registry.get(id)?.role === 'fixture' });

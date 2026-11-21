@@ -1,6 +1,7 @@
 // The node's IP links to the hub (design c3 §3 "Links", spec 05 §5.3-5.4, §5.10-5.12): Wi-Fi STA with a
 // pinned AP, hub_host resolution (mDNS on every attempt, then the last address, then fr_ident's hub_ip),
 // a TCP link (`len u16 LE | envelope`) and a UDP link (one datagram per envelope) to hub_host:7421.
+// With a hub list (fr.node.hubs_set, design multi-hub-m1) the hub is the one of the list the board is on now.
 // From C5 also the ESP-NOW link (design c5 §3): AirLink on the STA interface, on the network's channel C.
 //
 // One task (`fr_net`) owns Wi-Fi control, name resolution and the TCP socket; the core task only queues
@@ -22,6 +23,7 @@
 #include "fr/base.hpp"
 #include "fr/id.h"
 #include "fr/net/air.hpp"
+#include "fr/net/hub_plan.hpp"
 #include "fr/net/link.hpp"
 #include "fr/net/net.hpp"
 
@@ -107,6 +109,28 @@ Status status();
  * rejoined. BUSY while a previous request is waiting to apply; FAILED before start().
  */
 fr::Status net_set(const fr_net_creds_t &creds);
+
+/** What fr.node.hubs_get answers (design multi-hub-m1). */
+struct HubsNow {
+    HubList list{};      // the list in force, one on trial included; count 0: none stored
+    uint8_t on = 0xFF;   // the index in it of the hub the TCP session is with; 0xFF: none of them
+    bool trial = false;  // the list is on trial: no hub of it has WELCOMEd the board yet
+};
+
+/**
+ * fr.node.hubs_set (core task; design multi-hub-m1, fr/net/hub_plan.hpp): takes `list` about 300 ms later, so the
+ * RESULT leaves first. A list that names the hub the board is on is stored (nvs:fr_hubs) and in force at once,
+ * the session kept; any other is on trial: the board goes to its first hub, and unless one of its hubs WELCOMEs it
+ * within 60 s it returns to the list it had. EXPIRED for a rev at or below the one held (the same list and rev: OK),
+ * INVALID_ARGS for a list that is not one, BUSY while an earlier one waits to apply, UNSUPPORTED on a gateway,
+ * FAILED before start().
+ */
+fr::Status hubs_set(const HubList &list);
+/** Any task. */
+HubsNow hubs_now();
+/** Something that must not be cut short runs over the hub the board is on (an OTA job): no failback to a hub
+ * above it while `on`. Any task. */
+void hub_busy(bool on);
 
 /**
  * `net wifi_down <s>` (design c5 §2, debug builds; core task): about 300 ms later, so the RESULT leaves on

@@ -20,6 +20,8 @@ public:
     Runner(PosixCore &core, InlineWorker &worker, net::Net &net, Device &device, TcpLink &tcp)
         : core_(core), worker_(worker), net_(net), device_(device), tcp_(tcp)
     {
+        // Design multi-hub-m1: the stored hub list into the link, fr.node.hubs_set and hubs_get to it.
+        device_.attach_hub_link(tcp_);
     }
 
     /** A descriptor to wait on; `on_ready` gets poll()'s revents on the Runner thread. */

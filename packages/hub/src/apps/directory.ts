@@ -9,6 +9,8 @@ import type { WelcomeCap, WelcomeDevice } from '@fractonica/sdk/wire';
 
 import { manifestCapsByFwPrefix } from '../artifacts.ts';
 import type { Device, HubContext } from '../context.ts';
+import { hubName } from '../peers/identity.ts';
+import { presenceView } from '../peers/index.ts';
 import { routerInfo } from '../router/index.ts';
 import { instancesOf } from '../router/ops.ts';
 
@@ -76,10 +78,15 @@ function catalogVersion(cap: string): string {
 }
 
 /** One device as a welcome lists it (and device.added carries it). */
-export function welcomeDevice(hub: Pick<HubContext, 'db' | 'router'>, dev: Device, manifests: ManifestCache): WelcomeDevice {
-  const presence = hub.router.presence(dev.device_id);
+export function welcomeDevice(hub: Pick<HubContext, 'db' | 'router'> & Partial<Pick<HubContext, 'peers'>>, dev: Device, manifests: ManifestCache): WelcomeDevice {
+  // The network's presence (design multi-hub-m2 §6, §8): a board another hub holds is online for an app, and its
+  // properties are what that hub last said of them.
+  const view = hub.peers ? presenceView(hub, dev.device_id) : { presence: hub.router.presence(dev.device_id), at: null };
+  const presence = view.presence;
   const info = routerInfo(hub.router, dev.device_id);
-  const fw = fwPrefix(hub, dev);
+  const elsewhere = view.at !== null && hub.peers !== undefined && view.at !== hubName(hub.db) ? view.at : null;
+  const mirror = info && (info.presence === 'online' || info.presence === 'suspect') ? info.properties : ((elsewhere ? hub.peers!.events.properties(dev.device_id) : null) ?? info?.properties ?? {});
+  const fw = (elsewhere ? hub.peers!.heldFw(dev.device_id) : null) ?? fwPrefix(hub, dev);
   const manifest = manifests.caps(hub, fw);
   const caps: WelcomeCap[] = (boardInstances(hub, dev) ?? []).map((c) => {
     const m = manifest?.find((x) => x.port === c.port && x.name === c.name);
@@ -88,7 +95,7 @@ export function welcomeDevice(hub: Pick<HubContext, 'db' | 'router'>, dev: Devic
   });
   // The mirror is `<inst>.<prop>` -> value (05 §5.8); apps get it per instance.
   const props: Record<string, Record<string, unknown>> = {};
-  for (const [key, value] of Object.entries(info?.properties ?? {})) {
+  for (const [key, value] of Object.entries(mirror)) {
     const dot = key.indexOf('.');
     if (dot > 0) {
       (props[key.slice(0, dot)] ??= {})[key.slice(dot + 1)] = value;
@@ -103,6 +110,7 @@ export function welcomeDevice(hub: Pick<HubContext, 'db' | 'router'>, dev: Devic
     fw,
     caps,
     props,
+    ...(elsewhere && (presence === 'online' || presence === 'suspect') ? { hub: elsewhere } : {}),
   };
 }
 

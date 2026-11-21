@@ -761,3 +761,70 @@ TEST(net_jitter_is_deterministic_per_seed)
     CHECK(from_mac(1) == from_mac(1));
     CHECK(from_mac(1) != from_mac(2));
 }
+
+// ---- one network, several hubs (design multi-hub-m1) ----
+
+TEST(net_welcome_from_another_hub_ends_the_serial_session_of_the_first)
+{
+    NetRig r;
+    r.tcp.far = 1;
+    r.session(LinkKind::serial);
+    r.session(LinkKind::tcp);
+    r.down(LinkKind::tcp);
+    r.tcp.far = 2;
+    r.up(LinkKind::tcp);
+    r.deliver(LinkKind::tcp, r.hub.welcome());  // the same epoch, another hub
+    CHECK(r.net.state().link(LinkKind::tcp).session);
+    CHECK(!r.net.state().link(LinkKind::serial).session);
+    REQUIRE_EQ(r.serial.drop_reasons.size(), 1u);
+    CHECK(r.serial.drop_reasons[0] == fr::net::DropReason::hub_restarted);
+}
+
+TEST(net_serial_welcome_of_another_hub_is_refused_while_tcp_lives)
+{
+    // The board is on USB at one hub and has its TCP session with another (both have its row). The hub on USB
+    // answers the serial HELLO with its own run's WELCOME. Taking it would end the TCP session, whose next WELCOME
+    // would end this one, round and round: the board keeps the hub it chose and stops asking on serial.
+    NetRig r;
+    r.session(LinkKind::tcp);
+    r.up(LinkKind::serial);
+    CHECK_EQ(r.serial.count(kPres, kHello), 1u);
+    const uint16_t tcp_epoch = r.net.state().hub_epoch;
+    frt::HubSim usb = r.hub;
+    usb.epoch = static_cast<uint16_t>(tcp_epoch + 7);
+    usb.ucast = 0;
+    r.deliver(LinkKind::serial, usb.welcome());
+    CHECK(!r.net.state().link(LinkKind::serial).session);
+    CHECK(r.net.state().link(LinkKind::tcp).session);
+    CHECK_EQ(r.net.state().hub_epoch, tcp_epoch);
+    CHECK_EQ(r.net.state().welcomes_refused, 1u);
+    CHECK_EQ(r.tcp.drops, 0);
+    // No HELLO on serial while the TCP session lives.
+    advance_alive(r, LinkKind::tcp, 10'000);
+    CHECK_EQ(r.serial.count(kPres, kHello), 1u);
+    CHECK(r.net.state().link(LinkKind::tcp).session);
+    // The TCP session ends: now the hub on USB may have the board.
+    r.down(LinkKind::tcp);
+    r.core.advance_ms(1);
+    CHECK_EQ(r.serial.count(kPres, kHello), 2u);
+    r.deliver(LinkKind::serial, usb.welcome());
+    CHECK(r.net.state().link(LinkKind::serial).session);
+    CHECK_EQ(r.net.state().hub_epoch, usb.epoch);
+}
+
+TEST(net_serial_welcome_of_a_new_run_is_taken_once_tcp_is_silent)
+{
+    // One hub that restarted: its old TCP connection is dead (no frame for two intervals), and the WELCOME of its
+    // new run arrives over USB first. That is the rule of old, and it stands.
+    NetRig r;
+    r.session(LinkKind::serial);
+    r.session(LinkKind::tcp);
+    r.core.advance_ms(2500);  // nothing from the hub on TCP
+    r.hub.epoch = 42;
+    r.hub.ucast = 0;
+    r.deliver(LinkKind::serial, r.hub.welcome());
+    CHECK_EQ(r.net.state().hub_epoch, 42);
+    CHECK(r.net.state().link(LinkKind::serial).session);
+    CHECK(!r.net.state().link(LinkKind::tcp).session);
+    CHECK_EQ(r.net.state().welcomes_refused, 0u);
+}

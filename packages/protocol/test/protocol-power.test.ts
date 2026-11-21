@@ -12,7 +12,7 @@ import { CATALOG } from '../src/gen/catalog.ts';
 
 const hashOf = (ops: readonly { name: string; input: z.ZodType }[]) =>
   createHash('sha256')
-    .update(JSON.stringify(ops.map((o) => [o.name, z.toJSONSchema(o.name === 'hub_doctor' && !ops.some((x) => x.name === 'hub_doctor_fix') ? z.object({}) : o.input) /* hub_doctor had no input before the dashboard's health */])))
+    .update(JSON.stringify(ops.map((o) => [o.name, z.toJSONSchema(o.name === 'hub_doctor' && !ops.some((x) => x.name === 'hub_doctor_fix') ? z.object({}) : o.name === 'device_provision' && !ops.some((x) => x.name === 'device_enroll') ? (o.input as z.ZodObject).omit({ for_hub: true }) : o.input) /* hub_doctor had no input before the dashboard's health; device_provision no for_hub before device_enroll (protocol-for-hub.test.ts) */])))
     .digest('hex')
     .slice(0, 12);
 
@@ -35,7 +35,7 @@ const POWER_OP_NAMES = [
 
 describe('POWER-1 ops (design power-p1 D11)', () => {
   it('adds fourteen ops on their CLI paths and moves REGISTRY_HASH once', () => {
-    const power1 = OPS.filter((o) => !/^(wiring|part|storage|clock|app|time)_|^device_adopt$|^port_(lend|ignore|claim)$|^hub_doctor_fix$/.test(o.name)); // WIRING-1 adds eleven (protocol-wiring.test.ts)
+    const power1 = OPS.filter((o) => !/^(wiring|part|storage|clock|app|time)_|^device_adopt$|^port_(lend|ignore|claim)$|^hub_doctor_fix$|^device_enroll$|^device_(hubs_set|hubs_get|share)$|^network_join$|^network_admit$|^hub_(name_set|peers)$/.test(o.name)); // WIRING-1 adds eleven (protocol-wiring.test.ts)
     expect(power1).toHaveLength(82);
     expect(power1.slice(-14).map((o) => o.name)).toEqual(POWER_OP_NAMES);
     const paths: Record<string, [string[], string[]?, string?, string?]> = {

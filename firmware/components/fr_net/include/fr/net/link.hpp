@@ -60,6 +60,13 @@ public:
      * Links without such a queue say 0.
      */
     virtual size_t queued() const { return 0; }
+    /**
+     * Which hub is at the far end, for a link that can move between hubs (TCP with a hub list, design multi-hub-m1):
+     * a number that changes whenever the link connects to another hub than its last connection reached, never 0.
+     * Net takes the first WELCOME after such a change for a new hub run whatever its hub_epoch says (two hubs number
+     * their runs apart from each other and may agree by chance). 0: a link that cannot tell (serial, the gateway).
+     */
+    virtual uint32_t far_end() const { return 0; }
 
 protected:
     ~Link() = default;

@@ -129,3 +129,65 @@ describe('latency_stats rendering', () => {
     ]);
   });
 });
+
+describe("the hubs' link rendering (design multi-hub-m2)", () => {
+  const peers = {
+    net_id: 41235,
+    hub: { id: 'a0b1c2d3e4f5', name: 'attic', slot: 1 },
+    registrar: 'lab',
+    members_version: 2,
+    link: { listening: true, port: 7423, error: null },
+    peers: [
+      { id: '5d1c20a0b1c2', name: 'lab', this: false, role: 'registrar', slot: 0, host: 'lab-hub.local', reachable: false, since: null, registry_hash: null, hub_epoch: null, boards: null, address: null, last_error: '192.168.1.20:7423: ECONNREFUSED' },
+      { id: 'a0b1c2d3e4f5', name: 'attic', this: true, role: 'member', slot: 1, host: 'attic.local', reachable: true, since: '2026-11-21T10:00:00.000Z', registry_hash: '7113df84c91b', hub_epoch: 16390, boards: 3, address: '192.168.1.30:7423' },
+    ],
+  };
+
+  it('prints hub_peers as a table, this hub marked, and why an unreachable hub is not', () => {
+    const lines = renderResult('hub_peers', ok(peers)).out.split('\n');
+    expect(lines[0]).toBe('network 41235: this hub is attic (a0b1c2d3e4f5, slot 1); registrar lab; link listening on 7423');
+    expect(lines[1].split(/\s{2,}/)).toEqual(['HUB', 'ID', 'ROLE', 'SLOT', 'REACHABLE', 'SINCE', 'EPOCH', 'REGISTRY', 'BOARDS', 'ADDRESS']);
+    expect(lines[2].split(/\s{2,}/)).toEqual(['lab', '5d1c20a0b1c2', 'registrar', '0', 'no', '-', '-', '-', '-', '-']);
+    expect(lines[3].split(/\s{2,}/).slice(0, 5)).toEqual(['attic (this hub)', 'a0b1c2d3e4f5', 'member', '1', '-']);
+    expect(lines[3]).toMatch(/16390\s+7113df84c91b\s+3\s+192\.168\.1\.30:7423$/);
+    // SINCE is the local date and time of day, both from one clock.
+    const at = new Date('2026-11-21T10:00:00.000Z');
+    const local = `${at.getFullYear()}-${String(at.getMonth() + 1).padStart(2, '0')}-${String(at.getDate()).padStart(2, '0')} ${at.toLocaleTimeString('en-GB', { hour12: false })}`;
+    expect(lines[3].split(/\s{2,}/)[5]).toBe(local);
+    expect(lines[4]).toBe('lab: not reachable (192.168.1.20:7423: ECONNREFUSED)');
+    expect(lines).toHaveLength(5);
+    expect(renderResult('hub_peers', ok({ ...peers, link: { listening: false, port: null, error: '0.0.0.0:7423: EADDRINUSE' } })).out).toContain('link not listening (0.0.0.0:7423: EADDRINUSE)');
+  });
+
+  it('prints how the device registry stands with each reachable hub (design multi-hub-m2 step 2.3)', () => {
+    const lab = { ...peers.peers[0], reachable: true, last_error: undefined };
+    const withRegistry = (registry: Record<string, unknown>, top: Record<string, unknown> = {}) =>
+      renderResult('hub_peers', ok({ ...peers, peers: [{ ...lab, registry }, peers.peers[1]], registry: { rows: 14, tombstones: 0, hash: 'a1', conflicts: [], ...top } })).out.split('\n');
+    expect(withRegistry({ speaks: true, in_step: true, rows: 14, sent: 10, received: 0 }).at(-1)).toBe('registry: 14 rows; lab in step, 10 sent, 0 received');
+    expect(withRegistry({ speaks: true, in_step: false, rows: 4, sent: 0, received: 0, conflicts: 1 }, { tombstones: 2 }).at(-1)).toBe('registry: 14 rows, 2 deleted; lab differs (4 rows there), 0 sent, 0 received, 1 not taken');
+    expect(withRegistry({ speaks: false, in_step: null, rows: null }).at(-1)).toBe('registry: 14 rows; lab does not replicate');
+    const conflict = withRegistry({ speaks: true, in_step: false, rows: 14, sent: 1, received: 1, conflicts: 1 }, { conflicts: [{ device: 'aabbcc000001', hub: 'lab', message: 'pad is addr 7 here and addr 9 at hub lab: neither copy was changed' }] });
+    expect(conflict.at(-1)).toBe('registry: pad is addr 7 here and addr 9 at hub lab: neither copy was changed');
+    // A hub from before the registry was replicated answers no `registry`: the table alone, as before.
+    expect(renderResult('hub_peers', ok(peers)).out).not.toContain('registry:');
+  });
+
+  it('prints the live data with each reachable hub (design multi-hub-m2 step 2.4)', () => {
+    const lab = { ...peers.peers[0], reachable: true, last_error: undefined };
+    const withEvents = (events: Record<string, unknown>, streams?: Record<string, unknown>) => renderResult('hub_peers', ok({ ...peers, peers: [{ ...lab, events, ...(streams ? { streams } : {}) }, peers.peers[1]] })).out.split('\n');
+    expect(withEvents({ speaks: true, sent: 1240, received: 318, dropped: 0, missed: 0, queued: 0 }).at(-1)).toBe('events: lab 1240 sent, 318 received');
+    expect(withEvents({ speaks: true, sent: 9, received: 2, dropped: 40, missed: 3, queued: 12 }, { speaks: true, open: 1 }).at(-1)).toBe('events: lab 9 sent, 2 received, 40 dropped, 3 missed, 12 waiting, 1 stream relayed');
+    expect(withEvents({ speaks: true, sent: 0, received: 0 }, { speaks: true, open: 2 }).at(-1)).toBe('events: lab 0 sent, 0 received, 2 streams relayed');
+    // A hub from before step 2.4 relays none; a hub that is not reachable has no line; an older answer has no `events`.
+    expect(withEvents({ speaks: false }).at(-1)).toBe('events: lab relays none');
+    expect(renderResult('hub_peers', ok({ ...peers, peers: [{ ...peers.peers[0], events: { speaks: true, sent: 1, received: 1 } }, peers.peers[1]] })).out).not.toContain('events:');
+    expect(renderResult('hub_peers', ok(peers)).out).not.toContain('events:');
+  });
+
+  it('prints where a board is in fr devices ls and fr devices get: the `at` of each row', () => {
+    const row = { device_id: 'a0b1c2d3e4f5', alias: 'pad-c6', presence: 'offline', at: 'lab' };
+    expect(renderResult('device_list', ok({ devices: [row], count: 1, truncated: false })).out).toContain('at: lab');
+    expect(renderResult('device_get', ok({ ...row, hub_now: { here: false, at: 'lab' } })).out).toMatch(/at: lab[\s\S]*hub_now:[\s\S]*at: lab/);
+    expect(renderResult('device_list', ok({ devices: [{ ...row, at: null }], count: 1, truncated: false })).out).toContain('at: null');
+  });
+});

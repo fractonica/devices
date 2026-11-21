@@ -1,5 +1,7 @@
 import Database from 'better-sqlite3';
 
+import { runSlot, slotRun } from '@fractonica/protocol';
+
 export type Db = Database.Database;
 
 /**
@@ -15,7 +17,7 @@ function devicesTable(name: string): string {
      net INTEGER, board TEXT, profile TEXT, chip TEXT, tags TEXT NOT NULL DEFAULT '[]',
      role TEXT NOT NULL DEFAULT 'node' CHECK (role IN ('node', 'gateway', 'fixture')), fw_id TEXT,
      provisioned INTEGER NOT NULL DEFAULT 0, last_seen TEXT, last_epoch INTEGER, created_at TEXT NOT NULL,
-     provision TEXT, network TEXT NOT NULL DEFAULT 'default')`;
+     provision TEXT, network TEXT NOT NULL DEFAULT 'default', hubs TEXT)`;
 }
 
 /**
@@ -106,6 +108,31 @@ const MIGRATIONS = [
   `CREATE TABLE IF NOT EXISTS parts_stock (
      part TEXT NOT NULL, value TEXT NOT NULL DEFAULT '', qty INTEGER NOT NULL CHECK (qty >= 0), location TEXT,
      note TEXT, updated_at TEXT NOT NULL, PRIMARY KEY (part, value))`,
+  // The hubs' link (design multi-hub-m2 §4; peers/members.ts): the hubs of this hub's network as the registrar keeps
+  // them (this hub included; slot 0 is the registrar). `addr` and `link_port` are what a hub gave when it joined;
+  // seen_addr, seen_port and seen_at are this hub's own (where a peer's link last came from) and are not replicated.
+  // Never the network key: that is in secrets.json only.
+  `CREATE TABLE IF NOT EXISTS hub_members (
+     hub_id TEXT PRIMARY KEY, name TEXT NOT NULL UNIQUE, host TEXT NOT NULL, addr TEXT, link_port INTEGER NOT NULL,
+     slot INTEGER NOT NULL UNIQUE CHECK (slot BETWEEN 0 AND 3), joined_at TEXT NOT NULL,
+     seen_addr TEXT, seen_port INTEGER, seen_at TEXT)`,
+  // Jobs that run at another hub of the network because an op was passed on there (design multi-hub-m2 §7.3;
+  // peers/remote-jobs.ts): which hub, and the files this hub still has to pull when the job ends (`wants`: out field ->
+  // the path of this machine it was asked for; `spool`: where that hub writes them; `spool_root`: its directory there).
+  `CREATE TABLE IF NOT EXISTS peer_jobs (
+     job_id TEXT PRIMARY KEY, hub_id TEXT NOT NULL, hub_name TEXT NOT NULL, op TEXT NOT NULL,
+     wants TEXT, spool TEXT, spool_root TEXT, pulled_at TEXT, created_at TEXT NOT NULL)`,
+  // One registry across the hubs of a network (design multi-hub-m2 §5, §16; registry/sync.ts): one row per device of
+  // the network, beside `devices` (whose columns did not change, so a hub of an older version opens this file as
+  // before and ignores this table). `row_rev` and `row_hub`: the rev of the row's last write and the hub that made it;
+  // the alias, the hub list and the firmware id have their own (`*_at`, `*_hub`). `core`, `alias_v`, `hubs_v`, `fw_v`:
+  // the values those revs stand for, so a change in `devices` that nobody stamped is found by comparing. `gone` 1: a
+  // tombstone (the row was deleted at `row_rev`; `alias` is the name it had). `hash`: what two hubs compare.
+  `CREATE TABLE IF NOT EXISTS registry_sync (
+     device_id TEXT PRIMARY KEY, gone INTEGER NOT NULL DEFAULT 0, gone_at TEXT, alias TEXT,
+     row_rev INTEGER NOT NULL, row_hub TEXT NOT NULL, core TEXT,
+     alias_at INTEGER, alias_hub TEXT, alias_v TEXT, hubs_at INTEGER, hubs_hub TEXT, hubs_v TEXT,
+     fw_at INTEGER, fw_hub TEXT, fw_v TEXT, hash TEXT NOT NULL)`,
 ];
 
 /** Columns added to tables that earlier hubs created (CREATE TABLE IF NOT EXISTS leaves those as they were). */
@@ -123,6 +150,8 @@ const ADDED_COLUMNS: { table: string; column: string; decl: string }[] = [
   // The port policy (ports/policy.ts): the device a port was last seen carrying (a bridge port's HELLO, a provision's
   // probe), so in mode adopted a known board's port is opened again after a re-plug.
   { table: 'ports_seen', column: 'device_id', decl: 'TEXT' },
+  // Design multi-hub-m1: a board's hub list as device_hubs_set pushed it (JSON {rev, hubs, set_at}; NULL: none).
+  { table: 'devices', column: 'hubs', decl: 'TEXT' },
   // A bridge port's adapter when device_id was recorded (`vid:pid:serial`, serialport's identity of the adapter): a
   // different adapter in the same USB socket is not taken for that board (ports/policy.ts).
   { table: 'ports_seen', column: 'device_port', decl: 'TEXT' },
@@ -224,17 +253,59 @@ function kvSetDurable(db: Db, k: string, v: string): void {
 export function nextHubRun(db: Db): number {
   const run = Number(kvGet(db, 'hub_run') ?? '0') + 1;
   kvSetDurable(db, 'hub_run', String(run));
-  return run;
+  // In a network of several hubs the run carries this hub's slot (design multi-hub-m2 §17): two hubs then never give
+  // one run number, so a cursor is never taken for another hub's. kv keeps the hub's own counter, so a hub that is
+  // alone, the registrar (slot 0) and a version from before this count as they always did.
+  return slotRun(hubSlot(db) ?? 0, run);
+}
+
+/** Whether `run` is one a hub in `slot` gives (hubSlot; null, a hub that is alone, counts as the registrar does). */
+export function runInSlot(run: number, slot: number | null): boolean {
+  return runSlot(run) === (slot ?? 0);
+}
+
+/** An epoch slot's size (design multi-hub-m2 §9): a quarter of the u16 space; a slot's runs are 1..0x3FFF. */
+export const EPOCH_SLOT_SIZE = 0x4000;
+const EPOCH_SLOT_RUNS = EPOCH_SLOT_SIZE - 1;
+/** kv: the epoch slot the registrar gave this hub (0: it is the registrar); absent on a hub that is alone. */
+export const HUB_SLOT_KEY = 'hub.slot';
+
+/** This hub's epoch slot (0..3), or null on a hub that holds none. */
+export function hubSlot(db: Db): number | null {
+  const v = kvGet(db, HUB_SLOT_KEY);
+  const n = v === undefined ? NaN : Number(v);
+  return Number.isInteger(n) && n >= 0 && n * EPOCH_SLOT_SIZE < 0x10000 ? n : null;
+}
+
+/** Whether `epoch` is one a hub in `slot` gives: `slot * 0x4000 + run`, run 1..0x3FFF. */
+export function epochInSlot(epoch: number, slot: number): boolean {
+  return epoch > slot * EPOCH_SLOT_SIZE && epoch <= slot * EPOCH_SLOT_SIZE + EPOCH_SLOT_RUNS;
+}
+
+/**
+ * The epoch after `prev` for a hub in `slot` (design multi-hub-m2 §9): `slot * 0x4000 + run`, the run counted from 1 to
+ * 0x3FFF and wrapping inside the slot. Two hubs of one network never give one epoch, however often each restarts.
+ * A `prev` outside the slot (a hub that just got its slot; a member whose counter MULTI-HUB-1's network_join moved a
+ * quarter of the space away from the registrar's) starts the slot's runs at 1: never 0, which a node reads as "no hub
+ * yet", and never `slot * 0x4000`, which is no run of any slot.
+ */
+export function slotEpoch(slot: number, prev: number): number {
+  const base = slot * EPOCH_SLOT_SIZE;
+  const run = Number.isInteger(prev) && epochInSlot(prev, slot) ? prev - base : 0;
+  return base + (run % EPOCH_SLOT_RUNS) + 1;
 }
 
 /**
  * Increments and returns the hub epoch, the `epoch` of every hub frame (05 §5.8): a u16 that skips 0
  * when it wraps, so 0 can mean "no hub yet" on a node. Fsynced like the run counter: a rolled-back
  * epoch would let a node's window take this run's frames for replays of the last run's.
+ * A hub with an epoch slot (kv `hub.slot`: the registrar gave it one, or it is the registrar of a network another hub
+ * joined) counts inside that slot (slotEpoch); a hub that is alone counts the whole space as before.
  */
 export function nextHubEpoch(db: Db): number {
   const prev = Number(kvGet(db, 'hub_epoch') ?? '0');
-  const epoch = Number.isInteger(prev) && prev >= 0 && prev < 0xffff ? prev + 1 : 1;
+  const slot = hubSlot(db);
+  const epoch = slot !== null ? slotEpoch(slot, prev) : Number.isInteger(prev) && prev >= 0 && prev < 0xffff ? prev + 1 : 1;
   kvSetDurable(db, 'hub_epoch', String(epoch));
   return epoch;
 }

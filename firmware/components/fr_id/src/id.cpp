@@ -18,6 +18,7 @@ constexpr const char *NET_NAMESPACE = "fr_net";       // fr_ident: Wi-Fi and hub
 constexpr const char *BOOT_NAMESPACE = "fr_boot";     // RW, default `nvs` partition (06 §6.3)
 constexpr const char *OVR_NAMESPACE = "fr_ovr";       // RW: alias + rev from fr.node.set_alias
 constexpr const char *NET2_NAMESPACE = "fr_net2";     // RW: Wi-Fi from fr.node.net_set
+constexpr const char *HUBS_NAMESPACE = "fr_hubs";     // RW: the hub list from fr.node.hubs_set
 constexpr const char *LINK_NAMESPACE = "fr_link";     // RW: channel + BSSID of the last association
 constexpr const char *EPOCH_KEY = "epoch";
 
@@ -330,6 +331,86 @@ extern "C" esp_err_t fr_id_clear_net_override(void)
 {
     nvs_handle_t h;
     esp_err_t err = nvs_open(NET2_NAMESPACE, NVS_READWRITE, &h);
+    if (err != ESP_OK) {
+        return err;
+    }
+    return commit_and_close(h, nvs_erase_all(h));
+}
+
+namespace {
+
+/** The key of hub `i`'s host ("h0") or ip ("i0"). */
+void hub_key(char (&out)[4], char kind, size_t i)
+{
+    out[0] = kind;
+    out[1] = static_cast<char>('0' + i);
+    out[2] = '\0';
+}
+
+}  // namespace
+
+extern "C" esp_err_t fr_id_load_hubs(fr_hub_list_t *out)
+{
+    std::memset(out, 0, sizeof(*out));
+    nvs_handle_t h;
+    if (nvs_open(HUBS_NAMESPACE, NVS_READONLY, &h) != ESP_OK) {
+        return ESP_ERR_NOT_FOUND;
+    }
+    bool have = nvs_get_u32(h, "rev", &out->rev) == ESP_OK && nvs_get_u32(h, "base", &out->base_prov_ts) == ESP_OK &&
+                nvs_get_u8(h, "n", &out->count) == ESP_OK && out->count <= FR_ID_HUBS_MAX;
+    for (size_t i = 0; have && i < out->count; ++i) {
+        char key[4];
+        hub_key(key, 'h', i);
+        have = read_str(h, key, out->hubs[i].host) && out->hubs[i].host[0] != '\0';
+        hub_key(key, 'i', i);
+        read_str(h, key, out->hubs[i].ip);  // absent: no fallback address
+    }
+    nvs_close(h);
+    if (!have) {
+        std::memset(out, 0, sizeof(*out));
+        return ESP_ERR_NOT_FOUND;
+    }
+    return ESP_OK;
+}
+
+extern "C" esp_err_t fr_id_save_hubs(const fr_hub_list_t *list)
+{
+    if (list->count > FR_ID_HUBS_MAX) {
+        return ESP_ERR_INVALID_ARG;
+    }
+    nvs_handle_t h;
+    esp_err_t err = nvs_open(HUBS_NAMESPACE, NVS_READWRITE, &h);
+    if (err != ESP_OK) {
+        return err;
+    }
+    // One namespace per list, as fr_net2: a hub of an earlier, longer list must not survive. Nothing is committed
+    // until every key is set, so a power cut leaves the old list or the new one.
+    err = nvs_erase_all(h);
+    for (size_t i = 0; err == ESP_OK && i < list->count; ++i) {
+        char key[4];
+        hub_key(key, 'h', i);
+        err = nvs_set_str(h, key, list->hubs[i].host);
+        if (err == ESP_OK && list->hubs[i].ip[0] != '\0') {
+            hub_key(key, 'i', i);
+            err = nvs_set_str(h, key, list->hubs[i].ip);
+        }
+    }
+    if (err == ESP_OK) {
+        err = nvs_set_u8(h, "n", list->count);
+    }
+    if (err == ESP_OK) {
+        err = nvs_set_u32(h, "rev", list->rev);
+    }
+    if (err == ESP_OK) {
+        err = nvs_set_u32(h, "base", list->base_prov_ts);
+    }
+    return commit_and_close(h, err);
+}
+
+extern "C" esp_err_t fr_id_clear_hubs(void)
+{
+    nvs_handle_t h;
+    esp_err_t err = nvs_open(HUBS_NAMESPACE, NVS_READWRITE, &h);
     if (err != ESP_OK) {
         return err;
     }

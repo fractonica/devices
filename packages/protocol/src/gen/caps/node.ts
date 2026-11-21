@@ -5,6 +5,52 @@ import { Reader, Writer, type Decoded } from '../../wire/index.ts';
 
 import * as $ from '../support.ts';
 
+const NODE_HUB_JSON: readonly $.JsonField[] = [{ name: 'host' }, { name: 'ip' }];
+
+/** fr.node Hub (message type). One hub the board may connect to: its host name (an mDNS `.local` name, a DNS name or a dotted IPv4) and a dotted IPv4 to fall back to when the name does not resolve (empty: none). */
+export interface NodeHub {
+  /** (<= 63 UTF-8 bytes) */
+  host: string;
+  /** (<= 15 UTF-8 bytes) */
+  ip: string;
+}
+
+function writeNodeHub(w: Writer, value: unknown, path: string): void {
+  const v = $.obj(value, path) as Partial<NodeHub>;
+  const f1 = $.str(v.host ?? '', 63, `${path}.host`);
+  if (f1.length > 0) w.fieldBytes(1, f1);
+  const f2 = $.str(v.ip ?? '', 15, `${path}.ip`);
+  if (f2.length > 0) w.fieldBytes(2, f2);
+}
+
+function readNodeHub(r: Reader): NodeHub {
+  const v: NodeHub = { host: '', ip: '' };
+  while (r.next()) {
+    switch (r.field) {
+      case 1:
+        v.host = r.readString(63);
+        break;
+      case 2:
+        v.ip = r.readString(15);
+        break;
+      default:
+        r.skip();
+    }
+  }
+  return v;
+}
+
+export function encodeNodeHub(v: Partial<NodeHub> = {}): Uint8Array {
+  const w = new Writer();
+  writeNodeHub(w, v, 'node_hub');
+  return w.finish();
+}
+
+export function decodeNodeHub(bytes: Uint8Array): Decoded<NodeHub> {
+  const r = new Reader(bytes);
+  return $.done(r, readNodeHub(r));
+}
+
 /** fr.node.identify arguments (command 1, reliable). */
 export interface NodeIdentifyArgs {
   /** (default 3000) */
@@ -380,6 +426,104 @@ export function decodeNodeBindListResult(bytes: Uint8Array): Decoded<NodeBindLis
   return $.done(r, v);
 }
 
+/** fr.node.hubs_set arguments (command 11, reliable). Set the board's hub list (design multi-hub-m1; 1.1). Applied about 300 ms after the RESULT. A list that names the hub the board is on is kept at once; any other is on trial until one of its hubs WELCOMEs the board, and dropped for the list it had when none does within 60 s. EXPIRED for a rev at or below the one held (the same list and rev again is OK), INVALID_ARGS for a host or ip that is not one or a host named twice, BUSY while an earlier list waits to apply, UNSUPPORTED on a board without a hub IP link (a gateway, a radio-off build). */
+export interface NodeHubsSetArgs {
+  /** in priority order, the first is the board's default hub; empty: no list, the board uses the hub it was provisioned with (<= 4 items) */
+  hubs: NodeHub[];
+  /** above the rev the board holds (hubs_get), so a stale push never wins */
+  rev: number;
+}
+
+/** Absent fields take their defaults; throws RangeError on a value the field type cannot carry. */
+export function encodeNodeHubsSetArgs(v: Partial<NodeHubsSetArgs> = {}): Uint8Array {
+  const w = new Writer();
+  {
+    const f1 = $.list(v.hubs ?? [], 4, 'hubs');
+    for (let i = 0; i < f1.length; i++) {
+      const m = w.beginLen(1);
+      writeNodeHub(w, f1[i], `hubs[${i}]`);
+      w.endLen(m);
+    }
+  }
+  const f2 = $.int(v.rev ?? 0, 0, 0xffffffff, 'rev');
+  if (f2 !== 0) w.fieldUint(2, f2);
+  return w.finish();
+}
+
+export function decodeNodeHubsSetArgs(bytes: Uint8Array): Decoded<NodeHubsSetArgs> {
+  const r = new Reader(bytes);
+  const v: NodeHubsSetArgs = { hubs: [], rev: 0 };
+  while (r.next()) {
+    switch (r.field) {
+      case 1:
+        $.readRepeated(r, v.hubs, 4, readNodeHub);
+        break;
+      case 2:
+        v.rev = r.readUint(0xffffffff);
+        break;
+      default:
+        r.skip();
+    }
+  }
+  return $.done(r, v);
+}
+
+/** fr.node.hubs_get RESULT fields. */
+export interface NodeHubsGetResult {
+  /** the list in force (a list on trial included); empty: none stored (<= 4 items) */
+  hubs: NodeHub[];
+  /** its rev; 0 with no list */
+  rev: number;
+  /** the index in hubs of the hub the board's TCP session is with; 255: none of them (no TCP session, no list, or a hub found by its advert) */
+  on: number;
+  /** the list is on trial: no hub in it has WELCOMEd the board yet */
+  trial: boolean;
+}
+
+/** Absent fields take their defaults; throws RangeError on a value the field type cannot carry. */
+export function encodeNodeHubsGetResult(v: Partial<NodeHubsGetResult> = {}): Uint8Array {
+  const w = new Writer();
+  {
+    const f1 = $.list(v.hubs ?? [], 4, 'hubs');
+    for (let i = 0; i < f1.length; i++) {
+      const m = w.beginLen(1);
+      writeNodeHub(w, f1[i], `hubs[${i}]`);
+      w.endLen(m);
+    }
+  }
+  const f2 = $.int(v.rev ?? 0, 0, 0xffffffff, 'rev');
+  if (f2 !== 0) w.fieldUint(2, f2);
+  const f3 = $.int(v.on ?? 0, 0, 255, 'on');
+  if (f3 !== 0) w.fieldUint(3, f3);
+  const f4 = $.bool(v.trial ?? false, 'trial');
+  if (f4) w.fieldBool(4, f4);
+  return w.finish();
+}
+
+export function decodeNodeHubsGetResult(bytes: Uint8Array): Decoded<NodeHubsGetResult> {
+  const r = new Reader(bytes);
+  const v: NodeHubsGetResult = { hubs: [], rev: 0, on: 0, trial: false };
+  while (r.next()) {
+    switch (r.field) {
+      case 1:
+        $.readRepeated(r, v.hubs, 4, readNodeHub);
+        break;
+      case 2:
+        v.rev = r.readUint(0xffffffff);
+        break;
+      case 3:
+        v.on = r.readUint(255);
+        break;
+      case 4:
+        v.trial = r.readBool();
+        break;
+      default:
+        r.skip();
+    }
+  }
+  return $.done(r, v);
+}
+
 /** fr.node.boot event (id 1, normal). Sent once per boot right after the first WELCOME; exempt from the event-age rule. */
 export interface NodeBoot {
   reset_reason: number;
@@ -457,11 +601,11 @@ export function decodeNodeBindingFired(bytes: Uint8Array): Decoded<NodeBindingFi
   return $.done(r, v);
 }
 
-/** fr.node: System capability on port 0 of every device (instance "node"): identity, description, reboot, alias, bindings, state resync. */
+/** fr.node: System capability on port 0 of every device (instance "node"): identity, description, reboot, alias, bindings, state resync, the hub list. */
 export const NODE_CAP: $.CapInfo = {
   id: 0x00f0,
   name: 'fr.node',
-  version: { major: 1, minor: 0 },
+  version: { major: 1, minor: 1 },
   section: 'system',
   traits: $.EMPTY_CODEC,
   commands: [
@@ -475,6 +619,8 @@ export const NODE_CAP: $.CapInfo = {
     { id: 8, name: 'bind_set', delivery: 'reliable', idempotent: true, visibility: 'public', args: { fields: [{ name: 'slot', range: [0, 15] }, { name: 'on_port' }, { name: 'on_cls' }, { name: 'on_kind' }, { name: 'on_topic' }, { name: 'to_mac', json: 'bytes' }, { name: 'to_addr' }, { name: 'to_port' }, { name: 'to_cls' }, { name: 'to_kind' }, { name: 'to_topic' }, { name: 'payload', json: 'bytes' }, { name: 'reliable' }], maxSize: 169, encode: encodeNodeBindSetArgs, decode: decodeNodeBindSetArgs }, result: null },
     { id: 9, name: 'bind_clear', delivery: 'reliable', idempotent: true, visibility: 'public', args: { fields: [{ name: 'slot' }], maxSize: 3, encode: encodeNodeBindClearArgs, decode: decodeNodeBindClearArgs }, result: null },
     { id: 10, name: 'bind_list', delivery: 'reliable', idempotent: true, visibility: 'public', args: $.EMPTY_CODEC, result: { fields: [{ name: 'bindings', json: 'bytes' }], maxSize: 1403, encode: encodeNodeBindListResult, decode: decodeNodeBindListResult } },
+    { id: 11, name: 'hubs_set', delivery: 'reliable', idempotent: true, visibility: 'public', args: { fields: [{ name: 'hubs', json: NODE_HUB_JSON }, { name: 'rev' }], maxSize: 342, encode: encodeNodeHubsSetArgs, decode: decodeNodeHubsSetArgs }, result: null },
+    { id: 12, name: 'hubs_get', delivery: 'reliable', idempotent: true, visibility: 'public', args: $.EMPTY_CODEC, result: { fields: [{ name: 'hubs', json: NODE_HUB_JSON }, { name: 'rev' }, { name: 'on' }, { name: 'trial' }], maxSize: 347, encode: encodeNodeHubsGetResult, decode: decodeNodeHubsGetResult } },
   ],
   events: [
     { id: 1, name: 'boot', priority: 'normal', codec: { fields: [{ name: 'reset_reason' }], maxSize: 3, encode: encodeNodeBoot, decode: decodeNodeBoot } },

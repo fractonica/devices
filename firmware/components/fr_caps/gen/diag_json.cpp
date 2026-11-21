@@ -160,6 +160,7 @@ cJSON *to_json(const StepperZeroArgs &v);
 cJSON *to_json(const StepperConfigureArgs &v);
 cJSON *to_json(const StepperDone &v);
 cJSON *to_json(const StepperFault &v);
+cJSON *to_json(const NodeHub &v);
 cJSON *to_json(const NodeIdentifyArgs &v);
 cJSON *to_json(const NodeDescribeResult &v);
 cJSON *to_json(const NodeRebootArgs &v);
@@ -169,6 +170,8 @@ cJSON *to_json(const NodeNetSetArgs &v);
 cJSON *to_json(const NodeBindSetArgs &v);
 cJSON *to_json(const NodeBindClearArgs &v);
 cJSON *to_json(const NodeBindListResult &v);
+cJSON *to_json(const NodeHubsSetArgs &v);
+cJSON *to_json(const NodeHubsGetResult &v);
 cJSON *to_json(const NodeBoot &v);
 cJSON *to_json(const NodeBindingFired &v);
 cJSON *to_json(const DiagExecArgs &v);
@@ -1721,6 +1724,15 @@ cJSON *to_json(const StepperFault &v)
     return finish(o, ok);
 }
 
+cJSON *to_json(const NodeHub &v)
+{
+    cJSON *o = cJSON_CreateObject();
+    bool ok = o != nullptr;
+    ok = ok && add(o, "host", json_string(v.host));
+    ok = ok && add(o, "ip", json_string(v.ip));
+    return finish(o, ok);
+}
+
 cJSON *to_json(const NodeIdentifyArgs &v)
 {
     cJSON *o = cJSON_CreateObject();
@@ -1810,6 +1822,26 @@ cJSON *to_json(const NodeBindListResult &v)
     cJSON *o = cJSON_CreateObject();
     bool ok = o != nullptr;
     ok = ok && add(o, "bindings", json_bytes(v.bindings));
+    return finish(o, ok);
+}
+
+cJSON *to_json(const NodeHubsSetArgs &v)
+{
+    cJSON *o = cJSON_CreateObject();
+    bool ok = o != nullptr;
+    ok = ok && add(o, "hubs", json_array(v.hubs, [](const NodeHub &e) { return to_json(e); }));
+    ok = ok && add(o, "rev", json_number(v.rev));
+    return finish(o, ok);
+}
+
+cJSON *to_json(const NodeHubsGetResult &v)
+{
+    cJSON *o = cJSON_CreateObject();
+    bool ok = o != nullptr;
+    ok = ok && add(o, "hubs", json_array(v.hubs, [](const NodeHub &e) { return to_json(e); }));
+    ok = ok && add(o, "rev", json_number(v.rev));
+    ok = ok && add(o, "on", json_number(v.on));
+    ok = ok && add(o, "trial", json_bool(v.trial));
     return finish(o, ok);
 }
 
@@ -1956,6 +1988,25 @@ cJSON *to_json(const DiagMark &v)
             ok = from_json_bool(it, v.dir);
         } else if (key == "mtime") {
             ok = from_json_uint(it, 0xFFFFFFFF, v.mtime);
+        } else {
+            ok = false;  // unknown key
+        }
+    }
+    return ok;
+}
+
+[[maybe_unused]] bool from_json_node_hub(const cJSON *j, NodeHub &v)
+{
+    if (!cJSON_IsObject(j)) {
+        return false;
+    }
+    bool ok = true;
+    for (const cJSON *it = j->child; ok && it != nullptr; it = it->next) {
+        const std::string_view key = it->string != nullptr ? it->string : "";
+        if (key == "host") {
+            ok = from_json_string(it, 63, v.host);
+        } else if (key == "ip") {
+            ok = from_json_string(it, 15, v.ip);
         } else {
             ok = false;  // unknown key
         }
@@ -3607,6 +3658,36 @@ Status args_node_bind_list(const cJSON *obj)
     return {};
 }
 
+Status args_node_hubs_set(const cJSON *obj, fr::wire::Writer &w)
+{
+    NodeHubsSetArgs v{};
+    bool ok = true;
+    for (const cJSON *it = obj != nullptr ? obj->child : nullptr; ok && it != nullptr; it = it->next) {
+        const std::string_view key = it->string != nullptr ? it->string : "";
+        if (key == "hubs") {
+            ok = from_json_array(it, v.hubs,
+                [](const cJSON *e, NodeHub &out) { return from_json_node_hub(e, out); });
+        } else if (key == "rev") {
+            ok = from_json_uint(it, 0xFFFFFFFF, v.rev);
+        } else {
+            ok = false;  // unknown key
+        }
+    }
+    if (!ok || !valid(v)) {
+        return std::unexpected(Err::invalid_args);
+    }
+    encode(v, w);
+    return encoded(w);
+}
+
+Status args_node_hubs_get(const cJSON *obj)
+{
+    if (obj != nullptr && obj->child != nullptr) {
+        return std::unexpected(Err::invalid_args);
+    }
+    return {};
+}
+
 Status args_diag_exec(const cJSON *obj, fr::wire::Writer &w)
 {
     DiagExecArgs v{};
@@ -4960,6 +5041,10 @@ cJSON *node_to_json(uint8_t cls, uint8_t id, std::span<const uint8_t> body)
             return json_of(decode_node_bind_clear_args(body));
         case Node::kCmdBindList:
             return json_empty(body);
+        case Node::kCmdHubsSet:
+            return json_of(decode_node_hubs_set_args(body));
+        case Node::kCmdHubsGet:
+            return json_empty(body);
         }
         break;
     case fr::wire::kClsResult:
@@ -4984,6 +5069,10 @@ cJSON *node_to_json(uint8_t cls, uint8_t id, std::span<const uint8_t> body)
             return json_empty(body);
         case Node::kCmdBindList:
             return json_of(decode_node_bind_list_result(body));
+        case Node::kCmdHubsSet:
+            return json_empty(body);
+        case Node::kCmdHubsGet:
+            return json_of(decode_node_hubs_get_result(body));
         }
         break;
     case fr::wire::kClsEvent:
@@ -5439,6 +5528,12 @@ Status encode_args_json(uint16_t cap_id, const char *cmd, const cJSON *args, uin
         } else if (name == "bind_list") {
             id = Node::kCmdBindList;
             s = args_node_bind_list(obj);
+        } else if (name == "hubs_set") {
+            id = Node::kCmdHubsSet;
+            s = args_node_hubs_set(obj, w);
+        } else if (name == "hubs_get") {
+            id = Node::kCmdHubsGet;
+            s = args_node_hubs_get(obj);
         }
         break;
     case Ota::kId:

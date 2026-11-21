@@ -8,6 +8,12 @@ export const BROADCAST_ALIAS = 'broadcast';
 export const CLIENT_HEADER = 'x-fr-client';
 
 /**
+ * The request header that names the hub an op runs on (design multi-hub-m2 §7.2): `X-Fr-At: <hub name>`, beside the
+ * op's input and never in it (some ops have an input of their own called `at`). `fr --at <hub> <command>` sends it.
+ */
+export const AT_HEADER = 'x-fr-at';
+
+/**
  * The protocol's name and path (port 7420, 08 §8.10). The name is not a WebSocket subprotocol: `/` is not
  * an RFC 7230 token character, so `new WebSocket(url, 'fr-ws/1')` throws. Clients request none; the path
  * and `hello.v` identify fr-ws/1.

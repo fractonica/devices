@@ -95,13 +95,13 @@ export function identCsv(id: IdentFields, net: IdentNet): string {
 export { readWifiPassword } from '../network.ts';
 
 /**
- * The Mac's LAN IPv4, the fallback nodes use when mDNS fails (06 §6.3 `hub_ip`): the first non-internal,
- * non-link-local IPv4 on an `en*` interface (Wi-Fi or Ethernet, not VPN tunnels or bridges), else null.
+ * The hub's LAN IPv4, the fallback nodes use when mDNS fails (06 §6.3 `hub_ip`): the first non-internal,
+ * non-link-local IPv4 on an `en*` interface (the Mac's Wi-Fi or Ethernet, not VPN tunnels or bridges), or on a Linux
+ * hub's `wlan*` or `eth*` (the UNO Q's Wi-Fi; device_enroll answers it to the hub that flashes its boards), else null.
  */
-export function hubIpv4(): string | null {
-  const ifs = networkInterfaces();
+export function hubIpv4(ifs: ReturnType<typeof networkInterfaces> = networkInterfaces()): string | null {
   for (const name of Object.keys(ifs).sort()) {
-    if (!/^en\d+$/.test(name)) {
+    if (!/^(en|eth|wlan)\d+$/.test(name)) {
       continue;
     }
     for (const a of ifs[name] ?? []) {

@@ -100,6 +100,9 @@ public:
     }
     void hold(bool on) override { holds.push_back(on); }
     size_t queued() const override { return queued_bytes; }
+    uint32_t far_end() const override { return far; }
+    /** Link::far_end: which hub is at the far end (design multi-hub-m1); 0: the link cannot tell. */
+    uint32_t far = 0;
 
     /** Every frame sent, or those of one class/kind. */
     std::vector<Frame> frames() const

@@ -6,11 +6,11 @@ import { createHash } from 'node:crypto';
 import { describe, expect, it } from 'vitest';
 import { z } from 'zod';
 
-import { findOp, JOB_KINDS, OPS, REGISTRY_HASH, SCALE_MAX_KNOWN_G, ScaleStatusSchema, ScaleWatchSchema } from '../src/index.ts';
+import { findOp, JOB_KINDS, OPS, REGISTRY_HASH, REGISTRY_INPUTS_HASH, SCALE_MAX_KNOWN_G, ScaleStatusSchema, ScaleWatchSchema } from '../src/index.ts';
 
 const hashOf = (ops: readonly { name: string; input: z.ZodType }[]) =>
   createHash('sha256')
-    .update(JSON.stringify(ops.map((o) => [o.name, z.toJSONSchema(o.name === 'hub_doctor' && !ops.some((x) => x.name === 'hub_doctor_fix') ? z.object({}) : o.input) /* hub_doctor had no input before the dashboard's health */])))
+    .update(JSON.stringify(ops.map((o) => [o.name, z.toJSONSchema(o.name === 'hub_doctor' && !ops.some((x) => x.name === 'hub_doctor_fix') ? z.object({}) : o.name === 'device_provision' && !ops.some((x) => x.name === 'device_enroll') ? (o.input as z.ZodObject).omit({ for_hub: true }) : o.input) /* hub_doctor had no input before the dashboard's health; device_provision no for_hub before device_enroll (protocol-for-hub.test.ts) */])))
     .digest('hex')
     .slice(0, 12);
 
@@ -18,7 +18,7 @@ const SCALE_OP_NAMES = ['scale_status', 'scale_read', 'scale_tare', 'scale_calib
 
 describe('SCALE-1 ops (design scale-round-c1 D10)', () => {
   it('adds six scale ops on the CLI paths of D10 and moves REGISTRY_HASH once', () => {
-    const scale1 = OPS.filter((o) => !/^(battery|cell|haptic|wiring|part|storage|clock|app|time)_|^device_adopt$|^port_(lend|ignore|claim)$|^hub_doctor_fix$/.test(o.name)); // POWER-1 adds fourteen (protocol-power.test.ts)
+    const scale1 = OPS.filter((o) => !/^(battery|cell|haptic|wiring|part|storage|clock|app|time)_|^device_adopt$|^port_(lend|ignore|claim)$|^hub_doctor_fix$|^device_enroll$|^device_(hubs_set|hubs_get|share)$|^network_join$|^network_admit$|^hub_(name_set|peers)$/.test(o.name)); // POWER-1 adds fourteen (protocol-power.test.ts)
     expect(scale1).toHaveLength(68);
     expect(scale1.slice(-6).map((o) => o.name)).toEqual(SCALE_OP_NAMES);
     expect(findOp('scale_status')).toMatchObject({ kind: 'query', tier: 'read', cli: { path: ['scale', 'status'], positional: ['device'] } });
@@ -29,9 +29,9 @@ describe('SCALE-1 ops (design scale-round-c1 D10)', () => {
     expect(findOp('scale_watch')).toMatchObject({ kind: 'job', tier: 'mutate', cli: { path: ['scale', 'watch'], positional: ['device'] } });
     for (const name of SCALE_OP_NAMES) {
       expect(findOp(name)!.summary.length, name).toBeLessThan(1000);
-      expect(hashOf(OPS.filter((o) => o.name !== name)), name).not.toBe(REGISTRY_HASH);
+      expect(hashOf(OPS.filter((o) => o.name !== name)), name).not.toBe(REGISTRY_INPUTS_HASH);
     }
-    expect(hashOf(OPS)).toBe(REGISTRY_HASH);
+    expect(hashOf(OPS)).toBe(REGISTRY_INPUTS_HASH);
     // SCALE-1's own hash, POWER-1's ops left out (protocol-power.test.ts pins the current one).
     expect(hashOf(scale1)).toBe('382bd44ad86c');
     expect(REGISTRY_HASH).not.toBe('b62397012231'); // CAM-1's

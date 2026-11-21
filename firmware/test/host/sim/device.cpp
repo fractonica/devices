@@ -176,6 +176,26 @@ fr::Status NodeCap::get_state()
     return {};
 }
 
+fr::Status NodeCap::hubs_set(const fr::cap::NodeHubsSetArgs &args)
+{
+    fr::net::HubList list;
+    if (!fr::core::hubs_from_args(args, list)) {
+        return std::unexpected(fr::Err::invalid_args);
+    }
+    return d_.links() != nullptr ? d_.links()->hubs_set(list) : std::unexpected(fr::Err::unsupported);
+}
+
+std::expected<fr::cap::NodeHubsGetResult, fr::Err> NodeCap::hubs_get()
+{
+    uint8_t on = 0xFF;
+    bool trial = false;
+    hubs_ = {};
+    if (d_.links() == nullptr || !d_.links()->hubs_now(hubs_, on, trial)) {
+        return std::unexpected(fr::Err::unsupported);
+    }
+    return fr::core::hubs_result(hubs_, on, trial);
+}
+
 fr::Status NodeCap::bind_set(const fr::cap::NodeBindSetArgs &args)
 {
     const fr::Status st = fr::core::bind_set(d_.net(), args);

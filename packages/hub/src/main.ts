@@ -7,7 +7,7 @@ import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import { idfStatus, liveConfig, paths, pytoolsStatus, readIdfLock, rotateLog, type IdfStatus, type PytoolsStatus } from '@fractonica/host';
-import { HUB_API_PORT, HUB_VERSION, REGISTRY_HASH } from '@fractonica/protocol';
+import { HUB_API_PORT, HUB_VERSION, PEER_LINK_PORT, REGISTRY_HASH } from '@fractonica/protocol';
 
 import { createAppServer } from './apps/server.ts';
 import { sweepAudioTempsAtStart } from './audio/ops.ts';
@@ -31,6 +31,9 @@ import { holdPort, runningHubPid, writePidfile } from './lock.ts';
 import { createLogIngest } from './logs/ingest.ts';
 import { LogStore } from './logstore.ts';
 import { createOta, NODE_HTTP_PORT } from './ota/index.ts';
+import { hubIdentity } from './peers/identity.ts';
+import { createPeers } from './peers/index.ts';
+import { installPassing } from './peers/passing.ts';
 import { createPortHolders } from './ports/holders.ts';
 import { createLeases } from './ports/leases.ts';
 import { createPortPolicy } from './ports/policy.ts';
@@ -110,6 +113,10 @@ async function main(): Promise<void> {
   // The node HTTP listener (OTA images, spec 08 §8.10) binds where the node links do; a test hub passes
   // its own port (0: ephemeral), never the running hub's 7422.
   const nodeHttpPort = Number(arg('--node-http-port', String(NODE_HTTP_PORT)));
+  // The hubs' link (design multi-hub-m2 §3.1) binds where the node links do, and only while this hub holds its
+  // network's key. 7423 for a hub on the usual node port; a test hub (another node port) takes any free port unless
+  // told one, so it never meets the running hub's.
+  const peerPort = Number(arg('--peer-port', String(nodePort === NODE_LINK_PORT ? PEER_LINK_PORT : 0)));
   // `--serial-bridge 127.0.0.1:<port>` (design m2-c1-hil §5.1, tests only): the serial ports are a test's virtual
   // USB hub on loopback (packages/hub/test/virtual-usb.ts), never the Mac's; it implies leaving those alone. A
   // malformed flag (no value, `=` with nothing, not loopback) stops the start, before any port is opened.
@@ -126,6 +133,7 @@ async function main(): Promise<void> {
     nodeHttpPort,
     noAdvert: process.argv.includes('--no-advert'),
     serial: useSerial,
+    peerPort,
   };
   mkdirSync(paths.home(), { recursive: true });
   // Single instance: hold the API address before opening hub.db or any serial port.
@@ -170,7 +178,10 @@ async function main(): Promise<void> {
   const hubSourceDir = resolve(dirname(fileURLToPath(import.meta.url)), '..', '..', '..');
   const db = openDb(paths.db());
   const run = nextHubRun(db);
+  // Inside this hub's epoch slot once it has one (design multi-hub-m2 §9), so two hubs of a network never give one epoch.
   const hubEpoch = nextHubEpoch(db);
+  // This hub's id is made here once per FR_HOME; its name is its host's until it is given one (fr hub name).
+  const identity = hubIdentity(db);
   // One cursor space for logs and events (spec 08 §8.7).
   const seq = new CursorSeq(db);
   // Every `@fr1:` line passes the log store's frame decoder: the tap there feeds the serial node link.
@@ -248,6 +259,10 @@ async function main(): Promise<void> {
     },
     logIngest: createLogIngest(logs, scale),
     scale,
+    // No WELCOME on a USB cable for a board another hub holds over Wi-Fi (design multi-hub-m2 §6): `hub` exists by the first HELLO.
+    heldOverTcp: (id) => hub.peers?.heldOverTcp(id) ?? null,
+    // A board's session ending here while another hub holds it says where it is (design multi-hub-m2 §8).
+    heldByPeer: (id) => hub.peers?.holder(id)?.name ?? null,
   });
   frames.attach((device, line) => router.serialLine(device, line));
   // Node <-> node (design c5 §4): the router carries hub broadcasts; bindings resolve, push and re-push.
@@ -313,6 +328,7 @@ async function main(): Promise<void> {
     latencyProbe: createLatencyProbe(ctx, runOpts),
     sleepGuard,
     fixture: createFixture(ctx, runOpts, { benchName }),
+    peers: createPeers(ctx, runOpts),
   };
   const app = buildServer(hub, port);
   await new Promise<void>((r) => guard.close(() => r()));
@@ -335,6 +351,11 @@ async function main(): Promise<void> {
   cellTracker(hub); // POWER-1 (design power-p1 D9): cells' samples and sessions, power.* events, once the router runs
   hub.fixture!.start(); // the HIL fixture module (design m2-c1-hil): its bus subscription, once the router runs
   await ota.start(); // the node HTTP listener (:7422) serves only nodes with a session, so after the router
+  // The hubs' link (design multi-hub-m2): its listener and dialers when this hub holds its network's key, and its
+  // subscription to the bus for who is where, once the router runs.
+  // Step 2.2: before the link comes up, so the first call a peer sends is served (ops passed on, files, firmware).
+  const stopPassing = installPassing(hub);
+  await hub.peers!.start();
   // The rest of C6: prompts, the lease sweeper, the LAN self-test, the advert (of :7421, so after the
   // router), the latency probe and the dashboard's staleness check.
   for (const part of [hub.prompts, hub.leases, hub.lnp, hub.advert, hub.latencyProbe, hub.staticSite]) {
@@ -364,6 +385,9 @@ async function main(): Promise<void> {
       ...(v6.error ? { v6_error: v6.error } : {}),
       run,
       hub_epoch: hubEpoch,
+      hub: identity,
+      // The hubs' link: its bound port when this hub holds a key (a line `peer_link_listening` follows a later join).
+      ...(hub.peers!.status().link.port !== null ? { peer_port: hub.peers!.status().link.port } : {}),
       pid: process.pid,
     }),
   );
@@ -393,6 +417,9 @@ async function main(): Promise<void> {
       await Promise.resolve(part.stop()).catch(() => undefined);
     }
     await app.close().catch(() => undefined);
+    // Before the router: the peers see this hub's link close at once, not its boards leave one by one.
+    stopPassing();
+    await Promise.resolve(hub.peers?.stop()).catch(() => undefined);
     await Promise.resolve(ota.stop()).catch(() => undefined);
     // Before the router: it releases every driven line over the fixture's session.
     await Promise.resolve(hub.fixture?.stop()).catch(() => undefined);

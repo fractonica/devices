@@ -12,10 +12,10 @@
 // (logs/source.ts): a `forbid` checked against it passes without having seen what it forbids, so the result
 // carries a warning naming the devices and the crash check that works there.
 
-import { FrError, type LogsOpName, parseCursor } from '@fractonica/protocol';
+import { FrError, type LogsOpName } from '@fractonica/protocol';
 
 import type { Handler, HubContext, OpInput } from '../context.ts';
-import { mintCursor, mintTimeUs } from '../events/index.ts';
+import { mintTimeUs, sinceSeqOf } from '../events/index.ts';
 import { staleNetLine, type StoredLine, toLogLine } from '../logstore.ts';
 import { TCP_CRASH_CHECK, TCP_LOG_LIMITS, tcpOnlyDevices } from './source.ts';
 
@@ -32,14 +32,7 @@ const PAGE = 5000;
 
 /** Parses `since` and rejects cursors from an earlier hub run (spec 08 §8.7), as wait_for_log does. */
 function sinceSeq(since: string, hub: HubContext): number {
-  const c = parseCursor(since);
-  if (!c) {
-    throw new FrError('INVALID_ARGS', `bad cursor ${since}; expected c:<run>.<seq>`);
-  }
-  if (c.run !== hub.logs.run) {
-    throw new FrError('HUB_RESTARTED', `cursor ${since} is from an earlier hub run`, { details: { resume_cursor: mintCursor(hub) } });
-  }
-  return c.seq;
+  return sinceSeqOf(hub, since)!;
 }
 
 function matcher(pattern: string, regex: boolean): (text: string) => boolean {

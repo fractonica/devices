@@ -82,6 +82,8 @@ export type CsiStatus = z.infer<typeof CsiStatusSchema>;
 export const CSI_OPS = [
   op({
     name: 'csi_stream',
+    target: 'device',
+    files: { out: ['out'] },
     kind: 'job',
     tier: 'mutate',
     summary:
@@ -101,6 +103,7 @@ export const CSI_OPS = [
   }),
   op({
     name: 'csi_status',
+    target: 'device',
     kind: 'query',
     tier: 'read',
     summary:

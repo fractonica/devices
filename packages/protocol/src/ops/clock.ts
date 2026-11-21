@@ -91,6 +91,7 @@ export type ClockDrift = z.infer<typeof ClockDriftSchema>;
 export const CLOCK_OPS = [
   op({
     name: 'clock_read',
+    target: 'device',
     kind: 'query',
     tier: 'read',
     summary:
@@ -101,6 +102,7 @@ export const CLOCK_OPS = [
   }),
   op({
     name: 'clock_sync',
+    target: 'device',
     kind: 'command',
     tier: 'mutate',
     summary:
@@ -111,6 +113,7 @@ export const CLOCK_OPS = [
   }),
   op({
     name: 'clock_set',
+    target: 'device',
     kind: 'command',
     tier: 'mutate',
     mcp: { idempotent: true },
@@ -126,6 +129,7 @@ export const CLOCK_OPS = [
   }),
   op({
     name: 'clock_aging',
+    target: 'device',
     kind: 'command',
     tier: 'mutate',
     summary:
@@ -140,6 +144,7 @@ export const CLOCK_OPS = [
   }),
   op({
     name: 'clock_drift',
+    target: 'device',
     kind: 'job',
     tier: 'mutate',
     summary:

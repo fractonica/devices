@@ -16,6 +16,7 @@ import { checkBand, type NetworkRecord, requireNetwork } from '../network.ts';
 import { assertPortFree, nameBusyHolder } from '../ports/holders.ts';
 import { identNet, renderIdent, type RenderedIdent } from './ident.ts';
 import { attachedPort, isDeviceId, registryOf, resolveOne } from './hub.ts';
+import { ensureAddress } from './alloc.ts';
 import { CHIP_IDS, markIdentWritten, markImageFlashed, prepareIdentity, type ProvisionRecord, provisionOf } from './store.ts';
 
 /**
@@ -94,7 +95,9 @@ function decideIdent(
   if (plan === 'identity') {
     // Only fr_ident is written: its place comes from the device's artifact if there is one, else from
     // the record of the last fr_ident write (the layout is frozen per part_profile, 06 §6.2).
-    region = art ? requireIdentRegion(art.manifest) : (provisionOf(hub.db, dev!.device_id)?.ident ?? null);
+    // A record without a region (size 0: device_adopt's, or a device_enroll the flashing hub gave none) says nothing.
+    const recorded = provisionOf(hub.db, dev!.device_id)?.ident;
+    region = art ? requireIdentRegion(art.manifest) : recorded && recorded.size > 0 ? recorded : null;
     if (!region) {
       throw new FrError('NOT_FOUND', `no artifact or provisioning record says where ${who} keeps fr_ident`, {
         remediation: [{ tool: 'flash_start', args: { device: dev!.alias, plan: 'identity', profile: '<profile>' } }],
@@ -214,6 +217,8 @@ export async function startFlash(input: FlashStartInput, hub: HubContext): Promi
         const net = identNet(netRecord);
         // identity rewrites fr_ident only: the profile and board stay those of the firmware the device runs.
         const imageWritten = input.plan !== 'identity';
+        // On a member of a network a row without an address of it gets one from the registrar first (alloc.ts).
+        await ensureAddress(hub, { device_id: cur.device_id, profile: imageWritten ? manifest!.profile : cur.profile, board: imageWritten ? manifest!.board : cur.board, chip: cur.chip, net: netRecord.net_id, network: netRecord.name });
         // Same addr and alias; net follows the network record, and epoch_floor moves past the last epoch seen.
         const prep = prepareIdentity(hub.db, {
           deviceId: cur.device_id,

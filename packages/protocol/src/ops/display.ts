@@ -84,6 +84,9 @@ export const DisplayRenderSchema = z.looseObject({
 export const DISPLAY_OPS = [
   op({
     name: 'display_snapshot',
+    target: 'selector',
+    across: 'one',
+    files: { out: ['out'] },
     kind: 'query',
     tier: 'read',
     summary:
@@ -107,6 +110,7 @@ export const DISPLAY_OPS = [
   }),
   op({
     name: 'display_render',
+    target: 'hub',
     kind: 'query',
     tier: 'read',
     summary:

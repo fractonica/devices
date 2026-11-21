@@ -233,6 +233,7 @@ export function parseHapticSteps(steps: readonly number[] | string): number[] {
 export const POWER_OPS = [
   op({
     name: 'battery_status',
+    target: 'device',
     kind: 'query',
     tier: 'read',
     summary:
@@ -243,6 +244,7 @@ export const POWER_OPS = [
   }),
   op({
     name: 'battery_calibrate',
+    target: 'device',
     kind: 'command',
     tier: 'mutate',
     summary:
@@ -257,6 +259,7 @@ export const POWER_OPS = [
   }),
   op({
     name: 'battery_reset_calibration',
+    target: 'device',
     kind: 'command',
     tier: 'mutate',
     destructive: true,
@@ -267,6 +270,7 @@ export const POWER_OPS = [
   }),
   op({
     name: 'battery_load',
+    target: 'device',
     kind: 'command',
     tier: 'mutate',
     summary:
@@ -282,6 +286,7 @@ export const POWER_OPS = [
   }),
   op({
     name: 'cell_add',
+    target: 'hub',
     kind: 'command',
     tier: 'mutate',
     summary:
@@ -297,6 +302,7 @@ export const POWER_OPS = [
   }),
   op({
     name: 'cell_list',
+    target: 'hub',
     kind: 'query',
     tier: 'read',
     summary: 'Every registered cell: chemistry, nominal capacity, where it is installed, and what the hub learned (cycles, capacity, health, internal resistance, the latest charge and discharge lengths).',
@@ -306,6 +312,7 @@ export const POWER_OPS = [
   }),
   op({
     name: 'cell_show',
+    target: 'hub',
     kind: 'query',
     tier: 'read',
     summary: "One registered cell with its latest sessions (charges, discharges, capacity tests; newest first) and the curves the estimates read (`[t_s, mv]`, at most 200 points each).",
@@ -315,6 +322,7 @@ export const POWER_OPS = [
   }),
   op({
     name: 'cell_update',
+    target: 'hub',
     kind: 'command',
     tier: 'mutate',
     summary: "Change a registered cell: rename it, its chemistry, nominal capacity or notes (an empty notes clears them). Its history stays with it.",
@@ -330,6 +338,7 @@ export const POWER_OPS = [
   }),
   op({
     name: 'cell_install',
+    target: 'hub',
     kind: 'command',
     tier: 'mutate',
     summary:
@@ -340,6 +349,7 @@ export const POWER_OPS = [
   }),
   op({
     name: 'cell_uninstall',
+    target: 'hub',
     kind: 'command',
     tier: 'mutate',
     summary: 'Say a registered cell was taken out: its open session ends (incomplete) and nothing more is recorded for it until it is installed again. OK when it was not installed.',
@@ -349,6 +359,7 @@ export const POWER_OPS = [
   }),
   op({
     name: 'cell_test',
+    target: 'hub',
     kind: 'job',
     tier: 'mutate',
     summary:
@@ -367,6 +378,7 @@ export const POWER_OPS = [
   }),
   op({
     name: 'haptic_pulse',
+    target: 'device',
     kind: 'command',
     tier: 'mutate',
     summary:
@@ -382,6 +394,7 @@ export const POWER_OPS = [
   }),
   op({
     name: 'haptic_play',
+    target: 'device',
     kind: 'command',
     tier: 'mutate',
     summary:
@@ -398,6 +411,7 @@ export const POWER_OPS = [
   }),
   op({
     name: 'haptic_stop',
+    target: 'device',
     kind: 'command',
     tier: 'mutate',
     mcp: { idempotent: true },

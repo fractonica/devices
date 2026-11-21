@@ -35,5 +35,10 @@ export const NetworkSchema = z.looseObject({
   password_set: z.boolean(),
   /** Registered devices whose row names this network. */
   devices: z.number().int().optional(),
+  /**
+   * The API of the hub this hub joined the network of (network_join; design multi-hub-m1): that hub hands out the
+   * addresses. null or absent: this hub does.
+   */
+  registrar: z.string().nullable().optional(),
 });
 export type Network = z.infer<typeof NetworkSchema>;

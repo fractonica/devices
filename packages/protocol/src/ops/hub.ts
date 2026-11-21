@@ -6,6 +6,7 @@ import { z } from 'zod';
 
 import { PromptSchema } from '../events.ts';
 import { cursor, op } from './common.ts';
+import { HubIdentitySchema } from './peers.ts';
 import { GatewayInfoSchema } from './registry.ts';
 
 /** One doctor check (packages/host doctor.ts Check): `fix` says what to do, `fixed` that --fix did it. */
@@ -34,6 +35,13 @@ export const HubStatusSchema = z.looseObject({
   registry_hash: z.string(),
   pid: z.number().int(),
   run: z.number().int(),
+  /** The `epoch` of this hub run's frames (05 §5.8); absent from a hub older than design multi-hub-m1. */
+  hub_epoch: z.number().int().optional(),
+  /**
+   * This hub in its network (design multi-hub-m2 §2, §9): its id (made once per FR_HOME), its name, and its epoch slot
+   * (null until a hub joined it or it joined one). Absent from a hub older than the hubs' link.
+   */
+  hub: HubIdentitySchema.optional(),
   uptime_s: z.number(),
   node: z.looseObject({ version: z.string(), path: z.string() }),
   source_dir: z.string(),
@@ -95,6 +103,7 @@ export type HubStatus = z.infer<typeof HubStatusSchema>;
 export const HUB_OPS = [
   op({
     name: 'hub_doctor',
+    target: 'hub',
     kind: 'query',
     tier: 'read',
     summary:
@@ -107,6 +116,7 @@ export const HUB_OPS = [
   }),
   op({
     name: 'hub_doctor_fix',
+    target: 'hub',
     kind: 'command',
     tier: 'mutate',
     summary:

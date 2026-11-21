@@ -12,10 +12,55 @@ export type OpKind = 'query' | 'command' | 'job' | 'wait';
  */
 export type OpTier = 'read' | 'mutate';
 
+/**
+ * What an op acts on, which decides where it runs in a network of several hubs (design multi-hub-m2 §7.1):
+ * - `device`: one board. It runs at the hub that holds the board's session (the holder); with no holder, here.
+ * - `selector`: the boards a selector names; `across` says what happens when some are held by another hub.
+ * - `fleet`: the whole registry (device_list, job_list). Here, with what the peers report.
+ * - `port`: a USB port, which belongs to one machine. Here.
+ * - `hub`: this hub itself (its status, its builds, its network). Here.
+ * `fr --at <hub>` runs any op on a named hub, whatever its target.
+ */
+export const OP_TARGETS = ['device', 'selector', 'fleet', 'port', 'hub'] as const;
+export type OpTarget = (typeof OP_TARGETS)[number];
+
+/**
+ * A `selector` op whose boards are held by more than this hub:
+ * - `split`: each hub runs its part and the answers' `results` rows are merged, each row saying `at`.
+ * - `one`: passed whole when every selected board that has a session is at one hub; refused, naming where each is,
+ *   when they are spread (its answer is one job, one page of a cursor or one set of files).
+ * - `live`: a wait. It runs at the hub whose cursor its `since` is (a cursor is one hub's own), on that hub's bus,
+ *   which carries the events every hub of the network relays (design multi-hub-m2 §8, §17). wait_for_event and
+ *   wait_for_device then cover boards wherever they are; wait_for_log and logs_assert read that hub's log store
+ *   (logs do not cross the link) and are refused for a board whose lines are at another hub.
+ * - `here`: it needs this hub (a build from this machine's sources): refused for a board held elsewhere.
+ */
+export const OP_ACROSS = ['split', 'one', 'live', 'here'] as const;
+export type OpAcross = (typeof OP_ACROSS)[number];
+
+/** An input field that names a board: a selector, or `<alias>.<rest>` when `dotted` (a binding's ends). */
+export type OpBoardField = string | { field: string; dotted: true };
+
 export interface OpDef<I extends z.ZodObject = z.ZodObject, O extends z.ZodType = z.ZodType> {
   name: string;
   kind: OpKind;
   tier: OpTier;
+  /** Where it runs among the hubs of a network (design multi-hub-m2 §7.1). Part of REGISTRY_HASH. */
+  target: OpTarget;
+  /**
+   * The input fields that name the board or boards (`device` and `selector` targets): default `['device']` for a
+   * device op, `['selector']` for a selector op. A device op with two fields (a binding's `from` and `to`) is refused
+   * when the two boards are held by two hubs.
+   */
+  boards?: readonly OpBoardField[];
+  /** A `selector` op's rule for boards held by several hubs (required for that target). */
+  across?: OpAcross;
+  /**
+   * Input fields that are a path on the machine the call was made at (design multi-hub-m2 §7.3). `out`: a file or
+   * directory the op writes; when the op is passed on, it is written at the hub that runs it and the calling hub pulls
+   * it to the path given. `in`: a file the op reads; the hub that runs it fetches it from the calling hub first.
+   */
+  files?: { out?: readonly string[]; in?: readonly string[] };
   /**
    * Deletes, overwrites, flashes, erases, provisions, updates over the air or reboots: what it changes cannot be put
    * back by another op. MCP destructiveHint; a client asks a person before calling it.
@@ -34,7 +79,8 @@ export interface OpDef<I extends z.ZodObject = z.ZodObject, O extends z.ZodType 
   input: I;
   /**
    * The `data` of an ok Result, for OpenAPI and typed clients (design c6 D17). Objects are loose, so a
-   * field a handler adds does not break a client. Neither tier, destructive, mcp nor output is in REGISTRY_HASH.
+   * field a handler adds does not break a client. Neither tier, destructive, mcp nor output is in REGISTRY_HASH
+   * (target, boards, across and files are: two hubs that pass ops to each other must agree on them).
    */
   output?: O;
   /** `variadic`: the last positional takes the remaining words, joined with single spaces. */
@@ -47,6 +93,17 @@ export interface OpDef<I extends z.ZodObject = z.ZodObject, O extends z.ZodType 
  */
 export function op<const N extends string, I extends z.ZodObject, O extends z.ZodType = z.ZodType>(def: OpDef<I, O> & { name: N }): OpDef<I, O> & { name: N } {
   return def;
+}
+
+/** Calling it twice does what calling it once does: every read op, and the ops marked `mcp.idempotent`. */
+export function opRepeatable(op: Pick<OpDef, 'tier' | 'mcp'>): boolean {
+  return op.tier === 'read' || op.mcp?.idempotent === true;
+}
+
+/** The input fields of `op` that name its boards, with the form of each. */
+export function opBoardFields(op: Pick<OpDef, 'target' | 'boards'>): { field: string; dotted: boolean }[] {
+  const fields: readonly OpBoardField[] = op.boards ?? (op.target === 'device' ? ['device'] : op.target === 'selector' ? ['selector'] : []);
+  return fields.map((f) => (typeof f === 'string' ? { field: f, dotted: false } : { field: f.field, dotted: true }));
 }
 
 /**

@@ -8,6 +8,7 @@
 
 #include "catalog.hpp"  // generated fr::cap::catalog_hash
 #include "fr/core/descriptor.hpp"
+#include "fr/posix/links.hpp"
 #include "fr/wire.hpp"
 
 namespace fr::posix {
@@ -42,6 +43,18 @@ Device::Device(Core &core, IdentityFile &ident, NodeInfo info, std::span<PortEnt
                                      .profile = info_.profile,
                                      .board = info_.board};
     desc_len_ = core::build_descriptor(src, ports_, desc_);
+}
+
+void Device::attach_hub_link(TcpLink &tcp)
+{
+    tcp_ = &tcp;
+    tcp.set_hubs(ident_.hubs);
+    tcp.store_hubs = [this](const net::HubList &list) {
+        ident_.set_hubs(list);
+        if (!ident_.save()) {
+            say("node: hub list rev " + std::to_string(list.rev) + " not saved to " + ident_.path());
+        }
+    };
 }
 
 void Device::request_restart(uint8_t bye_reason, TimeUs delay_us)
@@ -240,6 +253,33 @@ Status NodeCap::get_state()
 {
     n_.report_all();
     return {};
+}
+
+Status NodeCap::hubs_set(const cap::NodeHubsSetArgs &args)
+{
+    net::HubList list;
+    if (n_.tcp_ == nullptr) {
+        return std::unexpected(Err::unsupported);
+    }
+    if (!core::hubs_from_args(args, list)) {
+        return std::unexpected(Err::invalid_args);
+    }
+    const Status st = n_.tcp_->push_hubs(list);
+    if (st) {
+        n_.say("node: hubs_set rev " + std::to_string(list.rev) + ": " + std::to_string(list.count) + " hub(s)");
+    }
+    return st;
+}
+
+std::expected<cap::NodeHubsGetResult, Err> NodeCap::hubs_get()
+{
+    if (n_.tcp_ == nullptr) {
+        return std::unexpected(Err::unsupported);
+    }
+    uint8_t on = 0xFF;
+    bool trial = false;
+    n_.tcp_->hubs_now(hubs_, on, trial);
+    return core::hubs_result(hubs_, on, trial);
 }
 
 Status NodeCap::bind_set(const cap::NodeBindSetArgs &args)

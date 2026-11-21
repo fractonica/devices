@@ -28,6 +28,7 @@ export type Lease = z.infer<typeof LeaseSchema>;
 const LEASE_OPS = [
   op({
     name: 'serial_lease',
+    target: 'port',
     kind: 'command',
     tier: 'mutate',
     summary:
@@ -42,6 +43,7 @@ const LEASE_OPS = [
   }),
   op({
     name: 'serial_lease_renew',
+    target: 'port',
     kind: 'command',
     tier: 'mutate',
     summary: 'Extend a serial lease: it now ends ttl_s from now (default: its own ttl_s). An unknown or ended lease is NOT_FOUND.',
@@ -54,6 +56,7 @@ const LEASE_OPS = [
   }),
   op({
     name: 'serial_release',
+    target: 'port',
     kind: 'command',
     tier: 'mutate',
     summary: 'End a serial lease: the hub reopens the port (DTR and RTS deasserted, so the board does not reset) and the node greets it again over serial. An unknown or ended lease is NOT_FOUND.',
@@ -78,6 +81,7 @@ export const PortPolicyResultSchema = z.looseObject({
 export const PORT_POLICY_OPS = [
   op({
     name: 'port_lend',
+    target: 'port',
     kind: 'command',
     tier: 'mutate',
     summary:
@@ -91,6 +95,7 @@ export const PORT_POLICY_OPS = [
   }),
   op({
     name: 'port_ignore',
+    target: 'port',
     kind: 'command',
     tier: 'mutate',
     mcp: { idempotent: true },
@@ -105,6 +110,7 @@ export const PORT_POLICY_OPS = [
   }),
   op({
     name: 'port_claim',
+    target: 'port',
     kind: 'command',
     tier: 'mutate',
     mcp: { idempotent: true },

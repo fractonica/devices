@@ -1440,6 +1440,26 @@ export class OtaOrchestrator implements OtaService {
     this.#deadline(c, this.config.confirmMs, () => live.finish({ state: 'TIMED_OUT', code: 'not_confirmed', needs_serial_recovery: false }));
   }
 
+  /**
+   * A peer reports the device's session with firmware `prefix` (design multi-hub-m2 §6; MULTI-HUB-1 §b left it open):
+   * an update over Wi-Fi whose board restarted into the new image and came up at another hub of its list ended well.
+   * The job ends `completed` instead of waiting for a HELLO that goes to the other hub. Its RESULT goes there too, so
+   * nothing here says the health check passed: the job's log says where the board came back.
+   */
+  seenAtPeer(deviceId: string, prefix: string, hubName: string): void {
+    const fw = prefix.toLowerCase();
+    for (const c of [...(this.#byDevice.get(deviceId) ?? [])]) {
+      const live = c.live;
+      if (!live || c.rec.via === 'serial' || fw.length === 0 || !c.rec.fw_id.startsWith(fw)) {
+        continue;
+      }
+      if (c.rec.state === 'REBOOTING' || c.rec.state === 'VERIFYING') {
+        c.ctx?.log(`back on the new image at hub ${hubName} (its session is with that hub now; the health check's RESULT goes there)`, 'event');
+        live.finish({ state: 'SUCCEEDED' });
+      }
+    }
+  }
+
   // ---- 7422 gate ----
 
   /**

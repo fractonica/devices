@@ -44,6 +44,9 @@ export const PROBE_MODES = ['both', 'immediate', 'exec_at'] as const;
 export const NET_OPS = [
   op({
     name: 'message_send',
+    target: 'selector',
+    boards: ['to'],
+    across: 'one',
     kind: 'job',
     tier: 'mutate',
     summary:
@@ -60,6 +63,8 @@ export const NET_OPS = [
   }),
   op({
     name: 'binding_set',
+    target: 'device',
+    boards: [{ field: 'from', dotted: true }, { field: 'to', dotted: true }],
     kind: 'command',
     tier: 'mutate',
     summary:
@@ -73,6 +78,7 @@ export const NET_OPS = [
   }),
   op({
     name: 'binding_list',
+    target: 'hub',
     kind: 'query',
     tier: 'read',
     summary: "Bindings by source device, as the registry keeps them (slot, from, to, args, pushed_at); live asks each selected online device's fr.node.bind_list instead.",
@@ -84,6 +90,7 @@ export const NET_OPS = [
   }),
   op({
     name: 'binding_clear',
+    target: 'device',
     kind: 'command',
     tier: 'mutate',
     destructive: true,
@@ -96,6 +103,8 @@ export const NET_OPS = [
   }),
   op({
     name: 'latency_stats',
+    target: 'selector',
+    across: 'one',
     kind: 'query',
     tier: 'read',
     summary:
@@ -115,6 +124,8 @@ export type NetOpName = (typeof NET_OPS)[number]['name'];
 export const PROBE_OPS = [
   op({
     name: 'latency_probe',
+    target: 'device',
+    boards: ['from', 'to'],
     kind: 'job',
     tier: 'mutate',
     summary:

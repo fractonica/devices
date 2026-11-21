@@ -10,7 +10,9 @@
 
 #include <algorithm>
 #include <cerrno>
+#include <cstdlib>
 #include <cstring>
+#include <thread>
 
 #include "protocol.hpp"  // generated fr::proto constants (kMtuBulk)
 
@@ -39,18 +41,210 @@ void set_nonblocking(int fd)
     ::fcntl(fd, F_SETFD, FD_CLOEXEC);
 }
 
+/** Whether `host:port` accepts a TCP connection within `timeout_us` (a failback probe; its own thread). */
+bool probe_connect(const std::string &host, uint16_t port, TimeUs timeout_us)
+{
+    sockaddr_in to{};
+    if (!resolve_ipv4(host, port, to)) {
+        return false;
+    }
+    const int fd = ::socket(AF_INET, SOCK_STREAM, 0);
+    if (fd < 0) {
+        return false;
+    }
+    set_nonblocking(fd);
+    bool ok = ::connect(fd, reinterpret_cast<const sockaddr *>(&to), sizeof(to)) == 0;
+    if (!ok && errno == EINPROGRESS) {
+        pollfd p{fd, POLLOUT, 0};
+        if (::poll(&p, 1, static_cast<int>(timeout_us / 1000)) == 1) {
+            int err = 0;
+            socklen_t len = sizeof(err);
+            ok = ::getsockopt(fd, SOL_SOCKET, SO_ERROR, &err, &len) == 0 && err == 0;
+        }
+    }
+    ::close(fd);  // a connect is the whole probe: the hub sees a connection that says nothing
+    return ok;
+}
+
 }  // namespace
 
 TcpLink::TcpLink(PosixCore &core, std::string host, uint16_t port, Timing timing)
     : core_(core), host_(std::move(host)), port_(port), timing_(timing), backoff_us_(timing.backoff_min_us)
 {
     tx_.reserve(kTxBytes);
+    plan_.set_timing(timing_.hubs);
+    plan_.reset(0);
 }
 
 TcpLink::~TcpLink()
 {
     if (fd_ >= 0) {
         ::close(fd_);
+    }
+}
+
+// ---- the hub list (design multi-hub-m1) ----
+
+void TcpLink::set_hubs(const net::HubList &list)
+{
+    list_ = net::hub_list_valid(list, true) ? list : net::HubList{};
+    prev_ = list_;
+    plan_.reset(list_.count);
+}
+
+Status TcpLink::push_hubs(const net::HubList &list)
+{
+    switch (net::hub_push_check(list_, list, true)) {
+    case net::HubPush::invalid:
+        return std::unexpected(Err::invalid_args);
+    case net::HubPush::stale:
+        return std::unexpected(Err::expired);
+    case net::HubPush::same:
+        return {};
+    case net::HubPush::apply:
+        break;
+    }
+    if (next_list_at_ != kNever) {
+        return std::unexpected(Err::busy);
+    }
+    next_list_ = list;
+    next_list_at_ = core_.now() + 300'000;
+    return {};
+}
+
+void TcpLink::hubs_now(net::HubList &list, uint8_t &on, bool &trial) const
+{
+    list = list_;
+    on = session_ && plan_.on() < list_.count ? plan_.on() : 0xFF;
+    trial = plan_.trial();
+}
+
+void TcpLink::split(const char *entry, std::string &host, uint16_t &port) const
+{
+    host = entry;
+    port = port_;
+    const size_t colon = host.rfind(':');
+    if (colon != std::string::npos) {
+        port = static_cast<uint16_t>(std::strtoul(host.c_str() + colon + 1, nullptr, 10));
+        host.resize(colon);
+    }
+}
+
+bool TcpLink::target(std::string &host, uint16_t &port) const
+{
+    if (plan_.count() == 0) {
+        host = host_;
+        port = port_;
+        return true;
+    }
+    const uint8_t t = plan_.target();
+    if (t >= list_.count) {
+        return false;  // the advert step: a POSIX node has no such lookup
+    }
+    split(list_.hubs[t].host, host, port);
+    return true;
+}
+
+void TcpLink::attempt_failed()
+{
+    const TimeUs now = core_.now();
+    const uint8_t gave_up = plan_.target();
+    if (plan_.failed(now)) {
+        if (gave_up < list_.count && plan_.target() < list_.count) {
+            say(std::string("hub: no session with ") + list_.hubs[gave_up].host + "; trying " + list_.hubs[plan_.target()].host);
+        }
+        backoff_us_ = timing_.backoff_min_us;
+        retry_at_ = now;
+    }
+}
+
+void TcpLink::welcomed()
+{
+    const bool trial = plan_.trial();
+    session_ = true;
+    plan_.session(core_.now());
+    if (plan_.on() < list_.count) {
+        say(std::string("hub: session with ") + list_.hubs[plan_.on()].host + " (hub " + std::to_string(plan_.on() + 1) + " of " +
+            std::to_string(list_.count) + ")");
+    }
+    if (trial) {
+        say("hub: list rev " + std::to_string(list_.rev) + " confirmed");
+        prev_ = list_;
+        if (store_hubs) {
+            store_hubs(list_);
+        }
+    }
+}
+
+void TcpLink::take_list()
+{
+    const TimeUs now = core_.now();
+    // The hub the session is with, under the name the node has for it.
+    const std::string cur = !session_ ? "" : plan_.count() == 0 ? host_ : plan_.on() < list_.count ? list_.hubs[plan_.on()].host : "";
+    if (!plan_.trial()) {
+        prev_ = list_;
+    }
+    list_ = next_list_;
+    // No list (count 0) is the node's own `hub` again.
+    const int keep = cur.empty() ? -1 : list_.count == 0 ? (net::hub_host_eq(cur, host_) ? 0 : -1) : net::hub_index_of(list_, cur);
+    if (keep >= 0) {
+        plan_.adopt(list_.count, static_cast<uint8_t>(keep), now);
+        say("hub: list rev " + std::to_string(list_.rev) + " taken; it names " + cur + ", where the node is");
+        prev_ = list_;
+        if (store_hubs) {
+            store_hubs(list_);
+        }
+        return;
+    }
+    say("hub: list rev " + std::to_string(list_.rev) + " on trial (reverted unless one of its hubs answers in " +
+        std::to_string(timing_.hubs.trial_us / 1'000'000) + " s)");
+    close("going to another hub of the list", End::moving);
+    plan_.reset(list_.count);
+    plan_.begin_trial(now);
+    backoff_us_ = timing_.backoff_min_us;
+    retry_at_ = now;
+}
+
+void TcpLink::upkeep(TimeUs now)
+{
+    if (next_list_at_ != kNever && now >= next_list_at_) {
+        next_list_at_ = kNever;
+        take_list();
+    }
+    if (plan_.trial_expired(now)) {
+        say("hub: no hub of list rev " + std::to_string(list_.rev) + " answered; back to rev " + std::to_string(prev_.rev));
+        close("going to another hub of the list", End::moving);
+        list_ = prev_;
+        plan_.reset(list_.count);
+        backoff_us_ = timing_.backoff_min_us;
+        retry_at_ = now;
+    }
+    if (state_ == State::up && !session_ && plan_.count() != 0 && now - up_since_ >= timing_.hubs.welcome_wait_us) {
+        close("no WELCOME from this hub");
+    }
+    // Failback: one probe at a time, on its own thread (a name that does not answer must not hold this one).
+    if (probe_) {
+        const int result = probe_->result.load();
+        if (result != 0) {
+            probe_.reset();
+            if (plan_.probed(now, result == 1)) {
+                say(std::string("hub: ") + list_.hubs[plan_.target()].host + " answers again; returning to it");
+                close("going to another hub of the list", End::moving);
+                backoff_us_ = timing_.backoff_min_us;
+                retry_at_ = now;
+            }
+        }
+    } else if (state_ == State::up && session_) {
+        const uint8_t i = plan_.probe(now, false);
+        if (i < list_.count) {
+            std::string host;
+            uint16_t port = 0;
+            split(list_.hubs[i].host, host, port);
+            probe_ = std::make_shared<Probe>();
+            std::thread([probe = probe_, host, port, timeout = timing_.connect_timeout_us] {
+                probe->result.store(probe_connect(host, port, timeout) ? 1 : 2);
+            }).detach();
+        }
     }
 }
 
@@ -95,18 +289,23 @@ short TcpLink::events() const
 
 TimeUs TcpLink::next_deadline() const
 {
+    TimeUs at = std::min({next_list_at_, plan_.probe_at(), plan_.trial_deadline()});
     if (state_ == State::connecting) {
-        return connect_deadline_;
+        return std::min(at, connect_deadline_);
     }
     if (state_ == State::idle && !held_) {
-        return retry_at_;
+        return std::min(at, retry_at_);
     }
-    return kNever;
+    if (state_ == State::up && !session_ && plan_.count() != 0) {
+        at = std::min(at, up_since_ + timing_.hubs.welcome_wait_us);
+    }
+    return at;
 }
 
 void TcpLink::poll()
 {
     const TimeUs now = core_.now();
+    upkeep(now);
     if (state_ == State::connecting && now >= connect_deadline_) {
         close("connect timed out");
         return;
@@ -118,11 +317,19 @@ void TcpLink::poll()
 
 void TcpLink::start_connect()
 {
+    // The hub the plan names (design multi-hub-m1): the node's own `hub` without a list.
+    std::string host;
+    uint16_t port = 0;
+    const bool named = target(host, port);
+    plan_.attempt(core_.now());
     sockaddr_in to{};
-    if (!resolve_ipv4(host_, port_, to)) {
-        say("hub: cannot resolve " + host_);
+    if (!named || !resolve_ipv4(host, port, to)) {
+        if (named) {
+            say("hub: cannot resolve " + host);
+        }
         retry_at_ = core_.now() + backoff_us_;
         backoff_us_ = std::min(backoff_us_ * 2, timing_.backoff_max_us);
+        attempt_failed();
         return;
     }
     const int fd = ::socket(AF_INET, SOCK_STREAM, 0);
@@ -130,6 +337,12 @@ void TcpLink::start_connect()
         retry_at_ = core_.now() + backoff_us_;
         return;
     }
+    const std::string far = host + ":" + std::to_string(port);
+    if (far != far_host_) {
+        far_host_ = far;  // another hub than the last connection went to: Net's WELCOME is a new hub run
+        ++far_;
+    }
+    connecting_to_ = host;
     set_nonblocking(fd);
     const int one = 1;
     ::setsockopt(fd, IPPROTO_TCP, TCP_NODELAY, &one, sizeof(one));
@@ -152,6 +365,7 @@ void TcpLink::start_connect()
 void TcpLink::connected()
 {
     state_ = State::up;
+    session_ = false;
     up_since_ = core_.now();
     tx_.clear();
     rx_.clear();
@@ -161,7 +375,7 @@ void TcpLink::connected()
     if (::getpeername(fd_, reinterpret_cast<sockaddr *>(&peer), &len) == 0) {
         ::inet_ntop(AF_INET, &peer.sin_addr, ip, sizeof(ip));
     }
-    say("hub: TCP up to " + host_ + " (" + ip + ":" + std::to_string(port_) + ")");
+    say("hub: TCP up to " + connecting_to_ + " (" + ip + ":" + std::to_string(ntohs(peer.sin_port)) + ")");
     notify();
 }
 
@@ -242,16 +456,21 @@ void TcpLink::read()
         if (state_ != State::up) {
             return;  // Net dropped the link while handling it
         }
+        if (!session_ && net_ != nullptr && net_->state().link(net::LinkKind::tcp).session) {
+            welcomed();  // the plan follows the WELCOME on this connection
+        }
     }
     rx_.erase(rx_.begin(), rx_.begin() + static_cast<long>(at));
 }
 
-void TcpLink::close(const char *why)
+void TcpLink::close(const char *why, End end)
 {
     if (fd_ < 0) {
         return;
     }
     const bool was_up = state_ == State::up;
+    const bool had_session = session_;
+    session_ = false;
     ::close(fd_);
     fd_ = -1;
     state_ = State::idle;
@@ -267,6 +486,16 @@ void TcpLink::close(const char *why)
     say(std::string("hub: TCP closed: ") + why);
     if (was_up) {
         notify();
+    }
+    // What this end means for the choice of hub: a session that ended is tried again where it was; an attempt that
+    // got none counts against its hub. A move to another hub is the caller's.
+    if (end == End::moving) {
+        return;
+    }
+    if (had_session) {
+        plan_.lost(now);
+    } else if (!held_) {
+        attempt_failed();
     }
 }
 

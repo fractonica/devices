@@ -58,7 +58,7 @@ import type { PortCap } from '../router/caps.ts';
 import { routerInfo } from '../router/index.ts';
 import { instancesOf, sendCommandTo } from '../router/ops.ts';
 import { JPEG_CHUNK_MAX_BYTES, jpegDimensions, JpegSink, sweepJpegTemps } from '../streams/jpeg-sink.ts';
-import { type LiveStream, liveStreams } from '../streams/live.ts';
+import { type LiveStream, liveStreams, stopAnywhere, viaText } from '../streams/live.ts';
 import type { StreamEndReason, StreamTicket } from '../streams/route.ts';
 import { guarded } from '../crash.ts';
 
@@ -195,6 +195,8 @@ export interface CameraStreamRequest {
   deadlineMs?: number;
   /** Began by an /app/stream `start` (stopped when its last starter leaves). */
   appOwned?: boolean;
+  /** The hub whose client asked for it through the hubs' link (design multi-hub-m2 §8). */
+  via?: string;
   origin?: JobOrigin;
 }
 
@@ -222,7 +224,7 @@ export function beginCameraStream(hub: HubContext, req: CameraStreamRequest): Be
   const { dev, inst } = req;
   const running = live.get(dev.device_id, inst.name);
   if (running) {
-    throw new FrError('DEVICE_BUSY', `${dev.alias} ${inst.name} is streaming already (stream ${running.info.stream_id}${running.jobId ? `, job ${running.jobId}` : ''}): one stream per instance`, {
+    throw new FrError('DEVICE_BUSY', `${dev.alias} ${inst.name} is streaming already (stream ${running.info.stream_id}${running.jobId ? `, job ${running.jobId}` : ''}${viaText(running)}): one stream per instance`, {
       ...(running.jobId ? { remediation: [{ tool: 'job_cancel', args: { job_id: running.jobId }, cli: `fr jobs cancel ${running.jobId}` }] } : {}),
     });
   }
@@ -256,6 +258,7 @@ export function beginCameraStream(hub: HubContext, req: CameraStreamRequest): Be
     counts: sink.counts,
     ...(path ? { path } : {}),
     appOwned: req.appOwned === true,
+    ...(req.via ? { via: req.via } : {}),
     use: req.appOwned ? 'view' : req.fetch ? 'play' : out && 'file' in out ? 'photo' : 'record',
     ...(req.fetch ? { recording: req.fetch.recording } : {}),
     live: req.live,
@@ -419,7 +422,7 @@ async function streamJob(hub: HubContext, ctx: JobCtx, req: CameraStreamRequest,
     } else {
       // Out of time, cancelled, or the app's last starter left: the board is told to stop, and what came is kept.
       ctx.stage('stopping');
-      await sendCommandTo(hub, dev, inst.name, 'stream_stop', { stream_id: id }, { ack: 'result', timeoutMs: CAMERA_CMD_TIMEOUT_MS }).catch(() => undefined);
+      await stopAnywhere(hub, dev, inst.name, id, CAMERA_CMD_TIMEOUT_MS);
       event = await within(ended.event, EVENT_GRACE_MS);
       if (!expectPost || (await within(ticket.ended, event ? POST_GRACE_MS : 0)) === undefined) {
         ticket.stop(first === 'deadline' ? 'timeout' : 'stopped');
@@ -701,6 +704,7 @@ export const CAMERA_HANDLERS: Record<CameraOpName, Handler> = {
             dropped: s.counts.dropped,
             bytes: s.counts.bytes,
             subscribers: s.live ? live.subscribers(dev.device_id, inst.name) : 0,
+            ...(s.via ? { via: s.via } : {}),
             gaps: live.gaps(dev.device_id, inst.name),
             live: s.live,
             ...(s.use ? { use: s.use } : {}),

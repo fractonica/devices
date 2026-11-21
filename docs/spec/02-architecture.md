@@ -109,7 +109,7 @@ fractonica/                       # this folder; unrelated experiments move to e
 | Capability names | `fr.<name>` (`fr.button`, `fr.led`) |
 | Device id | 12 lowercase hex digits of the factory MAC (`1cdbd4000134`) |
 | Alias | RFC 1123 label `^[a-z]([a-z0-9-]{0,29}[a-z0-9])?$` (`pad-red-1`). `broadcast`, `all`, `online` and `offline` are reserved |
-| Hub ports | 7420/tcp on loopback (API, WS, dashboard, SDK `/app`); 7421/tcp + udp on the LAN (node links); 7422/tcp on the LAN (node HTTP: OTA images; core dumps later) |
+| Hub ports | 7420/tcp on loopback (API, WS, dashboard, SDK `/app`); 7421/tcp + udp on the LAN (node links); 7422/tcp on the LAN (node HTTP: OTA images; core dumps later); 7423/tcp on the LAN while the hub holds a network key (the hubs' link, TLS with the key as its pre-shared key; [08 §8.10](08-hub.md)) |
 | Hub service advert | mDNS `_fractonica._tcp`, instance `Fractonica <host>`, port 7421, TXT `http=7422 api=7420` ([05 §5.12.5](05-network.md)) |
 
 ## 2.6 Key flows

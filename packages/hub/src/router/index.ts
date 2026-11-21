@@ -253,6 +253,17 @@ export interface RouterDeps {
   scale?: ScaleCounters;
   /** The Mac's LAN IPv4 for BEACON hub_ipv4 (design m2-c4-gateway D11); default registry/ident hubIpv4, read every 10 s. */
   hubIpv4?: () => string | null;
+  /**
+   * The hubs' link (design multi-hub-m2 §6): the name of a reachable peer hub that reports this device's TCP session,
+   * or null. While one does, a HELLO of that device on a USB cable is not answered (#hello).
+   */
+  heldOverTcp?: (deviceId: string) => string | null;
+  /**
+   * The name of a reachable peer hub that reports a session with the device, or null (design multi-hub-m2 §8): a
+   * device.offline or device.suspect of a board another hub holds says where it is (`fields.at`), so a client of the
+   * fleet does not take the end of this hub's session for the board going away.
+   */
+  heldByPeer?: (deviceId: string) => string | null;
 }
 
 // A RESULT, as sendCommand resolves it: defined with the Router interface (design c6 §3.3 adds the µs stamps).
@@ -325,6 +336,9 @@ export interface DeviceLinkInfo {
   udp_blocked: boolean;
   epoch: number | null;
   addr: number;
+  /** The net id of its HELLO, and its image chip id (255: a Linux node; null before a HELLO). Design multi-hub-m1. */
+  net: number;
+  chip_id: number | null;
   fw_id_prefix: string | null;
   /** HELLO `ota_state` (pending_verify until a new OTA image passes its health check), null before a HELLO. */
   ota_state: HelloSeen['ota_state'] | null;
@@ -731,6 +745,11 @@ export class HubRouter implements Router, HubBroadcast, Lifecycle, LinkSink {
     gateway_bye: 0,
     /** RESULT UNSUPPORTED over a gateway session (a BULK CMD, or an answer over ~200 B): retried once on the next link. */
     gateway_unsupported_retried: 0,
+    // The hubs' link (design multi-hub-m2 §6).
+    /** Serial HELLOs not answered because a reachable peer hub holds the board's TCP session (the board repeats them). */
+    serial_hello_held: 0,
+    /** Serial sessions ended for the same reason: at such a HELLO, or when the peer's report arrived. */
+    serial_yielded: 0,
   };
 
   constructor(deps: RouterDeps) {
@@ -974,6 +993,44 @@ export class HubRouter implements Router, HubBroadcast, Lifecycle, LinkSink {
       burst = Math.max(burst, p.burst);
     }
     return { resyncMs, burst };
+  }
+
+  /**
+   * The name of a reachable peer hub that reports the device's TCP session (RouterDeps.heldOverTcp), unless this hub
+   * has that TCP session itself: a board moves between hubs faster than the report of it, and the hub with the live
+   * connection is the one that has the board.
+   */
+  #heldElsewhere(deviceId: string): string | null {
+    const tcp = this.#peers.get(deviceId)?.sessions.tcp;
+    if (tcp && !tcp.closed && !tcp.ep.closed) {
+      return null;
+    }
+    try {
+      return this.#deps.heldOverTcp?.(deviceId) ?? null;
+    } catch {
+      return null;
+    }
+  }
+
+  /**
+   * Ends the device's serial session because a peer hub holds its session over Wi-Fi (design multi-hub-m2 §6): the
+   * board ended it when it took that hub's WELCOME (firmware net.cpp on_welcome: another hub run ends the sessions on
+   * the other links), so nothing is written to the port and the port stays open. `device.link {serial, up: false}`,
+   * and `device.offline` when it was the board's only session here. False without such a session, and while this
+   * hub has the board's TCP session itself.
+   */
+  yieldSerial(deviceId: string, reason: string): boolean {
+    const peer = this.#peers.get(deviceId);
+    const s = peer?.sessions.serial;
+    if (!peer || !s || this.#heldElsewhere(deviceId) === null) {
+      return false;
+    }
+    this.#counters.serial_yielded++;
+    this.#endSession(s, reason);
+    if (!this.#sessionsOf(peer).length) {
+      this.#offline(peer, reason);
+    }
+    return true;
   }
 
   /**
@@ -1449,6 +1506,8 @@ export class HubRouter implements Router, HubBroadcast, Lifecycle, LinkSink {
       udp_blocked: peer.udpBlocked,
       epoch: peer.epoch,
       addr: peer.addr,
+      net: peer.net,
+      chip_id: peer.hello?.chip ?? null,
       fw_id_prefix: peer.hello?.fw_id_prefix ?? null,
       ota_state: peer.hello?.ota_state ?? null,
       hello_caps: peer.hello?.caps ?? null,
@@ -1712,6 +1771,11 @@ export class HubRouter implements Router, HubBroadcast, Lifecycle, LinkSink {
    * and keeps its net_id, so it is read again only while there is none: `fr net set` on a fresh hub.db
    * creates it while the hub runs, and HELLOs from other nets are dropped from then on.
    */
+  /** The network record changed its net id (network_join): the next HELLO is judged by the new one. */
+  refreshNet(): void {
+    this.#netId = null;
+  }
+
   #currentNetId(): number | null {
     if (this.#netId === null) {
       try {
@@ -1751,6 +1815,21 @@ export class HubRouter implements Router, HubBroadcast, Lifecycle, LinkSink {
       return;
     }
     const id = hex(hello.mac);
+    const heldBy = ep.kind === 'serial' ? this.#heldElsewhere(id) : null;
+    if (heldBy !== null) {
+      // Design multi-hub-m2 §6 (MULTI-HUB-1 §c left it open): another hub of the network holds this board's session
+      // over Wi-Fi, and the board is on this hub's cable. A WELCOME here would be refused by the board (it keeps the
+      // hub it chose over Wi-Fi) and leave a session that never answers: "online" for a few seconds, then offline.
+      // So none is sent. The board says HELLO again every second it has no session on this link, and is answered as
+      // before once that hub's report of it ends or that hub goes away. The port stays the hub's: logs, flash, diag.
+      this.#counters.serial_hello_held++;
+      if (ep.remote !== id) {
+        this.#deps.serial?.learnDevice?.(ep.remote, id); // a bridge port still learns whose it is
+      }
+      // A HELLO on a link is a board with no session on it: one this hub still has there ended on the board's side.
+      this.yieldSerial(id, `held by hub ${heldBy} over Wi-Fi`);
+      return;
+    }
     const peer = this.#peer(id);
     const now = this.#clock.now();
     this.#waiting.delete(ep);
@@ -2393,6 +2472,17 @@ export class HubRouter implements Router, HubBroadcast, Lifecycle, LinkSink {
   }
 
   #publishPresence(peer: Peer, type: string, fields: Record<string, unknown>): void {
+    if (type === 'device.offline' || type === 'device.suspect') {
+      let at: string | null = null;
+      try {
+        at = this.#deps.heldByPeer?.(peer.id) ?? null;
+      } catch {
+        at = null;
+      }
+      if (at) {
+        fields = { ...fields, at };
+      }
+    }
     this.#deps.events.publish({
       type,
       device: peer.id,

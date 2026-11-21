@@ -774,6 +774,30 @@ public:
         return st;
     }
 
+    // The hub list (design multi-hub-m1): fr_net holds it, tries it and stores it in nvs:fr_hubs.
+    Status hubs_set(const cap::NodeHubsSetArgs &args) override
+    {
+        if (!kRadio) {
+            return std::unexpected(Err::unsupported);  // radio off (design m2-c1-hil D6): the hub is the one on USB
+        }
+        net::HubList list;
+        if (!fr::core::hubs_from_args(args, list)) {
+            return std::unexpected(Err::invalid_args);
+        }
+        Status st = net::esp::hubs_set(list);
+        if (st) {
+            ESP_LOGI(TAG, "hubs_set rev %" PRIu32 ": %u hub(s)", list.rev, static_cast<unsigned>(list.count));
+        }
+        return st;
+    }
+
+    std::expected<cap::NodeHubsGetResult, Err> hubs_get() override
+    {
+        // The strings the result points at live here until the reply is encoded (the dispatch does it at once).
+        hubs_now_ = net::esp::hubs_now();
+        return fr::core::hubs_result(hubs_now_.list, hubs_now_.on, hubs_now_.trial);
+    }
+
     Status get_state() override
     {
         report_all_ports();
@@ -811,6 +835,7 @@ public:
 
 private:
     uint8_t bind_list_buf_[kBindListMax];
+    net::esp::HubsNow hubs_now_{};  // what hubs_get's result points into
 };
 
 /** fr.diag on port 241: the serial command channel's commands as a capability, over any hub link. */
@@ -877,6 +902,10 @@ public:
         // shortage, the one that fails DMA buffers, task stacks and Wi-Fi.
         v.free_heap_kb = static_cast<uint32_t>(heap_caps_get_free_size(MALLOC_CAP_INTERNAL) / 1024);
         v.ota_busy = s_ota.busy();  // HEARTBEAT ota_busy (06 §6.6)
+        if (kRadio) {
+            // Design multi-hub-m1 (b): no return to a hub above the current one while an OTA job runs over this one.
+            net::esp::hub_busy(v.ota_busy);
+        }
         // vbat_mv (design m2-c3-inputs D11): measured once per heartbeat. Net also asks for vitals on the
         // ESP-NOW heartbeat and on every relay decision (for ota_busy); those reuse the last measurement.
         const TimeUs now = esp_timer_get_time();

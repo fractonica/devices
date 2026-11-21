@@ -12,7 +12,7 @@ import { z } from 'zod';
 import { runDoctor, type HubSelfTests } from '@fractonica/host';
 import { cliFlag, findOp, LOCAL_TIME_OPS, MAX_WAIT_S, OPS, REGISTRY_HASH, type ErrorCode, type OpDef, type Result } from '@fractonica/protocol';
 
-import { callTimeoutMs, hubCall, hubHealth } from './client.ts';
+import { callTimeoutMs, hubCall, hubHealth, setAtHub, takeAtHub } from './client.ts';
 import { addAudioCommands, AUDIO_CLI_OPS } from './audio.ts';
 import { addCsiCommands, CSI_CLI_OPS } from './csi.ts';
 import { addCodegenClientCommand, CODEGEN_CLIENT_OPS } from './codegen-client.ts';
@@ -393,8 +393,34 @@ addCsiCommands(group(['csi']), kit);
 addAppDeployCommand(group(['app']), kit);
 addMcpCommand(program, kit);
 
+program.addHelpText(
+  'after',
+  '\nSeveral hubs in one network: an op for a board runs at the hub that holds it. `fr --at <hub> <command>` (before the\ncommand) runs any hub command on the hub named (fr hub peers lists them), e.g. `fr --at uriel ports ls`.',
+);
+
+/** Commands that act on this machine and its own hub process: `--at` names a hub for an op, so it is refused with them. */
+const LOCAL_COMMANDS: readonly string[][] = [['doctor'], ['gen'], ['time'], ['mcp'], ['hub', 'start'], ['hub', 'stop'], ['hub', 'restart'], ['hub', 'compact'], ['serial'], ['display', 'window']];
+
+// `--at <hub>` is taken out of the words before the command (some commands have an --at of their own).
+const taken = takeAtHub(process.argv.slice(2));
+const argv = [...process.argv.slice(0, 2), ...taken.rest];
+
 try {
-  await program.parseAsync(process.argv);
+  if (taken.at !== undefined) {
+    const words = taken.rest.filter((w) => !w.startsWith('-'));
+    const localCmd = LOCAL_COMMANDS.find((c) => c.every((w, i) => words[i] === w));
+    if (taken.rest.includes('--json')) {
+      program.setOptionValue('json', true);
+    }
+    if (!/^[a-z0-9]([a-z0-9-]{0,29}[a-z0-9])?$/.test(taken.at)) {
+      await fail('INVALID_ARGS', `--at takes a hub's name (a lowercase label, e.g. --at uriel; fr hub peers lists them), not ${JSON.stringify(taken.at)}`, 'cli');
+    }
+    if (localCmd) {
+      await fail('INVALID_ARGS', `fr ${localCmd.join(' ')} acts on this machine, not through a hub's ops: --at ${taken.at} does not apply (on that machine: fr ${localCmd.join(' ')})`, 'cli');
+    }
+    setAtHub(taken.at);
+  }
+  await program.parseAsync(argv);
 } catch (e) {
   if (!(e instanceof CommanderError)) {
     await fail('INTERNAL', e instanceof Error ? e.message : String(e), 'cli');

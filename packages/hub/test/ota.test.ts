@@ -24,7 +24,7 @@ import { encodeOtaResult, KIND, PORT } from '@fractonica/protocol/gen';
 import type { Device, HubEvent, Presence, Router } from '../src/context.ts';
 import { openDb } from '../src/db.ts';
 import { HANDLERS } from '../src/ops.ts';
-import { createOta, OFFER_FLAGS, OTA_JOB_STATE_EVENT, type OtaJobState, type OtaPlanDevice, type OtaStatusRow } from '../src/ota/index.ts';
+import { createOta, OFFER_FLAGS, OTA_JOB_STATE_EVENT, otaOrchestrator, type OtaJobState, type OtaPlanDevice, type OtaStatusRow } from '../src/ota/index.ts';
 import { selectDevices } from '../src/registry/selector.ts';
 import { addArtifact, CLS, FakeNode, FakeRegistry, type OtaRig, otaRig, until } from './fake-node.ts';
 
@@ -498,6 +498,40 @@ describe('rollback and timeouts', () => {
     expect(done.error).toMatchObject({ code: 'OTA_FAILED', remediation: expect.arrayContaining([expect.objectContaining({ tool: 'flash_start' })]) });
     expect(states(r)).toEqual(['QUEUED', 'OFFERED', 'DOWNLOADING', 'REBOOTING', 'TIMED_OUT']);
     expect(otaEvents(r).at(-1)!.fields).toMatchObject({ state: 'TIMED_OUT', needs_serial_recovery: true });
+  });
+
+  it('back on the new image at another hub of the network: the job ends completed, not offline (design multi-hub-m2 §6)', async () => {
+    // The board restarts into the image and comes up at a peer (its list's first hub): this hub sees no HELLO of it.
+    const r = await open({ ota: { backOnlineMs: 5000 } });
+    const art = addArtifact(r.db, dir);
+    await online(r, C6, { ota: { stayDown: true } });
+    const job = await deploy(r, { selector: 'pad-c6' });
+    await until(() => states(r).at(-1) === 'REBOOTING', 5000, 'the device restarting');
+    const orchestrator = otaOrchestrator(r.hub);
+    // A peer's report of another firmware (the old image, a board of another build) ends nothing.
+    orchestrator.seenAtPeer(C6, OLD_FW, 'hub-b');
+    orchestrator.seenAtPeer(C6, '', 'hub-b');
+    orchestrator.seenAtPeer(C6B, art.fw_id.slice(0, 16), 'hub-b');
+    expect(states(r).at(-1)).toBe('REBOOTING');
+    // The peer reports the board's session with the new firmware (the HELLO prefix, 16 hex).
+    orchestrator.seenAtPeer(C6, art.fw_id.slice(0, 16).toUpperCase(), 'hub-b');
+    const done = await ended(r, job.job_id);
+    expect(done).toMatchObject({ status: 'completed' });
+    expect(done.error).toBeUndefined();
+    expect(states(r)).toEqual(['QUEUED', 'OFFERED', 'DOWNLOADING', 'REBOOTING', 'SUCCEEDED']);
+    const child = (await status(r, { job: job.job_id })).devices[0] as OtaStatusRow & { job: string };
+    expect(child).toMatchObject({ state: 'SUCCEEDED' });
+    const logs = r.jobs.logs(child.job, 0, 200, false).lines.map((l) => l.text);
+    expect(logs.some((t) => t.includes('back on the new image at hub hub-b'))).toBe(true);
+    // Before the board restarted, such a report is no end: the download is still this hub's to follow.
+    const r2 = await open();
+    const art2 = addArtifact(r2.db, dir);
+    await online(r2, C6, { ota: { ignoreOffer: true } });
+    const job2 = await deploy(r2, { selector: 'pad-c6' });
+    await until(() => states(r2).includes('OFFERED'), 5000, 'the OFFER');
+    otaOrchestrator(r2.hub).seenAtPeer(C6, art2.fw_id.slice(0, 16), 'hub-b');
+    expect(states(r2).at(-1)).not.toBe('SUCCEEDED');
+    await r2.jobs.cancel(job2.job_id);
   });
 
   it('VERIFYING reads the HELLO ota_state: pending_verify waits for the RESULT; valid (the RESULT lost with its session) confirms', async () => {

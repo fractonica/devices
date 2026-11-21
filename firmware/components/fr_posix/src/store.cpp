@@ -75,6 +75,9 @@ bool IdentityFile::load()
     std::istringstream in(*text);
     std::string line;
     extra_.clear();
+    hubs = {};
+    hubs_base_.clear();
+    bool have_base = false;
     while (std::getline(in, line)) {
         const size_t eq = line.find('=');
         if (line.empty() || line[0] == '#' || eq == std::string::npos) {
@@ -95,9 +98,36 @@ bool IdentityFile::load()
             epoch = static_cast<uint16_t>(num);
         } else if (key == "hub") {
             hub = value;
+        } else if (key == "hubs_rev") {
+            hubs.rev = static_cast<uint32_t>(num);
+        } else if (key == "hubs_base") {
+            hubs_base_ = value;
+            have_base = true;
+        } else if (key == "hubs") {
+            // `host[/ip]` entries separated by spaces; an entry that is not one voids the list.
+            std::istringstream entries(value);
+            std::string e;
+            hubs.count = 0;
+            while (entries >> e) {
+                const size_t slash = e.find('/');
+                const std::string host = e.substr(0, slash);
+                const std::string ip = slash == std::string::npos ? "" : e.substr(slash + 1);
+                if (hubs.count >= net::kHubsMax || host.size() > net::kHubHostMax || ip.size() > net::kHubIpMax) {
+                    hubs.count = 0;
+                    break;
+                }
+                std::snprintf(hubs.hubs[hubs.count].host, sizeof(hubs.hubs[hubs.count].host), "%s", host.c_str());
+                std::snprintf(hubs.hubs[hubs.count].ip, sizeof(hubs.hubs[hubs.count].ip), "%s", ip.c_str());
+                ++hubs.count;
+            }
         } else {
             extra_ += line + "\n";
         }
+    }
+    // A list stored under another `hub` (set-hub since, as a reprovision on an ESP32), or one that is not a list.
+    if ((hubs.rev != 0 || hubs.count != 0) && (!have_base || hubs_base_ != hub || !net::hub_list_valid(hubs, true))) {
+        hubs = {};
+        hubs_base_.clear();
     }
     return true;
 }
@@ -125,6 +155,15 @@ bool IdentityFile::save()
     text += "alias_rev=" + std::to_string(alias_rev) + "\n";
     text += "epoch=" + std::to_string(epoch) + "\n";
     text += "hub=" + hub + "\n";
+    if (hubs.rev != 0 || hubs.count != 0) {
+        text += "hubs_rev=" + std::to_string(hubs.rev) + "\n";
+        text += "hubs_base=" + hubs_base_ + "\n";
+        std::string list;
+        for (size_t i = 0; i < hubs.count; ++i) {
+            list += (i != 0 ? " " : "") + std::string(hubs.hubs[i].host) + (hubs.hubs[i].ip[0] != '\0' ? "/" + std::string(hubs.hubs[i].ip) : "");
+        }
+        text += "hubs=" + list + "\n";
+    }
     text += extra_;
     return write_file_atomic(path_, std::span(reinterpret_cast<const uint8_t *>(text.data()), text.size()));
 }

@@ -6,7 +6,9 @@
 //     device (a chip's own USB names its MAC in the USB serial number, which survives re-enumeration), or the device
 //     last seen on it (ports_seen.device_id: a bridge port's HELLO, a provision's probe) is one. ports.claim lists
 //     ports opened anyway (fr ports claim), so an unknown board can say HELLO. Every other candidate port is listed
-//     as `unwatched`, closed, for idf.py, esptool or a browser to use.
+//     as `unwatched`, closed, for idf.py, esptool or a browser to use. A board this hub flashed for another hub
+//     (device_provision `for_hub`, 06 §6.4: its row's provision record names that hub) is not adopted: it says HELLO
+//     with that hub's net once a second, which this hub's router drops, so reading its port would only fill the log.
 //   - mode `all`: every Espressif and USB-UART bridge port, as before the policy.
 // A bridge port is known only by its USB socket (its path) until its board speaks, so the board last seen on it is
 // remembered with the adapter it was behind (ports_seen.device_port: VID:PID and the adapter's own serial number):
@@ -73,7 +75,22 @@ export interface PortPolicyHandle extends PortPolicy {
  */
 export function createPortPolicy(db: Db, config: string | LiveConfig = paths.config()): PortPolicyHandle {
   const reader = typeof config === 'string' ? liveConfig(config) : config;
-  const deviceKnown = db.prepare('SELECT 1 FROM devices WHERE device_id = ?');
+  const deviceRow = db.prepare('SELECT provision FROM devices WHERE device_id = ?');
+  /** A registered board that is this hub's: not one whose last fr_ident this hub wrote for another hub. */
+  const deviceKnown = (id: string): boolean => {
+    const r = deviceRow.get(id) as { provision: string | null } | undefined;
+    if (!r) {
+      return false;
+    }
+    if (!r.provision?.includes('"for_hub"')) {
+      return true; // the usual row: no need to parse its record at every poll
+    }
+    try {
+      return typeof (JSON.parse(r.provision) as { for_hub?: unknown }).for_hub !== 'string';
+    } catch {
+      return true;
+    }
+  };
   const seenRow = db.prepare('SELECT device_id, device_port, vid, pid FROM ports_seen WHERE usb_serial = ? AND device_id IS NOT NULL');
   /** The board last seen on a bridge port, when the adapter in the socket is still the one it was seen behind. */
   const seenDevice = (p: PolicyPort): string | null => {
@@ -106,7 +123,7 @@ export function createPortPolicy(db: Db, config: string | LiveConfig = paths.con
         return { watch: true, why: 'all' };
       }
       const board = ownId ?? seen;
-      if (board !== null && deviceKnown.get(board)) {
+      if (board !== null && deviceKnown(board)) {
         return { watch: true, why: 'adopted' };
       }
       if (ports.claim.some((x) => portMatches(x, p))) {

@@ -13,6 +13,7 @@
 
 #include "fr/core/node_net.hpp"
 #include "fr/core/worker.hpp"
+#include "fr/net/hub_plan.hpp"
 
 namespace fr::posix {
 
@@ -25,6 +26,10 @@ std::optional<std::string> read_file(const std::string &path);
  * The node's identity file, `key=value` lines: addr, net, alias, alias_rev, epoch, hub (host[:port]). Unknown keys are
  * kept. epoch is the last boot's; begin_boot() raises it (RFC 1982 order, skipping 0) and commits it before the node
  * sends anything (spec 05 §5.5: a reused epoch has its frames dropped as duplicates).
+ * The hub list of fr.node.hubs_set (design multi-hub-m1) is three more keys, nvs:fr_hubs on an ESP32: hubs_rev, hubs
+ * (`host[/ip]` entries in priority order, separated by spaces) and hubs_base, the `hub` the list was pushed under.
+ * A `hub` changed since (set-hub, as a reprovision on an ESP32) supersedes the list: load() then drops its hubs and
+ * its rev. `hub` itself is never rewritten by a list: without one, or when no hub of it answers, it is where the node goes.
  */
 class IdentityFile
 {
@@ -43,12 +48,21 @@ public:
     uint32_t alias_rev = 0;
     uint16_t epoch = 0;
     std::string hub;  // host or host:port; empty: not provisioned
+    /** The stored hub list (count 0: none; its rev still stands). */
+    net::HubList hubs{};
+    /** Keeps `list` as the stored one, under the `hub` of now; the caller save()s. */
+    void set_hubs(const net::HubList &list)
+    {
+        hubs = list;
+        hubs_base_ = hub;
+    }
 
     const std::string &path() const { return path_; }
 
 private:
     std::string path_;
-    std::string extra_;  // lines with keys this version does not know, kept as they were
+    std::string extra_;      // lines with keys this version does not know, kept as they were
+    std::string hubs_base_;  // `hub` when the list was stored
 };
 
 /** A blob in its own file (Net's directory and bindings). */

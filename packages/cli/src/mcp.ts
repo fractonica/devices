@@ -61,6 +61,11 @@ const HEALTH_TTL_MS = 5_000;
 /** After a failed auto-start, calls do not try again for this long (each try waits up to 10 s). */
 const RESTART_BACKOFF_MS = 30_000;
 
+/** The tool argument that names the hub an op runs on; never part of an op's input (some ops have an `at` of their own). */
+export const AT_HUB_ARG = 'at_hub';
+const AT_HUB_DESCRIPTION =
+  "optional: the name of the hub of the network to run this on (hub_peers lists them). Leave it out: an op for a board runs at the hub that holds the board, anything else on this hub. Needed for another hub's own things (its ports, its status, its builds).";
+
 /** The MCP tool for one op (09 §9.6): name, CLI title, summary, io:'input' JSON Schema, safety annotations. */
 export function toolFor(op: OpDef): Tool {
   // io 'input': with the default ('output') every field with a default would be listed as required.
@@ -76,6 +81,11 @@ export function toolFor(op: OpDef): Tool {
     if (Array.isArray(inputSchema.required)) {
       inputSchema.required = (inputSchema.required as string[]).filter((f) => !hidden.includes(f));
     }
+  }
+  // `at_hub` (design multi-hub-m2 §7.2): the hub of the network to run it on. It is no input of the op: the adapter
+  // takes it out and sends it beside the input (X-Fr-At). Not on the time_* tools, which no hub answers.
+  if (!(LOCAL_TIME_OPS as readonly string[]).includes(op.name)) {
+    inputSchema.properties = { ...(inputSchema.properties as Record<string, unknown> | undefined), [AT_HUB_ARG]: { type: 'string', description: AT_HUB_DESCRIPTION } };
   }
   const read = op.tier === 'read';
   return {
@@ -112,9 +122,10 @@ export interface HubHealth {
 export interface McpDeps {
   /**
    * One op call to the hub (REST, X-Fr-Client: mcp). `signal` (the client cancelled the tool call) drops
-   * the request, so the hub sees its client go: a prompt_human wait ends as cancelled (design c6 D3).
+   * the request, so the hub sees its client go: a prompt_human wait ends as cancelled (design c6 D3). `at`: the hub
+   * of the network to run it on (the tool's at_hub argument), sent beside the input.
    */
-  call(op: string, input: Record<string, unknown>, timeoutMs: number, signal?: AbortSignal): Promise<Result>;
+  call(op: string, input: Record<string, unknown>, timeoutMs: number, signal?: AbortSignal, at?: string): Promise<Result>;
   /** /api/v1/health, or null when nothing answers. */
   health(): Promise<HubHealth | null>;
   /**
@@ -167,8 +178,8 @@ export const NOT_RUNNING_REMEDIES: Remediation[] = [
 ];
 
 /** hubCall (client.ts) as `mcp`, with the MCP request's cancel: a cancelled call's Result is dropped. */
-function mcpCall(op: string, input: Record<string, unknown>, timeoutMs: number, signal?: AbortSignal): Promise<Result> {
-  return hubCall(op, input, timeoutMs, 'mcp', signal);
+function mcpCall(op: string, input: Record<string, unknown>, timeoutMs: number, signal?: AbortSignal, at?: string): Promise<Result> {
+  return hubCall(op, input, timeoutMs, 'mcp', signal, at);
 }
 
 /**
@@ -342,7 +353,8 @@ export async function callTool(name: string, rawArgs: Record<string, unknown>, c
   if (!op) {
     return toolResult(failed('NOT_FOUND', `no tool ${name}`, [{ tool: 'hub_status' }]));
   }
-  const args = withoutNulls(rawArgs);
+  const { [AT_HUB_ARG]: atArg, ...args } = withoutNulls(rawArgs);
+  const at = typeof atArg === 'string' && atArg.trim() ? atArg.trim().toLowerCase() : undefined;
   const hidden = (op.mcp?.hide ?? []).filter((f) => f in args);
   if (hidden.length) {
     // A secret never passes through the agent: the person types it into the CLI's hidden prompt.
@@ -392,7 +404,7 @@ export async function callTool(name: string, rawArgs: Record<string, unknown>, c
     }, every);
   }
   try {
-    const call = deps.call(op.name, args, callTimeoutMs(op, args), ctx.signal);
+    const call = deps.call(op.name, args, callTimeoutMs(op, args), ctx.signal, at);
     const r = ctx.signal ? await untilAborted(call, ctx.signal) : await call;
     if (r?.error?.code === 'HUB_UNREACHABLE') {
       gate.forget();

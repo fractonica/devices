@@ -458,3 +458,59 @@ describe('a reset through the hub on a port it leaves closed', () => {
     expect(Date.now() - t0).toBeLessThan(1000);
   });
 });
+
+// A board flashed here for another hub (device_provision `for_hub`, 06 §6.4 "For another hub").
+describe("a board that is another hub's", () => {
+  const movedTo = (r: Rig, deviceId: string) =>
+    r.hub.db.prepare('UPDATE devices SET provisioned = 0, addr = NULL, provision = ? WHERE device_id = ?').run(JSON.stringify({ via: 'provision', for_hub: 'http://127.0.0.1:7520' }), deviceId);
+
+  it('is not adopted once its row says it was flashed for another hub, though the row stays', async () => {
+    const r = await rig();
+    r.register(KNOWN, 'mic-1');
+    h.FakePort.listed = [OWN(1101, KNOWN)];
+    await r.serial.poll();
+    expect(r.state('/dev/cu.usbmodem1101')).toBe('open');
+    movedTo(r, KNOWN);
+    await r.serial.poll();
+    expect(r.state('/dev/cu.usbmodem1101')).toBe('unwatched');
+    expect((await listPorts(r.hub)).ports.map((p) => [p.path, p.state, p.policy, p.alias])).toEqual([['/dev/cu.usbmodem1101', 'unwatched', 'not_adopted', 'mic-1']]);
+    // A record that only mentions the words, or cannot be read, is an ordinary row: adopted.
+    r.hub.db.prepare('UPDATE devices SET provision = ? WHERE device_id = ?').run(JSON.stringify({ via: 'provision', hub_host: '"for_hub"' }), KNOWN);
+    await r.serial.poll();
+    expect(r.state('/dev/cu.usbmodem1101')).toBe('open');
+    r.hub.db.prepare('UPDATE devices SET provision = ? WHERE device_id = ?').run('{"for_hub": ', KNOWN);
+    await r.serial.poll();
+    expect(r.state('/dev/cu.usbmodem1101')).toBe('open');
+    // Claimed by hand, a moved board's port is read like any claimed port.
+    movedTo(r, KNOWN);
+    await r.serial.poll();
+    expect(r.state('/dev/cu.usbmodem1101')).toBe('unwatched');
+    await HANDLERS.port_claim({ port: KNOWN, remove: false }, r.hub);
+    expect(r.state('/dev/cu.usbmodem1101')).toBe('open');
+  });
+
+  it('is read while a job watches its port (watchFor): the reset works, and the port closes when the job lets go', async () => {
+    const r = await rig({ ports: { ignore: ['/dev/cu.usbmodem1301'] } });
+    r.register(KNOWN, 'mic-1');
+    movedTo(r, KNOWN);
+    h.FakePort.listed = [OWN(1101, KNOWN), OWN(1201, STRANGER), OWN(1301, '1cdbd4000777')];
+    await r.serial.poll();
+    expect([r.state('/dev/cu.usbmodem1101'), r.state('/dev/cu.usbmodem1201'), r.state('/dev/cu.usbmodem1301')]).toEqual(['unwatched', 'unwatched', 'ignored']);
+    // The provisioning job: watch, lease for the flash, release, reset through the hub's own handle.
+    const unwatch = [r.serial.watchFor(KNOWN), r.serial.watchFor(STRANGER), r.serial.watchFor('1cdbd4000777')];
+    const lease = await r.serial.lease(STRANGER, 'job j_1');
+    lease.release();
+    await expect(r.serial.hardReset(STRANGER)).resolves.toMatchObject({ key: STRANGER });
+    await r.serial.poll();
+    // What port_list shows is still the policy's own answer; an ignored port is never opened.
+    expect((await listPorts(r.hub)).ports.map((p) => [p.path, p.state, p.policy])).toEqual([
+      ['/dev/cu.usbmodem1101', 'open', 'not_adopted'],
+      ['/dev/cu.usbmodem1201', 'open', 'not_adopted'],
+      ['/dev/cu.usbmodem1301', 'ignored', 'ignored'],
+    ]);
+    unwatch.forEach((u) => u());
+    unwatch[0](); // a second call changes nothing
+    await r.serial.recheck();
+    expect([r.state('/dev/cu.usbmodem1101'), r.state('/dev/cu.usbmodem1201'), r.state('/dev/cu.usbmodem1301')]).toEqual(['unwatched', 'unwatched', 'ignored']);
+  });
+});

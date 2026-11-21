@@ -196,8 +196,19 @@ set(FR_SCALE_INCLUDES ${REPO_DIR}/hardware/drivers/hx711_gpio/include)
 # host test.
 set(FR_STEPPER_INCLUDES ${REPO_DIR}/hardware/drivers/drv8833_stepper/include)
 
+# fr_posix's core, links and store (design multi-hub-m1): the POSIX runtime's hub list, failover and failback run in
+# tests/posix_links_test.cpp against TCP servers on loopback, on the wall clock. Its device.cpp and runner.cpp are a
+# Linux node's (the Runner's signal handling does not build on macOS) and stay out; fr_net_node keeps its own links.
+add_library(fr_posix_sim STATIC
+    ${COMPONENTS_DIR}/fr_posix/src/core.cpp
+    ${COMPONENTS_DIR}/fr_posix/src/links.cpp
+    ${COMPONENTS_DIR}/fr_posix/src/store.cpp)
+target_include_directories(fr_posix_sim PUBLIC ${COMPONENTS_DIR}/fr_posix/include)
+target_link_libraries(fr_posix_sim PUBLIC fr_host_lib)
+target_compile_options(fr_posix_sim PRIVATE ${FR_CXX_WARNINGS})
+
 add_executable(fr_host_tests ${FR_TEST_SRCS} ${FR_FUZZ_TARGET_SRCS})
-target_link_libraries(fr_host_tests PRIVATE fr_sim fr_audio_sim fr_radio_sim fr_panel_sim fr_fixture_sim fr_host_lib)
+target_link_libraries(fr_host_tests PRIVATE fr_sim fr_audio_sim fr_radio_sim fr_panel_sim fr_fixture_sim fr_posix_sim fr_host_lib)
 target_include_directories(fr_host_tests PRIVATE ${FR_FIXTURE_INCLUDES} ${FR_CARD_INCLUDES} ${FR_SCALE_INCLUDES}
     ${FR_STEPPER_INCLUDES})
 target_compile_options(fr_host_tests PRIVATE ${FR_CXX_WARNINGS})

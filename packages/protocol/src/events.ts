@@ -42,6 +42,13 @@ export const HubEventSchema = z.object({
    * time is the resync's, not the change's, so a timing check skips it.
    */
   resync: z.boolean().optional(),
+  /**
+   * The name of the hub the event came from, on an event another hub of the network published and this hub relays
+   * (design multi-hub-m2 §8, §17): it is live here and stored there. Absent on this hub's own events. `seq` and
+   * `cursor` are this hub's own; `hub_cursor` is the event's cursor at the hub that stored it.
+   */
+  hub: z.string().optional(),
+  hub_cursor: z.string().optional(),
 });
 export type HubEvent = z.infer<typeof HubEventSchema>;
 

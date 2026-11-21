@@ -15,6 +15,7 @@
 //   fr_net_node {--hub-tcp <port> --hub-udp <port> [--serial 1] | --serial 1} --mac <12 hex> [--host 127.0.0.1]
 //               [--addr <n>] [--net <n>] [--epoch <n>] [--hb-ms <n>] [--alias <a>] [--alias-rev <n>]
 //               [--fw <16 hex> | --fw-id <64 hex>] [--hub-http <port>] [--ota-dir <dir>] [--version <label>]
+//               [--hub-name <name>] [--hub-map <name>=<tcp>:<udp>:<http>]... [--hub-timing <5 times in ms>]
 //               [--health-ms <n>] [--fault health] [--air-dir <dir> [--air-loss <pct>] [--air-seed <n>]
 //               [--air-rssi <dBm>] [--air-channel <n>] [--air-ack-ms <n>]] [--pin-target <udp port>]
 //               [--pin-listen <udp port>] [--role node|gateway|fixture] [--board <b>] [--profile <p>] [--chip <n>]
@@ -30,6 +31,13 @@
 // --health-ms shortens the 60 s health deadline; `--fault health` is a fault build (CAPS never set), as is
 // an installed image whose fr_app_desc says fault = 1. The node is board esp32c6-supermini, profile c6-pad,
 // part_profile fr-4mb-v1, chip 13 rev 1, with a 0x1E0000 update slot.
+// Design multi-hub-m1: --hub-name is the name of the hub given by --hub-tcp, --hub-udp and --hub-http (a board's
+// hub_host), each --hub-map another hub a hub list may name, with its loopback ports. fr.node.hubs_set and hubs_get
+// then work as on a board: the list is tried by fr/net/hub_plan.hpp's rules, with --hub-timing in place of its 10 s,
+// 4 s, 60 s, 10 s and 60 s (give up a hub, wait for a WELCOME, probe period, probe confirm, trial). Lines: `hubs`
+// {rev, count, state kept|trial|confirmed|reverted}, `hub` {on, name} at each WELCOME with a list, `hub_next`
+// {from, to} when a hub is given up, `hub_return` {to} when a hub above the current one answers again. The list
+// lives in memory: a restart is the provisioned hub again.
 // --make-image writes an app image that passes this node's CHECK (06 §6.8 layout, the SHA-256 of the
 // rest appended) and prints `{"ev":"image","fw_id":"<64 hex>","size":<n>}`.
 //
@@ -619,11 +627,31 @@ private:
     std::vector<TimeUs> sent_;  // write() taps not yet printed (log_sent)
 };
 
-/** TCP to the hub, `len u16 LE | envelope` (05 §5.12.2); reconnects 250 ms after a close, like hub_link.cpp. */
+/** One hub on loopback: the name a hub list calls it, and its node TCP, UDP and HTTP ports (--hub-map, --hub-name). */
+struct HubPorts {
+    std::string name;
+    uint16_t tcp = 0;
+    uint16_t udp = 0;
+    uint16_t http = 0;
+};
+
+/**
+ * TCP to the hub, `len u16 LE | envelope` (05 §5.12.2); reconnects 250 ms after a close, like hub_link.cpp. With a hub
+ * list (design multi-hub-m1) it follows fr/net/hub_plan.hpp as hub_link.cpp does on target: which hub of the list to
+ * try, when to leave one that gives no WELCOME, the probes of the hubs above the one it is on, and a pushed list's
+ * trial. A hub of the list is a name here, and --hub-map says which loopback ports it has; a name without ports does
+ * not resolve, and neither does the advert (no mDNS on loopback). on_hub tells the rest of the node (UDP, the OTA and
+ * stream endpoints) which hub the connection is to.
+ */
 class TcpLink final : public fr::net::Link
 {
 public:
-    TcpLink(HostCore &core, std::string host, uint16_t port) : core_(core), host_(std::move(host)), port_(port) {}
+    TcpLink(HostCore &core, std::string host, HubPorts base, std::vector<HubPorts> map, const fr::net::HubTiming &timing)
+        : core_(core), host_(std::move(host)), base_(std::move(base)), map_(std::move(map))
+    {
+        plan_.set_timing(timing);
+        plan_.reset(0);
+    }
 
     LinkKind kind() const override { return LinkKind::tcp; }
     bool up() const override { return fd_ >= 0; }
@@ -657,36 +685,83 @@ public:
         }
         held_ = on;
     }
+    uint32_t far_end() const override { return far_; }
 
     void bind(fr::net::Net &net) { net_ = &net; }
     int fd() const { return fd_; }
     /** Where received envelopes go: Net, and the WELCOME check for the OTA health bit. */
     std::function<void(LinkKind, std::span<const uint8_t>)> rx;
-    TimeUs retry_at() const { return fd_ < 0 && enabled_ && !held_ ? retry_at_ : kNever; }
+    /** The hub a connection attempt goes to: its UDP and HTTP ports are the node's from here. */
+    std::function<void(const HubPorts &)> on_hub;
+    /** When the loop must call try_connect() again: a reconnect, a pushed list, a probe, a trial or WELCOME deadline. */
+    TimeUs retry_at() const
+    {
+        TimeUs at = fd_ < 0 && enabled_ && !held_ ? retry_at_ : kNever;
+        at = std::min({at, next_list_at_, plan_.probe_at(), plan_.trial_deadline()});
+        if (fd_ >= 0 && !session_ && plan_.count() != 0) {
+            at = std::min(at, connected_at_ + plan_.timing().welcome_wait_us);
+        }
+        return at;
+    }
     /** `tcp 0|1`: off closes the connection and stops reconnecting (Wi-Fi gone), on lets it reconnect. */
     void enable(bool on)
     {
         enabled_ = on;
         if (!on) {
-            close_and_retry("switched off");
+            close_and_retry("switched off", End::paused);
         }
     }
 
+    // ---- the hub list (design multi-hub-m1) ----
+
+    /** fr.node.hubs_set: taken 300 ms later, so the RESULT leaves on this connection first (as on target). */
+    fr::Status hubs_set(const fr::net::HubList &list)
+    {
+        switch (fr::net::hub_push_check(list_, list)) {
+        case fr::net::HubPush::invalid:
+            return std::unexpected(fr::Err::invalid_args);
+        case fr::net::HubPush::stale:
+            return std::unexpected(fr::Err::expired);
+        case fr::net::HubPush::same:
+            return {};
+        case fr::net::HubPush::apply:
+            break;
+        }
+        if (next_list_at_ != kNever) {
+            return std::unexpected(fr::Err::busy);
+        }
+        next_list_ = list;
+        next_list_at_ = core_.now() + 300'000;
+        return {};
+    }
+    void hubs_now(fr::net::HubList &list, uint8_t &on, bool &trial) const
+    {
+        list = list_;
+        on = session_ && plan_.on() < list_.count ? plan_.on() : 0xFF;
+        trial = plan_.trial();
+    }
+
+    /** The loop, each round: the list's upkeep, then a connection attempt when one is due. */
     void try_connect()
     {
-        if (fd_ >= 0 || !enabled_ || held_ || core_.now() < retry_at_) {
+        const TimeUs now = core_.now();
+        upkeep(now);
+        if (fd_ >= 0 || !enabled_ || held_ || now < retry_at_) {
             return;
         }
-        const int fd = ::socket(AF_INET, SOCK_STREAM, 0);
+        const HubPorts *hub = target();
+        plan_.attempt(now);
+        const int fd = hub != nullptr ? ::socket(AF_INET, SOCK_STREAM, 0) : -1;
         sockaddr_in a{};
         a.sin_family = AF_INET;
-        a.sin_port = htons(port_);
+        a.sin_port = htons(hub != nullptr ? hub->tcp : 0);
         ::inet_pton(AF_INET, host_.c_str(), &a.sin_addr);
         if (fd < 0 || ::connect(fd, reinterpret_cast<sockaddr *>(&a), sizeof(a)) != 0) {
             if (fd >= 0) {
                 ::close(fd);
             }
-            retry_at_ = core_.now() + 250'000;
+            retry_at_ = now + 250'000;
+            attempt_failed(now);
             return;
         }
         const int one = 1;
@@ -695,7 +770,16 @@ public:
         ::setsockopt(fd, SOL_SOCKET, SO_NOSIGPIPE, &one, sizeof(one));
 #endif
         fd_ = fd;
+        session_ = false;
+        connected_at_ = now;
         rx_.clear();
+        if (hub->tcp != far_port_) {
+            far_port_ = hub->tcp;  // another hub than the last connection reached: Net's WELCOME is a new hub run
+            ++far_;
+        }
+        if (on_hub) {
+            on_hub(*hub);
+        }
         emit(R"({"ev":"tcp","up":true})");
         notify();
     }
@@ -726,22 +810,154 @@ public:
             if (fd_ < 0) {
                 return;  // Net dropped the link while handling it
             }
+            if (!session_ && net_ != nullptr && net_->state().link(LinkKind::tcp).session) {
+                welcomed();
+            }
         }
         rx_.erase(rx_.begin(), rx_.begin() + static_cast<long>(at));
     }
 
 private:
-    void close_and_retry(const char *why)
+    /** Why a connection ends, for the plan: the hub's doing, the board's own move, or no network at all. */
+    enum class End : uint8_t { hub, moving, paused };
+
+    /** The ports of the hub the plan names; null when its name has none (it does not resolve). */
+    const HubPorts *target() const
     {
+        if (plan_.count() == 0) {
+            return &base_;
+        }
+        const uint8_t t = plan_.target();
+        return t < list_.count ? ports_of(list_.hubs[t].host) : nullptr;
+    }
+    const HubPorts *ports_of(std::string_view name) const
+    {
+        if (!base_.name.empty() && fr::net::hub_host_eq(base_.name, name)) {
+            return &base_;
+        }
+        for (const HubPorts &h : map_) {
+            if (fr::net::hub_host_eq(h.name, name)) {
+                return &h;
+            }
+        }
+        return nullptr;
+    }
+    const char *name_of(uint8_t i) const { return i < list_.count ? list_.hubs[i].host : i == fr::net::HubPlan::kAdvert ? "(advert)" : ""; }
+
+    void attempt_failed(TimeUs now)
+    {
+        const uint8_t gave_up = plan_.target();
+        if (plan_.failed(now)) {
+            if (gave_up != fr::net::HubPlan::kAdvert) {
+                emit(R"({"ev":"hub_next","from":"%s","to":"%s"})", name_of(gave_up), name_of(plan_.target()));
+            }
+            retry_at_ = now;
+        }
+    }
+
+    void welcomed()
+    {
+        const bool trial = plan_.trial();
+        session_ = true;
+        plan_.session(core_.now());
+        if (plan_.count() != 0) {
+            emit(R"({"ev":"hub","on":%d,"name":"%s"})", plan_.on() < list_.count ? int{plan_.on()} : -1, name_of(plan_.on()));
+        }
+        if (trial) {
+            prev_ = list_;
+            emit(R"({"ev":"hubs","rev":%u,"count":%u,"state":"confirmed"})", list_.rev, unsigned{list_.count});
+        }
+    }
+
+    void upkeep(TimeUs now)
+    {
+        if (next_list_at_ != kNever && now >= next_list_at_) {
+            next_list_at_ = kNever;
+            take_list(now);
+        }
+        if (plan_.trial_expired(now)) {
+            emit(R"({"ev":"hubs","rev":%u,"count":%u,"state":"reverted"})", prev_.rev, unsigned{prev_.count});
+            close_and_retry("hub list reverted", End::moving);
+            list_ = prev_;
+            plan_.reset(list_.count);
+            retry_at_ = now;
+        }
+        if (fd_ >= 0 && !session_ && plan_.count() != 0 && now - connected_at_ >= plan_.timing().welcome_wait_us) {
+            close_and_retry("no WELCOME from this hub");
+        }
+        if (fd_ >= 0 && session_ && enabled_) {
+            const uint8_t i = plan_.probe(now, false);
+            if (i < list_.count) {
+                // The probe is a connect of its own (on loopback it answers at once): the session's ports stay.
+                const HubPorts *hub = ports_of(list_.hubs[i].host);
+                bool ok = false;
+                if (const int fd = hub != nullptr ? ::socket(AF_INET, SOCK_STREAM, 0) : -1; fd >= 0) {
+                    sockaddr_in a{};
+                    a.sin_family = AF_INET;
+                    a.sin_port = htons(hub->tcp);
+                    ::inet_pton(AF_INET, host_.c_str(), &a.sin_addr);
+                    ok = ::connect(fd, reinterpret_cast<sockaddr *>(&a), sizeof(a)) == 0;
+                    ::close(fd);
+                }
+                if (plan_.probed(now, ok)) {
+                    emit(R"({"ev":"hub_return","to":"%s"})", name_of(plan_.target()));
+                    close_and_retry("returning to a hub above this one", End::moving);
+                    retry_at_ = now;
+                }
+            }
+        }
+    }
+
+    void take_list(TimeUs now)
+    {
+        // The hub the session is with, by name: the provisioned hub's (--hub-name) or its entry's.
+        const std::string cur = !session_ ? "" : plan_.count() == 0 ? base_.name : plan_.on() < list_.count ? list_.hubs[plan_.on()].host : "";
+        if (!plan_.trial()) {
+            prev_ = list_;
+        }
+        list_ = next_list_;
+        const int keep = cur.empty() ? -1 : list_.count == 0 ? (fr::net::hub_host_eq(cur, base_.name) ? 0 : -1) : fr::net::hub_index_of(list_, cur);
+        if (keep >= 0) {
+            plan_.adopt(list_.count, static_cast<uint8_t>(keep), now);
+            prev_ = list_;
+            emit(R"({"ev":"hubs","rev":%u,"count":%u,"state":"kept"})", list_.rev, unsigned{list_.count});
+            return;
+        }
+        emit(R"({"ev":"hubs","rev":%u,"count":%u,"state":"trial"})", list_.rev, unsigned{list_.count});
+        close_and_retry("hub list changed", End::moving);
+        plan_.reset(list_.count);
+        plan_.begin_trial(now);
+        retry_at_ = now;
+    }
+
+    void close_and_retry(const char *why, End end = End::hub)
+    {
+        const TimeUs now = core_.now();
+        const bool had_session = session_;
+        session_ = false;
+        if (end == End::paused) {
+            if (had_session) {
+                plan_.lost(now);
+            }
+            plan_.pause();
+        }
         if (fd_ < 0) {
             return;
         }
         ::close(fd_);
         fd_ = -1;
         rx_.clear();
-        retry_at_ = core_.now() + 250'000;
+        retry_at_ = now + 250'000;
         emit(R"({"ev":"tcp","up":false,"why":"%s"})", why);
         notify();
+        if (end != End::hub) {
+            return;
+        }
+        if (had_session) {
+            plan_.lost(now);
+        } else {
+            attempt_failed(now);
+        }
     }
     /** As on target, the link change reaches Net through the core queue, never re-entrantly. */
     void notify()
@@ -752,13 +968,24 @@ private:
 
     HostCore &core_;
     std::string host_;
-    uint16_t port_;
+    HubPorts base_;              // the provisioned hub (--hub-tcp, --hub-udp, --hub-http; --hub-name)
+    std::vector<HubPorts> map_;  // the other hubs a list may name (--hub-map)
     fr::net::Net *net_ = nullptr;
     int fd_ = -1;
     bool enabled_ = true;
     bool held_ = false;
     TimeUs retry_at_ = 0;
     std::vector<uint8_t> rx_;
+    // Design multi-hub-m1.
+    fr::net::HubPlan plan_;
+    fr::net::HubList list_{};
+    fr::net::HubList prev_{};
+    fr::net::HubList next_list_{};
+    TimeUs next_list_at_ = kNever;
+    bool session_ = false;  // this connection got a WELCOME
+    TimeUs connected_at_ = 0;
+    uint16_t far_port_ = 0;
+    uint32_t far_ = 0;
 };
 
 /** The USB serial line as fr_serial carries it: `@fr1:` ENV lines, here on stdout (out) and stdin (in). */
@@ -845,6 +1072,8 @@ public:
 
     /** `wifi_down`: no route to the hub while Wi-Fi is away. */
     void enable(bool on) { enabled_ = on; }
+    /** The hub the TCP link goes to now (design multi-hub-m1): its UDP port. */
+    void set_port(uint16_t port) { to_.sin_port = htons(port); }
 
 private:
     int fd_ = -1;
@@ -1108,6 +1337,10 @@ struct Options {
     // OTA (design c4 §5).
     std::optional<ota_fake::Digest> fw_id;  // the running image's full fw_id; else `fw` padded with zeros
     uint16_t hub_http = fr::ota::kHttpPort;
+    // Design multi-hub-m1: the provisioned hub's name, the other hubs a list may name, and the plan's timing.
+    std::string hub_name;
+    std::vector<HubPorts> hub_map;
+    fr::net::HubTiming hub_timing{};
     std::string ota_dir;
     std::string version = "0.1.0";
     uint32_t health_ms = fr::ota::kHealthDeadlineMs;
@@ -1771,6 +2004,37 @@ Options parse(int argc, char **argv)
             o.hub_tcp = static_cast<uint16_t>(n);
         } else if (k == "--hub-udp") {
             o.hub_udp = static_cast<uint16_t>(n);
+        } else if (k == "--hub-name") {
+            o.hub_name = v;
+        } else if (k == "--hub-map") {
+            // <name>=<tcp>:<udp>:<http>
+            HubPorts h;
+            unsigned tcp = 0;
+            unsigned udp = 0;
+            unsigned http = 0;
+            const std::string_view spec(v);
+            const size_t eq = spec.find('=');
+            if (eq == std::string_view::npos || eq == 0 ||
+                std::sscanf(std::string(spec.substr(eq + 1)).c_str(), "%u:%u:%u", &tcp, &udp, &http) != 3) {
+                usage("--hub-map takes <name>=<tcp port>:<udp port>:<http port>");
+            }
+            h.name = std::string(spec.substr(0, eq));
+            h.tcp = static_cast<uint16_t>(tcp);
+            h.udp = static_cast<uint16_t>(udp);
+            h.http = static_cast<uint16_t>(http);
+            o.hub_map.push_back(std::move(h));
+        } else if (k == "--hub-timing") {
+            // <give up ms>:<welcome wait ms>:<probe period ms>:<probe confirm ms>:<trial ms>
+            unsigned t[5] = {};
+            if (std::sscanf(v, "%u:%u:%u:%u:%u", &t[0], &t[1], &t[2], &t[3], &t[4]) != 5) {
+                usage("--hub-timing takes <give up>:<welcome wait>:<probe period>:<probe confirm>:<trial>, each in ms");
+            }
+            o.hub_timing.giveup_us = TimeUs{t[0]} * 1000;
+            o.hub_timing.welcome_wait_us = TimeUs{t[1]} * 1000;
+            o.hub_timing.probe_period_us = TimeUs{t[2]} * 1000;
+            o.hub_timing.probe_confirm_us = TimeUs{t[3]} * 1000;
+            o.hub_timing.probe_period_max_us = TimeUs{t[2]} * 8000;
+            o.hub_timing.trial_us = TimeUs{t[4]} * 1000;
         } else if (k == "--mac") {
             have_mac = parse_hex(v, o.mac);
         } else if (k == "--addr") {
@@ -2013,6 +2277,18 @@ public:
     }
     void serial_host(bool present) override { serial_.set_host(present); }
     void hub_mute(bool on) override { serial_.set_mute(on); }
+    fr::Status hubs_set(const fr::net::HubList &list) override
+    {
+        return tcp_ ? tcp_->hubs_set(list) : std::unexpected(fr::Err::unsupported);  // serial only: no hub to choose
+    }
+    bool hubs_now(fr::net::HubList &list, uint8_t &on, bool &trial) const override
+    {
+        if (!tcp_) {
+            return false;
+        }
+        tcp_->hubs_now(list, on, trial);
+        return true;
+    }
     bool test_pin_wired() const override { return pin_target_.on() || test_pin_tap_.on(); }
     void test_pin_pulse(uint32_t us) override
     {
@@ -2262,20 +2538,24 @@ frsim::Device *g_node = nullptr;
 class NodeStreamHost final : public fr::audio::StreamHost
 {
 public:
-    NodeStreamHost(const Options &o, fr::net::Net &net) : o_(o), net_(net), id_(ota_fake::hex(o.mac)) {}
+    NodeStreamHost(const Options &o, const frsim::NodeSpec &spec, fr::net::Net &net)
+        : o_(o), spec_(spec), net_(net), id_(ota_fake::hex(o.mac))
+    {
+    }
 
     bool endpoint(fr::audio::Endpoint &out) override
     {
         if (!net_.state().link(LinkKind::tcp).session || !fr::audio::parse_ipv4(o_.host.c_str(), out.ipv4)) {
             return false;
         }
-        out.port = o_.hub_http;
+        out.port = spec_.hub_http;  // the hub the TCP link is on now (design multi-hub-m1)
         return true;
     }
     const char *device_id() const override { return id_.c_str(); }
 
 private:
     const Options &o_;
+    const frsim::NodeSpec &spec_;
     fr::net::Net &net_;
     std::string id_;
 };
@@ -2322,7 +2602,8 @@ int main(int argc, char **argv)
     }
     ota_fake::MemFlash flash(o.ota_dir, running, o.version, g_out);
     std::copy_n(flash.state().running.begin(), o.fw.size(), o.fw.begin());
-    const frsim::NodeSpec spec = spec_of(o);
+    // Not const: hub_http follows the hub the TCP link is on (design multi-hub-m1), for the OTA and stream endpoints.
+    frsim::NodeSpec spec = spec_of(o);
     ota_fake::MemStore store(o.ota_dir);
     ota_fake::HttpFetch fetch(g_out);
     ota_fake::HostWorker worker;
@@ -2416,7 +2697,7 @@ int main(int argc, char **argv)
     for (fr::PortEntry &p : ports) {
         p.cap->attach(p.port, p.name, net);
     }
-    NodeStreamHost stream_host(o, net);
+    NodeStreamHost stream_host(o, spec, net);
     fr::audio::set_stream_host(&stream_host);
     bool services_ok = static_cast<bool>(led.init(core)) && (o.fixture || static_cast<bool>(button.init(core)));
     services_ok = services_ok && (!mic || static_cast<bool>(mic->init(core))) && (!spk || static_cast<bool>(spk->init(core)));
@@ -2457,9 +2738,13 @@ int main(int argc, char **argv)
         net.attach(serial);
     }
     if (o.ip()) {
-        tcp.emplace(core, o.host, o.hub_tcp);
+        tcp.emplace(core, o.host, HubPorts{o.hub_name, o.hub_tcp, o.hub_udp, o.hub_http}, o.hub_map, o.hub_timing);
         udp.emplace(o.host, o.hub_udp);
         tcp->bind(net);
+        tcp->on_hub = [&udp, &spec](const HubPorts &hub) {
+            udp->set_port(hub.udp);
+            spec.hub_http = hub.http;
+        };
         net.attach(*tcp);
         net.attach(*udp);
     }

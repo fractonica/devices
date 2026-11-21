@@ -1,0 +1,37 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:fractonica:schema:fr.node.hubs_set.args",
+  "title": "fr.node.hubs_set arguments",
+  "description": "Set the board's hub list (design multi-hub-m1; 1.1). Applied about 300 ms after the RESULT. A list that names the hub the board is on is kept at once; any other is on trial until one of its hubs WELCOMEs the board, and dropped for the list it had when none does within 60 s. EXPIRED for a rev at or below the one held (the same list and rev again is OK), INVALID_ARGS for a host or ip that is not one or a host named twice, BUSY while an earlier list waits to apply, UNSUPPORTED on a board without a hub IP link (a gateway, a radio-off build).",
+  "type": "object",
+  "properties": {
+    "hubs": {
+      "type": "array",
+      "maxItems": 4,
+      "items": {
+        "type": "object",
+        "properties": {
+          "host": {
+            "type": "string",
+            "maxLength": 63,
+            "description": "(<= 63 UTF-8 bytes)"
+          },
+          "ip": {
+            "type": "string",
+            "maxLength": 15,
+            "description": "(<= 15 UTF-8 bytes)"
+          }
+        },
+        "additionalProperties": false
+      },
+      "description": "in priority order, the first is the board's default hub; empty: no list, the board uses the hub it was provisioned with (<= 4 items)"
+    },
+    "rev": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 4294967295,
+      "description": "above the rev the board holds (hubs_get), so a stale push never wins"
+    }
+  },
+  "additionalProperties": false
+}

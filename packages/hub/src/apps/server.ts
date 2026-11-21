@@ -4,6 +4,9 @@
 // rule 2, §8.7). A hello gets the welcome (every provisioned device: presence, instances, mirror), then
 // `catalog` and `registry.drift` when the app's hashes differ, then what it missed since `hello.resume`
 // (D8), all in the same tick, so nothing published meanwhile can come first. Sockets are per app (socket.ts).
+// With several hubs (design multi-hub-m2 §8, §17) the bridge subscribes to the fleet: an app connected here also gets
+// what the boards other hubs hold say (frames with `hub`), its welcome lists such a board as online with its last
+// values, and a relayed stream of it is served here for another hub's client (peers/streams.ts asks this part).
 
 import type { Socket } from 'node:net';
 
@@ -12,10 +15,10 @@ import type { FastifyInstance } from 'fastify';
 
 import { FrError } from '@fractonica/protocol';
 import { CATALOG, CATALOG_HASH } from '@fractonica/protocol/gen';
-import { APP_DEAD_MS, APP_HELLO_TIMEOUT_MS, APP_MAX_IN_FLIGHT, APP_PING_MS, APP_STREAM_PATH, type HelloFrame, type WelcomeFrame } from '@fractonica/sdk/wire';
+import { APP_DEAD_MS, APP_HELLO_TIMEOUT_MS, APP_MAX_IN_FLIGHT, APP_PING_MS, APP_PROTOCOL_V, APP_STREAM_PATH, type HelloFrame, type WelcomeFrame } from '@fractonica/sdk/wire';
 
 import type { AppServer, Device, HubContext, HubEvent, HubRunOptions } from '../context.ts';
-import { mintCursor } from '../events/index.ts';
+import { mintCursor, subscribeFleet } from '../events/index.ts';
 import { nowUs } from '../ring.ts';
 import { appFrame, frameBytes } from './bridge.ts';
 import { appVisible, capsSignature, ManifestCache, provisionedDevices, registryRev, welcomeDevice } from './directory.ts';
@@ -53,6 +56,8 @@ export interface AppServerPart extends AppServer, AppTokenSource {
   sockets(): number;
   /** `/app/stream` sockets open (design csi-c1 D12). */
   streamSockets(): number;
+  /** Streams this hub runs for clients of other hubs, through the hubs' link (design multi-hub-m2 §8). */
+  relayedStreamSockets(): number;
   /** Frames written to sockets and waiting in their queues, since start. */
   stats(): { sockets: number; written: number; queued: number };
   /** The limits in force (tests change them on a running part). */
@@ -73,6 +78,8 @@ export function createAppServer(hub: () => HubContext, _run: HubRunOptions, opts
       streams.delete(s);
     },
   };
+  /** Sockets that serve another hub's client through the hubs' link (design multi-hub-m2 §8): no WebSocket, no ping. */
+  const relayed = new Set<StreamSocket>();
   const manifests = new ManifestCache();
   /** The instances signature each device was last announced with: a change is announced again (device.added). */
   const announced = new Map<string, string>();
@@ -167,7 +174,7 @@ export function createAppServer(hub: () => HubContext, _run: HubRunOptions, opts
       gap(); // another hub run (a restart), or not a cursor
       return;
     }
-    const missed = h.events.query({ afterSeq: seq, limit: REPLAY_SCAN + 1 });
+    const missed = h.events.query({ afterSeq: seq, limit: REPLAY_SCAN + 1, relayed: true });
     if (missed.length > REPLAY_SCAN) {
       gap();
       return;
@@ -227,7 +234,7 @@ export function createAppServer(hub: () => HubContext, _run: HubRunOptions, opts
     start() {
       readToken();
       // D7: the first subscriber of the bus (main.ts starts this part before anything else subscribes).
-      off = hub().events.subscribe(onEvent);
+      off = subscribeFleet(hub().events, onEvent);
       pinger = setInterval(guarded('apps.ping', () => {
         for (const s of sockets) {
           s.ping();
@@ -237,6 +244,28 @@ export function createAppServer(hub: () => HubContext, _run: HubRunOptions, opts
         }
       }), limits.pingMs);
       pinger.unref();
+      // A live stream of a board this hub holds, for a client of another hub: run here as for a client of this hub's
+      // own, written to the hubs' link (peers/streams.ts). That hub checked its client's token; this hub sees none.
+      hub().peers?.streams.serve((peer, ref, pipe) => {
+        const s = new StreamSocket(pipe, undefined, { ...streamHost, relayedFrom: peer.name, gone: (x: StreamSocket) => void relayed.delete(x) });
+        relayed.add(s);
+        s.message(
+          JSON.stringify({
+            t: 'stream.hello',
+            v: typeof ref.v === 'number' ? ref.v : APP_PROTOCOL_V,
+            token: '',
+            device: typeof ref.device === 'string' ? ref.device : '',
+            ...(typeof ref.instance === 'string' ? { instance: ref.instance } : {}),
+            ...(ref.start !== null && typeof ref.start === 'object' ? { start: ref.start } : {}),
+          }),
+        );
+        return {
+          closed: () => s.closed(),
+          get gaps() {
+            return s.gaps;
+          },
+        };
+      });
     },
     async stop() {
       off?.();
@@ -250,6 +279,10 @@ export function createAppServer(hub: () => HubContext, _run: HubRunOptions, opts
         s.close(1001, 'hub stopping');
       }
       for (const s of [...streams]) {
+        s.close(1001, 'hub stopping');
+      }
+      hub().peers?.streams.serve(null);
+      for (const s of [...relayed]) {
         s.close(1001, 'hub stopping');
       }
       const deadline = Date.now() + 500;
@@ -298,6 +331,7 @@ export function createAppServer(hub: () => HubContext, _run: HubRunOptions, opts
     },
     sockets: () => live.size,
     streamSockets: () => streams.size,
+    relayedStreamSockets: () => relayed.size,
     stats: () => ({ sockets: live.size, written: [...sockets].reduce((n, s) => n + s.written, closedWritten), queued: [...sockets].reduce((n, s) => n + s.queued, 0) }),
     limits,
   };

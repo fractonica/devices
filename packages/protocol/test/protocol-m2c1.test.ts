@@ -22,7 +22,7 @@ import {
   OPS,
   PROVISION_WIFI,
   ProvisionResultSchema,
-  REGISTRY_HASH,
+  REGISTRY_HASH, REGISTRY_INPUTS_HASH,
   TEST_TIERS,
   TestReportSchema,
 } from '@fractonica/protocol';
@@ -191,7 +191,7 @@ describe('hub events (D9)', () => {
 describe('REGISTRY_HASH (§3)', () => {
   const hashOf = (ops: readonly { name: string; input: z.ZodType }[]) =>
     createHash('sha256')
-      .update(JSON.stringify(ops.map((o) => [o.name, z.toJSONSchema(o.name === 'hub_doctor' && !ops.some((x) => x.name === 'hub_doctor_fix') ? z.object({}) : o.input) /* hub_doctor had no input before the dashboard's health */])))
+      .update(JSON.stringify(ops.map((o) => [o.name, z.toJSONSchema(o.name === 'hub_doctor' && !ops.some((x) => x.name === 'hub_doctor_fix') ? z.object({}) : o.name === 'device_provision' && !ops.some((x) => x.name === 'device_enroll') ? (o.input as z.ZodObject).omit({ for_hub: true }) : o.input) /* hub_doctor had no input before the dashboard's health; device_provision no for_hub before device_enroll (protocol-for-hub.test.ts) */])))
       .digest('hex')
       .slice(0, 12);
 
@@ -199,11 +199,11 @@ describe('REGISTRY_HASH (§3)', () => {
     expect(OP_NAMES).toEqual(expect.arrayContaining(['bench_get', 'test_report']));
     // 46 at M2-C1; M2-C5 adds display_snapshot and display_render (protocol-m2c5.test.ts), A1 the audio_ ops, CSI-1
     // network_list and the csi_ ops.
-    expect(OPS.filter((o) => !/^(display|audio|csi|camera|scale|battery|cell|haptic|wiring|part|storage|clock|app|time)_|^device_adopt$|^port_(lend|ignore|claim)$|^hub_doctor_fix$/.test(o.name) && o.name !== 'network_list')).toHaveLength(46);
-    expect(hashOf(OPS)).toBe(REGISTRY_HASH);
+    expect(OPS.filter((o) => !/^(display|audio|csi|camera|scale|battery|cell|haptic|wiring|part|storage|clock|app|time)_|^device_adopt$|^port_(lend|ignore|claim)$|^hub_doctor_fix$|^device_enroll$|^device_(hubs_set|hubs_get|share)$|^network_join$|^network_admit$|^hub_(name_set|peers)$/.test(o.name) && o.name !== 'network_list')).toHaveLength(46);
+    expect(hashOf(OPS)).toBe(REGISTRY_INPUTS_HASH);
     expect(REGISTRY_HASH).not.toBe('8805351bae42'); // M1's
     for (const name of ['bench_get', 'test_report']) {
-      expect(hashOf(OPS.filter((o) => o.name !== name)), name).not.toBe(REGISTRY_HASH);
+      expect(hashOf(OPS.filter((o) => o.name !== name)), name).not.toBe(REGISTRY_INPUTS_HASH);
     }
   });
 });

@@ -423,6 +423,58 @@ function renderNetworks(rows: Row[]): string {
   ).join('\n');
 }
 
+/**
+ * hub_peers as a table (design multi-hub-m2): one line per hub of the network, this hub marked, then why a hub that is
+ * not reachable is not. EPOCH and REGISTRY are what each hub runs (a peer's from its hello; `-` before its first).
+ */
+function renderPeers(data: Row): string {
+  const v = (x: unknown) => (x === null || x === undefined ? '-' : String(x));
+  const peers = (Array.isArray(data.peers) ? data.peers : []) as Row[];
+  const hub = (data.hub ?? {}) as Row;
+  const link = (data.link ?? {}) as Row;
+  // Local date and time of day, as the leases' times are.
+  const since = (x: unknown) => {
+    const d = typeof x === 'string' ? new Date(x) : null;
+    return d && !Number.isNaN(d.getTime()) ? `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')} ${clockTime(x as string)}` : '-';
+  };
+  const head = `network ${v(data.net_id)}: this hub is ${v(hub.name)} (${v(hub.id)}, slot ${v(hub.slot)}); registrar ${v(data.registrar)}; link ${link.listening ? `listening on ${v(link.port)}` : `not listening${link.error ? ` (${v(link.error)})` : ''}`}`;
+  const table = aligned(
+    ['HUB', 'ID', 'ROLE', 'SLOT', 'REACHABLE', 'SINCE', 'EPOCH', 'REGISTRY', 'BOARDS', 'ADDRESS'],
+    peers.map((p) => [`${v(p.name)}${p.this ? ' (this hub)' : ''}`, v(p.id), v(p.role), v(p.slot), p.this ? '-' : p.reachable ? 'yes' : 'no', since(p.since), v(p.hub_epoch), v(p.registry_hash), v(p.boards), v(p.address)]),
+  );
+  const notes = peers.filter((p) => !p.this && !p.reachable).map((p) => `${v(p.name)}: not reachable${p.last_error ? ` (${v(p.last_error)})` : ''}`);
+  // The one registry (design multi-hub-m2 §5): what this hub holds, and how it stands with each reachable peer.
+  const reg = data.registry as Row | undefined;
+  const sync: string[] = [];
+  if (reg) {
+    const each = peers
+      .filter((p) => !p.this && p.reachable)
+      .map((p) => {
+        const r = (p.registry ?? null) as Row | null;
+        const state = !r || r.speaks === false ? 'does not replicate' : r.in_step === true ? 'in step' : r.in_step === false ? `differs (${v(r.rows)} rows there)` : 'not heard yet';
+        return `${v(p.name)} ${state}${r && r.speaks !== false ? `, ${v(r.sent)} sent, ${v(r.received)} received${r.conflicts ? `, ${v(r.conflicts)} not taken` : ''}` : ''}`;
+      });
+    sync.push(`registry: ${v(reg.rows)} rows${reg.tombstones ? `, ${v(reg.tombstones)} deleted` : ''}${each.length ? `; ${each.join('; ')}` : ''}`);
+    for (const c of (Array.isArray(reg.conflicts) ? reg.conflicts : []) as Row[]) {
+      sync.push(`registry: ${v(c.message)}`);
+    }
+  }
+  // Live data (design multi-hub-m2 §8): events with each reachable peer, and the streams relayed with it now.
+  const live = peers
+    .filter((p) => !p.this && p.reachable && p.events)
+    .map((p) => {
+      const e = p.events as Row;
+      const st = (p.streams ?? null) as Row | null;
+      if (e.speaks === false) {
+        return `${v(p.name)} relays none`;
+      }
+      const lost = [e.dropped ? `${v(e.dropped)} dropped` : '', e.missed ? `${v(e.missed)} missed` : '', e.queued ? `${v(e.queued)} waiting` : ''].filter(Boolean);
+      return `${v(p.name)} ${v(e.sent)} sent, ${v(e.received)} received${lost.length ? `, ${lost.join(', ')}` : ''}${st && st.open ? `, ${v(st.open)} stream${st.open === 1 ? '' : 's'} relayed` : ''}`;
+    });
+  const events = live.length ? [`events: ${live.join('; ')}`] : [];
+  return [head, ...table, ...notes, ...sync, ...events].join('\n');
+}
+
 /** audio_monitor's result as one line (the counters it could read), and its feedback warning on the next. */
 function renderMonitor(r: Row): string {
   const counters = (['underruns', 'rx_overflows'] as const).filter((k) => typeof r[k] === 'number').map((k) => `${k} ${String(r[k])}`);
@@ -611,6 +663,9 @@ export function renderResult(op: string, r: Result): { out: string; err: string 
   }
   if (op === 'network_list' && Array.isArray((data as { networks?: unknown }).networks)) {
     return { out: renderNetworks((data as { networks: Row[] }).networks), err: '' };
+  }
+  if (op === 'hub_peers' && Array.isArray((data as { peers?: unknown }).peers)) {
+    return { out: renderPeers(data), err: '' };
   }
   if (op === 'latency_stats') {
     return { out: renderLatency(data), err: '' };

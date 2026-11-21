@@ -286,6 +286,36 @@ describe('fr mcp (in-process)', () => {
     expect(a.calls.at(-1)?.timeoutMs).toBe(90_000);
   });
 
+  it('at_hub names the hub an op runs on: beside the input, never in it (design multi-hub-m2 §7.2)', async () => {
+    const seen: { op: string; input: Record<string, unknown>; at: string | undefined }[] = [];
+    const a = await legacy({
+      call: async (op, input, _ms, _signal, at) => {
+        seen.push({ op, input, at });
+        return { ok: true, data: { op }, cursor: 'c:4.2', ...(at ? { at } : {}) };
+      },
+    });
+    open.push(a);
+    const named = await a.peer.request('tools/call', { name: 'port_list', arguments: { at_hub: ' Uriel ' } });
+    expect(structured(named)).toEqual({ ok: true, data: { op: 'port_list' }, cursor: 'c:4.2', at: 'uriel' });
+    await a.peer.request('tools/call', { name: 'device_get', arguments: { device: 'mic-s3', at_hub: null } });
+    await a.peer.request('tools/call', { name: 'audio_level', arguments: { device: 'mic-s3' } });
+    expect(seen).toEqual([
+      { op: 'port_list', input: {}, at: 'uriel' },
+      { op: 'device_get', input: { device: 'mic-s3' }, at: undefined },
+      { op: 'audio_level', input: { device: 'mic-s3' }, at: undefined },
+    ]);
+    // Every tool a hub answers has the argument, optional; the time_* tools, which no hub answers, do not, and
+    // their own `at` (an instant) stays what it is.
+    for (const t of buildTools()) {
+      const props = (t.inputSchema.properties ?? {}) as Record<string, unknown>;
+      expect('at_hub' in props, t.name).toBe(!t.name.startsWith('time_'));
+      expect((t.inputSchema.required as string[] | undefined) ?? [], t.name).not.toContain('at_hub');
+    }
+    expect((buildTools().find((t) => t.name === 'time_now')!.inputSchema.properties as Record<string, unknown>).at).toBeDefined();
+    // No op has an input called at_hub: the name is free for the adapter.
+    expect(OPS.filter((o) => 'at_hub' in o.input.shape)).toEqual([]);
+  });
+
   it('answers unknown tools, a missing hub and another registry as Results', async () => {
     let health: HubHealth | null = null;
     const a = await legacy({ health: async () => health });

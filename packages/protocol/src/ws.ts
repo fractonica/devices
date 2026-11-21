@@ -98,6 +98,8 @@ export const WsJobSchema = z.object({
   status: z.enum(JOB_STATUSES),
   stage: z.string().optional(),
   progress: JobSchema.shape.progress,
+  /** The name of the hub that runs the job, when that is another hub of the network (design multi-hub-m2 §8). */
+  hub: z.string().optional(),
 });
 /** Events after `after` were not sent (the queue overflowed): re-read them with events_read since it. */
 export const WsGapSchema = z.object({ t: z.literal('gap'), after: cursor });

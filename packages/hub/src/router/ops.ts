@@ -14,10 +14,12 @@ import { ANALOG_IN_CONFIG_DEFAULTS, decodeMember, encodeMember, findCap, jsonSch
 import { manifestCapsByFwPrefix } from '../artifacts.ts';
 import type { Device, Handler, HubContext, HubEvent, OpInput, Presence } from '../context.ts';
 import type { Db } from '../db.ts';
-import { type EventQuery, EventStore, matchTypes, matchWhere, mintCursor, mintTimeUs, parseTypes, tailEvents } from '../events/index.ts';
+import { type EventQuery, EventStore, matchTypes, matchWhere, mintCursor, mintTimeUs, parseTypes, sinceSeqOf, subscribeFleet, tailEvents } from '../events/index.ts';
 import { checkArgsSize } from '../display/layout.ts';
 import { fenceCommand, fixtureIds } from '../fixture/fence.ts';
 import { requestClient } from '../jobs.ts';
+import { hubName } from '../peers/identity.ts';
+import { netPresence, presenceView } from '../peers/index.ts';
 import { humanPrompt, type WaitPrompt } from '../prompts.ts';
 import { nowUs } from '../ring.ts';
 import { CapDirectory, instanceNamed, type PortCap } from './caps.ts';
@@ -37,17 +39,7 @@ const MINT_SLACK_US = 100_000;
 
 /** Parses `since` and rejects cursors from an earlier hub run (spec 08 §8.7). */
 function sinceSeq(since: string | undefined, hub: HubContext): number | undefined {
-  if (!since) {
-    return undefined;
-  }
-  const c = parseCursor(since);
-  if (!c) {
-    throw new FrError('INVALID_ARGS', `bad cursor ${since}; expected c:<run>.<seq>`);
-  }
-  if (c.run !== hub.logs.run) {
-    throw new FrError('HUB_RESTARTED', `cursor ${since} is from an earlier hub run`, { details: { resume_cursor: mintCursor(hub) } });
-  }
-  return c.seq;
+  return sinceSeqOf(hub, since);
 }
 
 /** A JSON object given as one (REST, MCP) or as JSON text (the CLI); null when absent. */
@@ -67,6 +59,36 @@ export function jsonObject(v: unknown, name: string): Record<string, unknown> | 
     throw new FrError('INVALID_ARGS', `${name} must be a JSON object`);
   }
   return o as Record<string, unknown>;
+}
+
+/**
+ * A hub that held one of a wait's boards went away while the wait ran (design multi-hub-m2 §17): what those boards do
+ * cannot reach this hub now, so the wait ends with a retryable error instead of running into its timeout. `watch`
+ * returns the stop; `lost()` the hub's name once it happened.
+ */
+function watchHolders(hub: HubContext, ids: readonly string[] | null, onLost: () => void): { lost(): string | null; devices(): string[]; off(): void } {
+  let lost: string | null = null;
+  const devices = new Set<string>();
+  const off =
+    ids && hub.peers
+      ? hub.peers.onRemote((e) => {
+          if (e.away && ids.includes(e.device)) {
+            lost ??= e.hub.name;
+            devices.add(e.device);
+            onLost();
+          }
+        })
+      : () => undefined;
+  return { lost: () => lost, devices: () => [...devices], off };
+}
+
+function holderLost(hub: HubContext, what: string, w: { lost(): string | null; devices(): string[] }, details: Record<string, unknown>): FrError {
+  const names = w.devices().map((id) => hub.registry.get(id)?.alias ?? id);
+  return new FrError('HUB_UNREACHABLE', `hub ${w.lost()} went away while ${what} waited: it held ${names.join(', ')}, and what ${names.length === 1 ? 'that board does' : 'those boards do'} cannot reach this hub now`, {
+    hint: `fr hub peers shows the link; wait again once hub ${w.lost()} is back or the board is on another hub (take a new cursor first: this one stays valid on this hub)`,
+    remediation: [{ tool: 'hub_peers', cli: 'fr hub peers' }],
+    details: { hub: w.lost(), devices: w.devices(), ...details },
+  });
 }
 
 export function selectDevices(hub: HubContext, selector: string): Device[] {
@@ -90,7 +112,12 @@ function selectIds(hub: HubContext, selector: string | undefined): { devices: st
   if (selector.trim().toLowerCase() === 'all') {
     return { devices: null, exclude: fixtureIds(hub) };
   }
-  return { devices: selectDevices(hub, selector).map((d) => d.device_id), exclude: [] };
+  // The network's presence (design multi-hub-m2 §6): `online` names a board another hub holds too, as device_list does.
+  const devices = hub.registry.resolve(selector, netPresence(hub));
+  if (!devices.length) {
+    throw new FrError('NOT_FOUND', `no device matches ${selector}`, { remediation: [{ tool: 'device_list', cli: 'fr devices ls' }] });
+  }
+  return { devices: devices.map((d) => d.device_id), exclude: [] };
 }
 
 /** Makes queued events visible to SQL (a wait's cursor time reads the tables). */
@@ -440,7 +467,9 @@ export const LINKS_HANDLERS: Record<LinksOpName, Handler> = {
   events_read: (input: { selector?: string; types?: string; since?: string; max_events: number }, hub) => {
     const after = sinceSeq(input.since, hub);
     const sel = selectIds(hub, input.selector);
-    const q: EventQuery = { afterSeq: after, types: parseTypes(input.types), devices: sel.devices, excludeDevices: sel.exclude, limit: input.max_events + 1 };
+    // This hub's stored events and, marked `hub`, what the other hubs relayed and is still kept in memory (design
+    // multi-hub-m2 §17): the same events, in the same order, as a /ws client of this hub was sent.
+    const q: EventQuery = { afterSeq: after, types: parseTypes(input.types), devices: sel.devices, excludeDevices: sel.exclude, limit: input.max_events + 1, relayed: true };
     const found = after !== undefined ? hub.events.query(q) : tailEvents(hub.events, q);
     const truncated = found.length > input.max_events;
     const events = after !== undefined ? found.slice(0, input.max_events) : found.slice(-input.max_events);
@@ -502,17 +531,19 @@ export const LINKS_HANDLERS: Record<LinksOpName, Handler> = {
     let wake = () => {};
     let timer: NodeJS.Timeout | undefined;
     let prompt: WaitPrompt | null = null;
-    // Subscribed before reading the backlog, so nothing published in between is missed (seen dedups).
-    const unsubscribe = hub.events.subscribe((e) => {
+    // Subscribed before reading the backlog, so nothing published in between is missed (seen dedups). The fleet: a
+    // board another hub holds is waited for here through the events that hub relays (design multi-hub-m2 §8).
+    const unsubscribe = subscribeFleet(hub.events, (e) => {
       take(e);
       if (done()) {
         wake();
       }
     });
+    const holders = watchHolders(hub, ids, () => wake());
     try {
       let last = after;
       for (;;) {
-        const page: EventQuery = { afterSeq: last, types: globs, devices: ids, excludeDevices: sel.exclude, limit: 1000 };
+        const page: EventQuery = { afterSeq: last, types: globs, devices: ids, excludeDevices: sel.exclude, limit: 1000, relayed: true };
         const rows = hub.events.query(page);
         for (const e of rows) {
           last = Math.max(last, e.seq);
@@ -535,6 +566,7 @@ export const LINKS_HANDLERS: Record<LinksOpName, Handler> = {
       }
     } finally {
       unsubscribe();
+      holders.off();
       clearTimeout(timer);
       prompt?.end(done());
     }
@@ -542,6 +574,9 @@ export const LINKS_HANDLERS: Record<LinksOpName, Handler> = {
     const promptId = prompt ? { prompt_id: prompt.prompt_id } : {};
     if (!done()) {
       const missing = input.per_device ? ids!.filter((id) => (perDevice.get(id) ?? 0) < input.count) : undefined;
+      if (holders.lost() && !prompt?.cancelled()) {
+        throw holderLost(hub, 'wait_for_event', holders, { events: found, ...(missing ? { missing } : {}), ...promptId });
+      }
       if (prompt?.cancelled()) {
         throw new FrError('INTERNAL', `cancelled: the waiting client went away (prompt ${prompt.prompt_id})`, { details: { events: found, ...promptId } });
       }
@@ -553,12 +588,21 @@ export const LINKS_HANDLERS: Record<LinksOpName, Handler> = {
   },
 
   wait_for_device: async (input: { selector: string; state: 'online' | 'offline'; fw_id?: string; ota_state?: string; since?: string; timeout_s: number }, hub) => {
-    const devices = selectDevices(hub, input.selector);
+    // The network's presence (design multi-hub-m2 §6, §17): a board another hub holds is online, and one whose hub went
+    // away is neither online nor offline. The selector's `online` and `offline` mean the same.
+    const view = (id: string) => presenceView(hub, id);
+    const devices = hub.registry.resolve(input.selector, (id) => view(id).presence);
+    if (!devices.length) {
+      throw new FrError('NOT_FOUND', `no device matches ${input.selector}`, { remediation: [{ tool: 'device_list', cli: 'fr devices ls' }] });
+    }
     const after = sinceSeq(input.since, hub);
     const want = input.state;
     const ids = devices.map((d) => d.device_id);
+    const ownName = hub.db?.open ? hubName(hub.db) : null;
     const fwWant = input.fw_id?.toLowerCase();
-    const fwOf = (d: Device) => routerInfo(hub.router, d.device_id)?.fw_id_prefix ?? d.fw_id;
+    // The running firmware: this hub's session, else what the hub that holds the board said of it, else the registry's.
+    const fwOf = (d: Device) => routerInfo(hub.router, d.device_id)?.fw_id_prefix ?? heldFw.get(d.device_id) ?? hub.peers?.heldFw(d.device_id) ?? d.fw_id;
+    const heldFw = new Map<string, string>();
     const fwOk = (d: Device) => {
       const fw = fwOf(d)?.toLowerCase();
       if (!fwWant) {
@@ -568,21 +612,22 @@ export const LINKS_HANDLERS: Record<LinksOpName, Handler> = {
       return n >= 4 && fw!.slice(0, n) === fwWant.slice(0, n);
     };
     // With since, the device must have changed state after the cursor (a reboot, a reconnect), not merely be
-    // in it; a suspect device coming back is not such a change.
+    // in it; a suspect device coming back is not such a change. A board that only changed hub (its session with one
+    // hub ended while another holds it: the event says `at`) did not go offline.
     const changed = new Set<string>();
-    const transition = (e: HubEvent) => e.type === `device.${want}` && e.device !== undefined && ids.includes(e.device) && !e.fields?.recovered;
-    // The HELLO's ota_state, live only: the registry keeps no image state.
+    const transition = (e: HubEvent) => e.type === `device.${want}` && e.device !== undefined && ids.includes(e.device) && !e.fields?.recovered && !(want === 'offline' && e.fields?.at);
+    // The HELLO's ota_state, live only: the registry keeps no image state, and a peer does not say it.
     const otaOf = (d: Device) => routerInfo(hub.router, d.device_id)?.ota_state ?? null;
     const otaOk = (d: Device) => !input.ota_state || otaOf(d) === input.ota_state;
-    const ok = (d: Device) =>
-      (want === 'online' ? isUp(hub.router.presence(d.device_id)) : !isUp(hub.router.presence(d.device_id))) &&
-      (want === 'offline' || (fwOk(d) && otaOk(d))) &&
-      (after === undefined || changed.has(d.device_id));
+    const ok = (d: Device) => {
+      const p = view(d.device_id).presence;
+      return (want === 'online' ? isUp(p) : p === 'offline' || (p === 'unknown' && !view(d.device_id).presence_reason)) && (want === 'offline' || (fwOk(d) && otaOk(d))) && (after === undefined || changed.has(d.device_id));
+    };
     const all = () => devices.every(ok);
     let wake = () => {};
     let timer: NodeJS.Timeout | undefined;
     let poll: NodeJS.Timeout | undefined;
-    const unsubscribe = hub.events.subscribe((e) => {
+    const unsubscribe = subscribeFleet(hub.events, (e) => {
       if (after !== undefined && e.seq > after && transition(e)) {
         changed.add(e.device!);
       }
@@ -590,9 +635,25 @@ export const LINKS_HANDLERS: Record<LinksOpName, Handler> = {
         wake();
       }
     });
+    // What a peer says of a board it holds: its firmware; and a hub going away, which leaves a wait for `offline`
+    // undecidable (the board may be running fine there) while a wait for `online` goes on (it may come to another hub).
+    let lost: { hub: string; devices: Set<string> } | null = null;
+    const offRemote =
+      hub.peers?.onRemote((e) => {
+        if (!ids.includes(e.device)) {
+          return;
+        }
+        if (e.up && e.fw) {
+          heldFw.set(e.device, e.fw);
+        } else if (e.away && want === 'offline') {
+          lost ??= { hub: e.hub.name, devices: new Set() };
+          lost.devices.add(e.device);
+          wake();
+        }
+      }) ?? (() => undefined);
     try {
       if (after !== undefined) {
-        for (const e of hub.events.query({ afterSeq: after, types: [`device.${want}`], devices: ids, limit: 1000 })) {
+        for (const e of hub.events.query({ afterSeq: after, types: [`device.${want}`], devices: ids, limit: 1000, relayed: true })) {
           if (transition(e)) {
             changed.add(e.device!);
           }
@@ -608,20 +669,37 @@ export const LINKS_HANDLERS: Record<LinksOpName, Handler> = {
       }
     } finally {
       unsubscribe();
+      offRemote();
       clearTimeout(timer);
       clearInterval(poll);
     }
-    const report = devices.map((d) => ({
-      device: d.device_id,
-      alias: d.alias,
-      presence: hub.router.presence(d.device_id),
-      fw_id: fwOf(d) ?? null,
-      ...(input.ota_state ? { ota_state: otaOf(d) } : {}),
-      ok: ok(d),
-    }));
+    const report = devices.map((d) => {
+      const v = view(d.device_id);
+      return {
+        device: d.device_id,
+        alias: d.alias,
+        presence: v.presence,
+        // Where it is, when that is another hub (or was, and that hub is away).
+        ...(v.at && v.at !== ownName ? { at: v.at } : {}),
+        ...(v.presence_reason ? { presence_reason: v.presence_reason } : {}),
+        fw_id: fwOf(d) ?? null,
+        ...(input.ota_state ? { ota_state: otaOf(d) } : {}),
+        ok: ok(d),
+      };
+    });
     if (!report.every((r) => r.ok)) {
+      const gone = lost as { hub: string; devices: Set<string> } | null;
+      if (gone) {
+        const names = [...gone.devices].map((id) => hub.registry.get(id)?.alias ?? id);
+        throw new FrError('HUB_UNREACHABLE', `hub ${gone.hub} went away while wait_for_device waited for ${names.join(', ')} to be offline: whether ${names.length === 1 ? 'it is' : 'they are'} cannot be known from this hub now`, {
+          hint: `fr hub peers shows the link; wait again once hub ${gone.hub} is back`,
+          remediation: [{ tool: 'hub_peers', cli: 'fr hub peers' }],
+          details: { hub: gone.hub, devices: report },
+        });
+      }
       const on = [fwWant ? ` on ${fwWant}` : '', want === 'online' && input.ota_state ? ` with ota_state ${input.ota_state}` : ''].join('');
-      throw new FrError('TIMEOUT', `${report.filter((r) => !r.ok).map((r) => r.alias).join(', ')} not ${want}${on} within ${input.timeout_s}s`, {
+      const away = report.filter((r) => !r.ok && r.presence_reason).map((r) => `${r.alias}: ${r.presence_reason}`);
+      throw new FrError('TIMEOUT', `${report.filter((r) => !r.ok).map((r) => r.alias).join(', ')} not ${want}${on} within ${input.timeout_s}s${away.length ? ` (${away.join('; ')})` : ''}`, {
         details: { devices: report },
       });
     }
