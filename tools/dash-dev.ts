@@ -20,7 +20,10 @@
 // and a buzzer that plays tones, beeps and melodies in time and ends each with done, tools/fake-buzzer.ts),
 // provisioned the same way, with a build manifest that gives its motor the drv8833_stepper driver and the microstep
 // trait, and its buzzer ledc_buzzer's traits. SIGUSR1 raises a driver fault on it (nFAULT fell), for the panel's fault
-// line.
+// line. Since design haptic-h1 it also carries the capacitor `cap` (fr.battery: an LIC-H-0825 on a TP4056), the
+// solenoid `kick` and the vibration motor `buzz` (fr.haptic 1.1, tools/fake-haptic.ts: tap trains, patterns, the
+// budget, done and cut, the capacitor's dip and charge). SIGUSR2 draws the capacitor down to 3.0 V and holds its charger
+// off for 30 s, for the haptic panel's BUSY and cut (with --camera too, it also cuts the camera's link as above).
 //
 // It prints one JSON line {"url": ..., "home": ...} (and writes the URL to --url-file), then runs until SIGINT or
 // SIGTERM, when it stops the fleet and the hub and removes the temp home.
@@ -37,6 +40,7 @@ import { Fleet, fleetBin, fleetBinExists } from '../tests/sim/lib/fleet.ts';
 import { startPrivateHub } from '../tests/sim/lib/private-hub.ts';
 import { type FakeCamera, startFakeCamera } from './fake-camera.ts';
 import { BUZZER_CONFIG, BUZZER_TRAITS } from './fake-buzzer.ts';
+import { BUZZ_CONFIG, HAPTIC_TRAITS, KICK_CONFIG, LIC_CONFIG, LIC_TRAITS } from './fake-haptic.ts';
 import { C3S_STEPPER_CONFIG, type FakeStepper, startFakeStepper } from './fake-stepper.ts';
 
 const args = process.argv.slice(2);
@@ -174,6 +178,9 @@ try {
       led('status', 2),
       { name: 'motor', port: 3, cap: 'fr.stepper', cap_id: 0x12, version: '1.0', driver: 'drv8833_stepper', config: C3S_STEPPER_CONFIG, traits: { microstep: true } },
       { name: 'buzzer', port: 4, cap: 'fr.buzzer', cap_id: 0x13, version: '1.0', driver: 'ledc_buzzer', config: { ...BUZZER_CONFIG }, traits: { ...BUZZER_TRAITS } },
+      { name: 'cap', port: 5, cap: 'fr.battery', cap_id: 0x0d, version: '1.0', driver: 'tp4056', config: { ...LIC_CONFIG }, traits: { ...LIC_TRAITS } },
+      { name: 'kick', port: 6, cap: 'fr.haptic', cap_id: 0x0e, version: '1.1', driver: 'haptic_ledc', config: { ...KICK_CONFIG }, traits: { ...HAPTIC_TRAITS } },
+      { name: 'buzz', port: 7, cap: 'fr.haptic', cap_id: 0x0e, version: '1.1', driver: 'haptic_sdm', config: { ...BUZZ_CONFIG }, traits: { ...HAPTIC_TRAITS } },
     ]);
     motor = await startFakeStepper({ ...identity(STEP_MAC), hub: hub.node });
   }
@@ -204,6 +211,7 @@ async function stop(): Promise<void> {
 }
 let camAway = false;
 process.on('SIGUSR2', () => {
+  motor?.drain();
   if (!cam) {
     return;
   }

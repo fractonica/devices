@@ -75,5 +75,10 @@ describe('fr battery, cell and haptic output', () => {
     expect(renderResult('haptic_pulse', ok({ ...who, instance: 'buzz', ms: 200, level: 80 })).out).toBe('scale-c6 buzz: pulse 200 ms at 80 %');
     expect(renderResult('haptic_play', ok({ ...who, instance: 'kick', steps: [100, 50, 100], level: 100, repeat: 2, total_ms: 500 })).out).toBe('scale-c6 kick: playing 100,50,100 at 100 % x2 (500 ms)');
     expect(renderResult('haptic_stop', ok({ ...who, instance: 'buzz' })).out).toBe('scale-c6 buzz: stopped');
+    const tap = { ...who, instance: 'kick', period_ms: 125, hz: 8, ms: 15, level: 70, count: 0, accent: 0, accent_level: 100 };
+    expect(renderResult('haptic_tap', ok(tap)).out).toBe('scale-c6 kick: tapping 15 ms at 70 % every 125 ms (8 a second), until stopped');
+    expect(renderResult('haptic_tap', ok({ ...tap, period_ms: 500, count: 0, accent: 4 })).out).toBe('scale-c6 kick: tapping 15 ms at 70 % every 500 ms (2 a second), until stopped; accent every 4th at 100 %');
+    expect(renderResult('haptic_tap', ok({ ...tap, period_ms: 3000, count: 10 })).out).toBe('scale-c6 kick: tapping 15 ms at 70 % every 3000 ms (one every 3 s), 10 times');
+    expect(renderResult('haptic_tap', ok({ ...tap, period_ms: 1000, count: 1 })).out).toBe('scale-c6 kick: tap 15 ms at 70 %, once');
   });
 });

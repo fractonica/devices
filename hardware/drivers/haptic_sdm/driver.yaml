@@ -1,0 +1,21 @@
+# Driver manifest (design haptic-h1 D4; spec 07 §7.8). `fr gen firmware` validates profiles against it and fills
+# fr::drv::HapticSdm::Config from the instance's bind, `bind: { out: gpio.<n> }` (a pin in the board's pins.free): the
+# gate of a logic-level N-MOSFET (an AO3400 with 100 Ohm in series and 10 kOhm to GND) switching a vibration motor,
+# active high. For a board whose LEDC channels are taken (c3s-stepper: the stepper's four, the buzzer's and the
+# solenoid's): the chip's sigma-delta modulator drives the gate with a pulse-density stream a motor averages like PWM.
+schema: fractonica/driver@1
+id: haptic_sdm
+summary: A vibration motor (ERM) behind a logic-level MOSFET on one GPIO, driven by a sigma-delta channel (256 levels at 312.5 kHz); off at init and through a restart or panic.
+implements: hal.HapticOutput
+class: fr::drv::HapticSdm               # header: include/fr/drv/haptic_sdm.hpp
+targets: [esp32c3, esp32c5, esp32c6, esp32s3]
+binds: gpio                             # bare pins: bind { out: gpio.<n> } (no board section)
+accepts_kinds: [gpio]
+config:                                 # same order as HapticSdm::Config
+  out:     { type: gpio, from: bind.out, output: true, doc: "the MOSFET's gate (through 100 Ohm, 10 kOhm to GND); high is on" }
+  rate_hz: { type: u32, default: 312500, range: [312500, 20000000], doc: "the modulator's sample rate: 312.5 kHz, the lowest its 8-bit prescaler gives from 80 MHz, switches the MOSFET least. Needs a fast flyback diode (1N5819, 1N4148), never a 1N4007" }
+# fr.haptic traits its service reports (pwm()): the duty is a pulse density.
+traits: { pwm: true }
+# One sigma-delta channel (4 on the C3, C5 and C6, 8 on the S3: boards' resources.sdm_channels).
+resources: { gpio: 1, sdm_channels: 1 }
+dependencies: {}

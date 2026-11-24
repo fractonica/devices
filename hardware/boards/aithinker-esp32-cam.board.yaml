@@ -56,7 +56,7 @@ test_pin: null                # not on the HIL bench
 # rmt_rx share them); LEDC 4 timers and 8 channels per speed mode x 2 modes (SOC_LEDC_SUPPORT_HS_MODE); 2 I2C
 # (SOC_I2C_NUM); no free ADC1 pin; 2 I2S controllers (I2S0 is the camera's DMA path, taken by dvp_camera's port 0; I2S1
 # free); 2 SD/MMC slots (SOC_SDMMC_NUM_SLOTS), slot 0 on the flash's pins, so one usable.
-resources: { rmt_tx: 8, rmt_rx: 8, ledc_timers: 8, ledc_channels: 16, i2c: 2, adc1_channel: 0, i2s: 2, sdmmc_slot: 1 }
+resources: { rmt_tx: 8, rmt_rx: 8, ledc_timers: 8, ledc_channels: 16, i2c: 2, adc1_channel: 0, i2s: 2, sdmmc_slot: 1, sdm_channels: 8 }
 defaults:
   status: { cap: fr.led, driver: led_gpio, bind: leds.red }
 detection:

@@ -152,7 +152,7 @@ Status HapticService::pulse(const cap::HapticPulseArgs &args)
         return std::unexpected(Err::invalid_args);
     }
     const uint16_t steps[] = {args.ms};
-    return start(steps, 1, args.level, 1);
+    return start(cap::HapticProgram::pulse, steps, 1, args.level, 1);
 }
 
 Status HapticService::play(const cap::HapticPlayArgs &args)
@@ -186,23 +186,62 @@ Status HapticService::play(const cap::HapticPlayArgs &args)
     for (size_t i = 0; i < n; ++i) {
         copy[i] = args.steps[i];
     }
-    return start(copy.data(), n, args.level, args.repeat);
+    return start(cap::HapticProgram::play, copy.data(), n, args.level, args.repeat);
 }
 
-Status HapticService::start(const uint16_t *steps, size_t n, uint8_t level, uint8_t repeat)
+bool HapticService::train_fits(uint16_t period_ms, uint16_t ms, uint8_t cooldown_pct)
 {
-    if (core_ == nullptr) {
-        return std::unexpected(Err::failed);
+    if (cooldown_pct >= 100) {
+        return true;
     }
+    if (period_ms == 0) {
+        return false;
+    }
+    const uint32_t window_ms = static_cast<uint32_t>(kWindowUs / 1000);
+    const uint32_t taps = (window_ms + period_ms - 1) / period_ms;
+    const uint32_t budget_ms = static_cast<uint32_t>(cooldown_pct) * window_ms / 100;
+    // Strictly under: the service cuts at budget_ms.
+    return taps * (static_cast<uint32_t>(ms) + 1) < budget_ms;
+}
+
+Status HapticService::admit(TimeUs now)
+{
     if (supply_refuses()) {
         return std::unexpected(Err::busy);
     }
-    const TimeUs now = core_->now();
     account(now);
     const uint32_t budget_ms = static_cast<uint32_t>(cooldown_pct_) * (kWindowUs / 1000) / 100;
     // The running program's own on-time counts too: a replacement starts from what was spent.
     if (cooldown_pct_ < 100 && spent_ms() >= budget_ms) {
         return std::unexpected(Err::busy);
+    }
+    return {};
+}
+
+void HapticService::begin(cap::HapticProgram program, TimeUs now)
+{
+    if (active_) {
+        emit_done({program_, cap::HapticDoneReason::replaced}, now);
+    }
+    program_ = program;
+    const net::LinkInfo li = core::link_info();
+    hub_ = li.hub_session;
+    hub_epoch_ = li.hub_epoch;
+    if (!active_) {
+        active_ = true;
+        report_active(true, now);
+    }
+    report_supply(now, true);
+}
+
+Status HapticService::start(cap::HapticProgram program, const uint16_t *steps, size_t n, uint8_t level, uint8_t repeat)
+{
+    if (core_ == nullptr) {
+        return std::unexpected(Err::failed);
+    }
+    const TimeUs now = core_->now();
+    if (auto st = admit(now); !st) {
+        return st;
     }
     for (size_t i = 0; i < n; ++i) {
         steps_[i] = steps[i];
@@ -212,14 +251,55 @@ Status HapticService::start(const uint16_t *steps, size_t n, uint8_t level, uint
     repeats_left_ = std::max<uint8_t>(repeat, 1);
     step_ = 0;
     step_start_ = now;
-    const net::LinkInfo li = core::link_info();
-    hub_ = li.hub_session;
-    hub_epoch_ = li.hub_epoch;
-    if (!active_) {
-        active_ = true;
-        report_active(true, now);
+    begin(program, now);
+    run(now);
+    return {};
+}
+
+Status HapticService::tap(const cap::HapticTapArgs &args)
+{
+    if (core_ == nullptr) {
+        return std::unexpected(Err::failed);
     }
-    report_supply(now, true);
+    if (args.period_ms < 20 || args.ms == 0 || args.ms >= args.period_ms || args.ms > max_on_ms_ ||
+        !train_fits(args.period_ms, args.ms, cooldown_pct_)) {
+        return std::unexpected(Err::invalid_args);
+    }
+    const TimeUs now = core_->now();
+    const bool change = active_ && program_ == cap::HapticProgram::tap;
+    if (!change) {
+        if (auto st = admit(now); !st) {
+            return st;
+        }
+    }
+    // Whether the tap that started last is still on, by the settings it started with.
+    const bool was_on = change && now < tap_start_ + static_cast<TimeUs>(tap_ms_) * 1000;
+    period_us_ = static_cast<TimeUs>(args.period_ms) * 1000;
+    tap_ms_ = args.ms;
+    level_ = std::clamp<uint8_t>(args.level, 1, 100);
+    accent_ = args.accent;
+    accent_level_ = std::clamp<uint8_t>(args.accent_level, 1, 100);
+    forever_ = args.count == 0;
+    if (change) {
+        // In place (D2): the beat is kept, the count starts again, the accent counts on; the hub that asked now owns it.
+        const net::LinkInfo li = core::link_info();
+        hub_ = li.hub_session;
+        hub_epoch_ = li.hub_epoch;
+        if (was_on) {
+            taps_left_ = args.count;  // the tap that is on is the first
+        } else if (tap_start_ + period_us_ <= now) {
+            tap_start_ = now;  // overdue at the new rate: now
+            ++tap_no_;
+            taps_left_ = args.count;
+        } else {
+            taps_left_ = static_cast<uint32_t>(args.count) + 1;  // the tap that ended, then count more
+        }
+    } else {
+        tap_start_ = now;
+        tap_no_ = 0;
+        taps_left_ = args.count;
+        begin(cap::HapticProgram::tap, now);
+    }
     run(now);
     return {};
 }
@@ -230,7 +310,7 @@ Status HapticService::stop()
         return std::unexpected(Err::failed);
     }
     if (active_) {
-        finish(core_->now());
+        finish(cap::HapticDoneReason::stopped, core_->now());
     }
     return {};
 }
@@ -256,7 +336,7 @@ void HapticService::on_tick()
     if (hub_) {
         const net::LinkInfo li = core::link_info();
         if (li.hub_epoch != hub_epoch_ || now - li.hub_heard_at >= kHubSilentUs) {
-            finish(now);  // the hub that asked is gone: nobody would hear a cut
+            finish(cap::HapticDoneReason::hub_lost, now);  // the hub that asked is gone (1.1: said in a done)
             return;
         }
     }
@@ -279,33 +359,65 @@ void HapticService::on_tick()
 
 void HapticService::run(TimeUs now)
 {
-    while (active_) {
-        const TimeUs end = step_start_ + static_cast<TimeUs>(steps_[step_]) * 1000;
-        if (now < end) {
-            break;
-        }
-        step_start_ = end;
-        ++step_;
-        if (step_ == n_steps_) {
-            if (--repeats_left_ == 0) {
-                finish(now);
+    bool on = false;
+    uint8_t level = level_;
+    TimeUs on_start = 0;  // the on-step's start (the solenoid's kick counts from it)
+    TimeUs next = 0;      // the step's end
+    if (program_ == cap::HapticProgram::tap) {
+        const TimeUs ms_us = static_cast<TimeUs>(tap_ms_) * 1000;
+        while (true) {
+            if (now < tap_start_ + ms_us) {
+                break;  // on
+            }
+            if (!forever_ && taps_left_ <= 1) {
+                finish(cap::HapticDoneReason::done, now);  // the last tap's on-time is over
                 return;
             }
-            step_ = 0;
+            const TimeUs next_tap = tap_start_ + period_us_;
+            if (now < next_tap) {
+                break;  // between taps
+            }
+            tap_start_ = next_tap;
+            ++tap_no_;
+            if (!forever_) {
+                --taps_left_;
+            }
         }
+        on = now < tap_start_ + ms_us;
+        on_start = tap_start_;
+        next = on ? tap_start_ + ms_us : tap_start_ + period_us_;
+        if (accent_ != 0 && tap_no_ % accent_ == 0) {
+            level = accent_level_;
+        }
+    } else {
+        while (true) {
+            const TimeUs end = step_start_ + static_cast<TimeUs>(steps_[step_]) * 1000;
+            if (now < end) {
+                break;
+            }
+            step_start_ = end;
+            ++step_;
+            if (step_ == n_steps_) {
+                if (--repeats_left_ == 0) {
+                    finish(cap::HapticDoneReason::done, now);
+                    return;
+                }
+                step_ = 0;
+            }
+        }
+        on = step_ % 2 == 0;
+        on_start = step_start_;
+        next = step_start_ + static_cast<TimeUs>(steps_[step_]) * 1000;
     }
-    if (!active_) {
-        return;
-    }
-    const bool on = step_ % 2 == 0;
     const uint16_t supply = supply_ != nullptr ? supply_->mv() : 0;
+    const bool solenoid = cfg_.kind == cap::HapticKind::solenoid;
+    const TimeUs kick_end = on_start + static_cast<TimeUs>(cfg_.kick_ms) * 1000;
     uint16_t duty = 0;
     if (on) {
-        if (cfg_.kind == cap::HapticKind::solenoid) {
-            const bool kicking = now - step_start_ < static_cast<TimeUs>(cfg_.kick_ms) * 1000;
-            duty = kicking ? 1000 : compensate(cfg_.hold_pct, cfg_.rated_mv, supply);
+        if (solenoid && now >= kick_end) {
+            duty = compensate(std::min(cfg_.hold_pct, level), cfg_.rated_mv, supply);  // never holds harder than it kicked
         } else {
-            duty = compensate(level_, cfg_.rated_mv, supply);
+            duty = compensate(level, cfg_.rated_mv, supply);  // an ERM, or a solenoid's kick (1.1: at its level)
         }
         if (!traits_.pwm && duty > 0) {
             duty = 1000;
@@ -313,12 +425,8 @@ void HapticService::run(TimeUs now)
     }
     write(duty);
     // The next look: the step's end or the next tick, whichever comes first; the solenoid's kick end too.
-    TimeUs next = step_start_ + static_cast<TimeUs>(steps_[step_]) * 1000;
-    if (on && cfg_.kind == cap::HapticKind::solenoid) {
-        const TimeUs kick_end = step_start_ + static_cast<TimeUs>(cfg_.kick_ms) * 1000;
-        if (kick_end > now) {
-            next = std::min(next, kick_end);
-        }
+    if (on && solenoid && kick_end > now) {
+        next = std::min(next, kick_end);
     }
     if (on_) {
         next = std::min(next, on_since_ + static_cast<TimeUs>(max_on_ms_) * 1000);  // the max_on cut lands on time
@@ -327,12 +435,13 @@ void HapticService::run(TimeUs now)
     tick_->start(static_cast<uint32_t>(std::max<TimeUs>(next - now, 0)));
 }
 
-void HapticService::finish(TimeUs now)
+void HapticService::finish(cap::HapticDoneReason why, TimeUs now)
 {
     write(0);
     account(now);
     tick_->stop();
     active_ = false;
+    emit_done({program_, why}, now);
     report_active(false, now);
     report_supply(now, true);
 }
@@ -342,7 +451,7 @@ void HapticService::cut(cap::HapticCutReason why, TimeUs now)
     const uint16_t mv = supply_ != nullptr ? supply_->mv() : 0;
     write(0);
     emit_cut({why, mv}, now);
-    finish(now);
+    finish(cap::HapticDoneReason::cut, now);
 }
 
 }  // namespace fr

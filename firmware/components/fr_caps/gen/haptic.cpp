@@ -59,6 +59,78 @@ bool from_name(std::string_view s, HapticCutReason &out)
     return false;
 }
 
+const char *to_name(HapticProgram v)
+{
+    switch (v) {
+    case HapticProgram::pulse:
+        return "pulse";
+    case HapticProgram::play:
+        return "play";
+    case HapticProgram::tap:
+        return "tap";
+    }
+    return nullptr;
+}
+
+bool from_name(std::string_view s, HapticProgram &out)
+{
+    if (s == "pulse") {
+        out = HapticProgram::pulse;
+        return true;
+    }
+    if (s == "play") {
+        out = HapticProgram::play;
+        return true;
+    }
+    if (s == "tap") {
+        out = HapticProgram::tap;
+        return true;
+    }
+    return false;
+}
+
+const char *to_name(HapticDoneReason v)
+{
+    switch (v) {
+    case HapticDoneReason::done:
+        return "done";
+    case HapticDoneReason::stopped:
+        return "stopped";
+    case HapticDoneReason::replaced:
+        return "replaced";
+    case HapticDoneReason::hub_lost:
+        return "hub_lost";
+    case HapticDoneReason::cut:
+        return "cut";
+    }
+    return nullptr;
+}
+
+bool from_name(std::string_view s, HapticDoneReason &out)
+{
+    if (s == "done") {
+        out = HapticDoneReason::done;
+        return true;
+    }
+    if (s == "stopped") {
+        out = HapticDoneReason::stopped;
+        return true;
+    }
+    if (s == "replaced") {
+        out = HapticDoneReason::replaced;
+        return true;
+    }
+    if (s == "hub_lost") {
+        out = HapticDoneReason::hub_lost;
+        return true;
+    }
+    if (s == "cut") {
+        out = HapticDoneReason::cut;
+        return true;
+    }
+    return false;
+}
+
 size_t encode(const HapticTraits &v, fr::wire::Writer &w)
 {
     const size_t start = w.size();
@@ -205,6 +277,78 @@ bool valid(const HapticPlayArgs &v)
     return v.level >= 1 && v.level <= 100 && v.repeat >= 1 && v.repeat <= 100;
 }
 
+size_t encode(const HapticTapArgs &v, fr::wire::Writer &w)
+{
+    const size_t start = w.size();
+    if (v.period_ms != 0) {
+        w.field_uint(1, v.period_ms);
+    }
+    if (v.ms != 0) {
+        w.field_uint(2, v.ms);
+    }
+    w.field_uint(3, v.level);
+    w.field_uint(4, v.count);
+    if (v.accent != 0) {
+        w.field_uint(5, v.accent);
+    }
+    w.field_uint(6, v.accent_level);
+    return w.size() - start;
+}
+
+std::expected<HapticTapArgs, fr::wire::DecodeErr> decode_haptic_tap_args(std::span<const uint8_t> in)
+{
+    HapticTapArgs v{};
+    fr::wire::Reader r(in);
+    while (r.next()) {
+        switch (r.field()) {
+        case 1:
+            v.period_ms = static_cast<uint16_t>(r.read_uint(0xFFFF));
+            break;
+        case 2:
+            v.ms = static_cast<uint16_t>(r.read_uint(0xFFFF));
+            break;
+        case 3:
+            v.level = static_cast<uint8_t>(r.read_uint(0xFF));
+            break;
+        case 4:
+            v.count = static_cast<uint16_t>(r.read_uint(0xFFFF));
+            break;
+        case 5:
+            v.accent = static_cast<uint8_t>(r.read_uint(0xFF));
+            break;
+        case 6:
+            v.accent_level = static_cast<uint8_t>(r.read_uint(0xFF));
+            break;
+        default:
+            r.skip();
+            break;
+        }
+    }
+    if (!r.ok()) {
+        return std::unexpected(r.error());
+    }
+    return v;
+}
+
+bool operator==(const HapticTapArgs &a, const HapticTapArgs &b)
+{
+    return a.period_ms == b.period_ms &&
+           a.ms == b.ms &&
+           a.level == b.level &&
+           a.count == b.count &&
+           a.accent == b.accent &&
+           a.accent_level == b.accent_level;
+}
+
+bool valid(const HapticTapArgs &v)
+{
+    return (v.period_ms == 0 || (v.period_ms >= 20 && v.period_ms <= 60000)) &&
+           v.level >= 1 && v.level <= 100 &&
+           v.count <= 10000 &&
+           v.accent <= 32 &&
+           v.accent_level >= 1 && v.accent_level <= 100;
+}
+
 size_t encode(const HapticCut &v, fr::wire::Writer &w)
 {
     const size_t start = w.size();
@@ -248,6 +392,51 @@ bool operator==(const HapticCut &a, const HapticCut &b)
 bool valid(const HapticCut &v)
 {
     return is_known(v.reason);
+}
+
+size_t encode(const HapticDone &v, fr::wire::Writer &w)
+{
+    const size_t start = w.size();
+    if (v.program != HapticProgram{}) {
+        w.field_uint(1, std::to_underlying(v.program));
+    }
+    if (v.reason != HapticDoneReason{}) {
+        w.field_uint(2, std::to_underlying(v.reason));
+    }
+    return w.size() - start;
+}
+
+std::expected<HapticDone, fr::wire::DecodeErr> decode_haptic_done(std::span<const uint8_t> in)
+{
+    HapticDone v{};
+    fr::wire::Reader r(in);
+    while (r.next()) {
+        switch (r.field()) {
+        case 1:
+            v.program = static_cast<HapticProgram>(r.read_uint(0xFF));
+            break;
+        case 2:
+            v.reason = static_cast<HapticDoneReason>(r.read_uint(0xFF));
+            break;
+        default:
+            r.skip();
+            break;
+        }
+    }
+    if (!r.ok()) {
+        return std::unexpected(r.error());
+    }
+    return v;
+}
+
+bool operator==(const HapticDone &a, const HapticDone &b)
+{
+    return a.program == b.program && a.reason == b.reason;
+}
+
+bool valid(const HapticDone &v)
+{
+    return is_known(v.program) && is_known(v.reason);
 }
 
 size_t encode_haptic_active_state(bool v, fr::wire::Writer &w)
@@ -331,6 +520,13 @@ Status Haptic::dispatch(uint8_t cmd_id, std::span<const uint8_t> args, Reply &)
         }
         return stop();
     }
+    case kCmdTap: {
+        const auto a = decode_haptic_tap_args(args);
+        if (!a || !fr::cap::valid(*a)) {
+            return std::unexpected(Err::invalid_args);
+        }
+        return tap(*a);
+    }
     default:
         return std::unexpected(Err::unsupported);
     }
@@ -356,6 +552,17 @@ void Haptic::emit_cut(const HapticCut &e, TimeUs at)
     fr::wire::Writer w(buf, sizeof(buf));
     encode(e, w);
     sink_->event(port_, kEventCut, Priority::normal, w.bytes(), at, kOrdered);
+}
+
+void Haptic::emit_done(const HapticDone &e, TimeUs at)
+{
+    if (sink_ == nullptr) {
+        return;
+    }
+    uint8_t buf[HapticDone::kMaxSize];
+    fr::wire::Writer w(buf, sizeof(buf));
+    encode(e, w);
+    sink_->event(port_, kEventDone, Priority::normal, w.bytes(), at, kOrdered);
 }
 
 void Haptic::report_active(bool v, TimeUs at)

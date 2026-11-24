@@ -139,6 +139,11 @@ The body diode leaks nothing the wrong way: the cell can only discharge toward `
 
 **D6. The capability** `fr.haptic`, id **0x000E** (planned since M3), version 1.0:
 
+> **Since 2026-11-21: 1.1** ([haptic-h1](haptic-h1.md) D1–D5): `tap` trains, a solenoid's kick at its `level`, a
+> `done` event at the end of every program, the driver `haptic_sdm`, and `haptic_ledc`'s channel handed by codegen. A
+> 1N4007 flyback is only for a load that is plain on and off: under PWM it shorts the supply at every edge; use a
+> 1N5819 (haptic-h1 §0).
+
 - **Traits:** `pwm` bool (from the driver).
 - **Config:**
   - `kind`: `erm` | `solenoid`;

@@ -5,8 +5,8 @@
 //   that does not parse is listed under `errors`, not a failed op. A profile's newest_debug is the newest
 //   debug artifact that device_provision would flash (never a fault build).
 // - capability_list is the catalog the hub runs; with a device, its instances as the router knows them
-//   this run (live), else from its firmware's artifact manifest, with version, driver and traits from that
-//   manifest. Firmware the hub did not build has no manifest: traits null (D13).
+//   this run (live), else from its firmware's artifact manifest, with version, driver, traits and (when it set any)
+//   config from that manifest. Firmware the hub did not build has no manifest: traits null (D13), no config.
 
 import { readBoards, readProfiles } from '@fractonica/host';
 import type { InventoryOpName } from '@fractonica/protocol';
@@ -48,6 +48,8 @@ export function deviceInstances(hub: Pick<HubContext, 'db' | 'router'>, deviceId
       v: m?.version ?? CATALOG.capabilities.find((c) => c.id === i.cap_id)?.version ?? 'unknown',
       traits: m?.traits ?? null,
       ...(m?.driver ? { driver: m.driver } : {}),
+      // The build's config when it set any (design haptic-h1 D11: a haptic's kind and limits for its panel).
+      ...(m?.config && typeof m.config === 'object' && Object.keys(m.config).length ? { config: m.config as Record<string, unknown> } : {}),
     };
   });
   return { instances, source: live ? 'router' : manifest ? 'manifest' : 'none', ...(fw ? { fw_id: fw } : {}) };

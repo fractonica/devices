@@ -3490,10 +3490,10 @@ export const CATALOG: Catalog = {
     {
       "id": 14,
       "name": "fr.haptic",
-      "version": "1.0",
+      "version": "1.1",
       "section": "standard",
       "summary": "A vibration motor (ERM) or a solenoid on one switched output, compensated for and protected by the cell it draws from.",
-      "doc": "Design power-p1 D6-D7. The duty is level% x rated_mv / supply_mv (capped at 100 %), recomputed every 10 ms from the\nsupply's (an fr.battery instance named by `supply`) latest sample, so an ERM feels the same across the cell's range\nand never sees more than its rating on average. A solenoid pulls in at 100 % for kick_ms, then holds at hold_pct.\n`pulse` and `play` answer BUSY at or below the supply's critical voltage (a solenoid below critical + 300 mV), with\nno fresh supply reading, or past the cooldown budget (cooldown_pct of any 10 s); a running one is stopped by the\nsupply falling to critical or its floor, or by max_on_ms of on-time without a break, with `cut`. A program started\nwhile a hub session existed stops (no `cut`) 10 s after that hub's newest frame or at a new hub run.\n",
+      "doc": "Design power-p1 D6-D7, haptic-h1 D1-D3 (1.1). The duty is level% x rated_mv / supply_mv (capped at 100 %),\nrecomputed every 10 ms from the supply's (an fr.battery instance named by `supply`) latest sample, so an ERM feels\nthe same across the cell's range and never sees more than its rating on average. A solenoid pulls in at `level`\n(1.0: always 100 %) for kick_ms, then holds at hold_pct (or `level` if lower).\n`pulse` and `play` answer BUSY at or below the supply's critical voltage (a solenoid below critical + 300 mV), with\nno fresh supply reading, or past the cooldown budget (cooldown_pct of any 10 s); a running one is stopped by the\nsupply falling to critical or its floor, or by max_on_ms of on-time without a break, with `cut`. A program started\nwhile a hub session existed stops 10 s after that hub's newest frame or at a new hub run. 1.1: `tap` trains, and a\n`done` at the end of every pulse, pattern and train.\n",
       "types": {
         "Kind": {
           "erm": 0,
@@ -3503,6 +3503,18 @@ export const CATALOG: Catalog = {
           "low_supply": 0,
           "floor": 1,
           "max_on": 2
+        },
+        "Program": {
+          "pulse": 0,
+          "play": 1,
+          "tap": 2
+        },
+        "DoneReason": {
+          "done": 0,
+          "stopped": 1,
+          "replaced": 2,
+          "hub_lost": 3,
+          "cut": 4
         }
       },
       "traits": [
@@ -3678,6 +3690,90 @@ export const CATALOG: Catalog = {
           "visibility": "public",
           "doc": "Off now; OK when nothing runs.",
           "fields": []
+        },
+        {
+          "name": "tap",
+          "id": 4,
+          "delivery": "reliable",
+          "idempotent": false,
+          "visibility": "public",
+          "doc": "1.1. A train of `count` taps (0 = until stop), one every `period_ms`, each on for `ms` at `level` %; with `accent` N > 0 the first tap and every Nth after it are at `accent_level` instead. A tap while a train runs changes it in place: the next tap comes period_ms after the last one started (at once if that has passed), the count starts again, the accent counts on; no done. Anything else running is replaced. A change is not a start: never BUSY. BUSY as pulse; INVALID_ARGS for ms 0, ms >= period_ms, ms above max_on_ms, or a train whose worst 10 s could spend the cooldown budget: ceil(10000 / period_ms) x (ms + 1) >= cooldown_pct x 100 (when cooldown_pct < 100); a train started on an unspent budget is then never cut for it.",
+          "fields": [
+            {
+              "name": "period_ms",
+              "id": 1,
+              "type": "u16",
+              "range": [
+                20,
+                60000
+              ],
+              "unit": "ms"
+            },
+            {
+              "name": "ms",
+              "id": 2,
+              "type": "u16",
+              "unit": "ms"
+            },
+            {
+              "name": "level",
+              "id": 3,
+              "type": "u8",
+              "default": 100,
+              "range": [
+                1,
+                100
+              ]
+            },
+            {
+              "name": "count",
+              "id": 4,
+              "type": "u16",
+              "default": 1,
+              "range": [
+                0,
+                10000
+              ],
+              "doc": "taps; 0 = until stop"
+            },
+            {
+              "name": "accent",
+              "id": 5,
+              "type": "u8",
+              "default": 0,
+              "range": [
+                0,
+                32
+              ],
+              "doc": "every Nth tap from the first at accent_level; 0 = none"
+            },
+            {
+              "name": "accent_level",
+              "id": 6,
+              "type": "u8",
+              "default": 100,
+              "range": [
+                1,
+                100
+              ]
+            }
+          ],
+          "examples": [
+            {
+              "period_ms": 125,
+              "ms": 15,
+              "level": 70,
+              "count": 0
+            },
+            {
+              "period_ms": 500,
+              "ms": 20,
+              "level": 50,
+              "count": 0,
+              "accent": 4,
+              "accent_level": 100
+            }
+          ]
         }
       ],
       "events": [
@@ -3697,6 +3793,24 @@ export const CATALOG: Catalog = {
               "id": 2,
               "type": "u16",
               "unit": "mV"
+            }
+          ]
+        },
+        {
+          "name": "done",
+          "id": 2,
+          "priority": "normal",
+          "doc": "1.1. A pulse, pattern or tap train ended: done (ran to its end), stopped (stop), replaced (by another program; a tap that changes a running train is not a replacement), hub_lost (the hub fell silent), cut (after the `cut` event).",
+          "fields": [
+            {
+              "name": "program",
+              "id": 1,
+              "type": "Program"
+            },
+            {
+              "name": "reason",
+              "id": 2,
+              "type": "DoneReason"
             }
           ]
         }
@@ -5916,4 +6030,4 @@ export const CATALOG: Catalog = {
   ]
 };
 
-export const CATALOG_HASH = 0xf3b9dd7e;
+export const CATALOG_HASH = 0xecb03fd1;

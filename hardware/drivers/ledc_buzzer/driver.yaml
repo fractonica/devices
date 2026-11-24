@@ -20,8 +20,8 @@ config:                                 # same order as LedcBuzzer::Config
 traits: { pitched: true, volume: true, min_hz: 100, max_hz: 20000 }
 # LEDC low-speed timer 2 and channel LEDC_CHANNEL_MAX - 2 (4 on the C3, C5 and C6; 6 on the S3), fixed: clear of
 # drv8833_stepper (timer 0, channels 0-3), dvp_camera (timer 0, channel 0), st7789_spi (timer 3, the top channel),
-# fixture_gpio (timer 0, channels from 0 up) and one haptic_ledc frequency (timer 1, channels from LEDC_CHANNEL_MAX/2 up).
-# Never in one profile with two haptic_ledc instances on a six-channel chip (their second channel is 4) or with two
-# haptic_ledc frequencies (timer 2). One instance per firmware (codegen refuses a second; init answers busy).
+# fixture_gpio (timer 0, channels from 0 up) and one haptic_ledc frequency (timer 1). Codegen (board.ts LEDC_SLOTS,
+# bindLedc; design haptic-h1 D5) hands haptic_ledc channels around this one and refuses a second haptic_ledc frequency
+# beside it (timer 2). One instance per firmware (codegen refuses a second; init answers busy).
 resources: { gpio: 1, ledc_channels: 1, ledc_timers: 1 }
 dependencies: {}

@@ -49,7 +49,7 @@ inline std::expected<fr::wire::SerialFrame, fr::wire::DecodeErr> decode_serial(s
     return fr::wire::decode_line({reinterpret_cast<const char *>(in.data()), in.size()}, scratch);
 }
 
-inline constexpr size_t kCount = 1126;
+inline constexpr size_t kCount = 1134;
 
 template <class V>
 void for_each(V &&v)
@@ -8356,6 +8356,61 @@ void for_each(V &&v)
         fr::proto::Empty x{};
         v.value("fr.haptic.stop.args.empty", "fr.haptic.stop.args", x, enc, fr::proto::decode_empty, "", true);
     }
+    // fr.haptic.tap.args.defaults (cap fr.haptic.tap.args)
+    {
+        fr::cap::HapticTapArgs x{};
+        x.period_ms = 0;
+        x.ms = 0;
+        x.level = 100;
+        x.count = 1;
+        x.accent = 0;
+        x.accent_level = 100;
+        v.value("fr.haptic.tap.args.defaults", "fr.haptic.tap.args", x, enc, fr::cap::decode_haptic_tap_args, "186420013064", true);
+    }
+    // fr.haptic.tap.args.sample (cap fr.haptic.tap.args)
+    {
+        fr::cap::HapticTapArgs x{};
+        x.period_ms = 36607;
+        x.ms = 62306;
+        x.level = 84;
+        x.count = 1376;
+        x.accent = 17;
+        x.accent_level = 67;
+        v.value("fr.haptic.tap.args.sample", "fr.haptic.tap.args", x, enc, fr::cap::decode_haptic_tap_args, "08ff9d0210e2e603185420e00a28113043", true);
+    }
+    // fr.haptic.tap.args.max (cap fr.haptic.tap.args)
+    {
+        fr::cap::HapticTapArgs x{};
+        x.period_ms = 60000;
+        x.ms = 65535;
+        x.level = 100;
+        x.count = 10000;
+        x.accent = 32;
+        x.accent_level = 100;
+        v.value("fr.haptic.tap.args.max", "fr.haptic.tap.args", x, enc, fr::cap::decode_haptic_tap_args, "08e0d40310ffff03186420904e28203064", true);
+    }
+    // fr.haptic.tap.args.example_0 (cap fr.haptic.tap.args)
+    {
+        fr::cap::HapticTapArgs x{};
+        x.period_ms = 125;
+        x.ms = 15;
+        x.level = 70;
+        x.count = 0;
+        x.accent = 0;
+        x.accent_level = 100;
+        v.value("fr.haptic.tap.args.example_0", "fr.haptic.tap.args", x, enc, fr::cap::decode_haptic_tap_args, "087d100f184620003064", true);
+    }
+    // fr.haptic.tap.args.example_1 (cap fr.haptic.tap.args)
+    {
+        fr::cap::HapticTapArgs x{};
+        x.period_ms = 500;
+        x.ms = 20;
+        x.level = 50;
+        x.count = 0;
+        x.accent = 4;
+        x.accent_level = 100;
+        v.value("fr.haptic.tap.args.example_1", "fr.haptic.tap.args", x, enc, fr::cap::decode_haptic_tap_args, "08f40310141832200028043064", true);
+    }
     // fr.haptic.cut.event.defaults (cap fr.haptic.cut.event)
     {
         fr::cap::HapticCut x{};
@@ -8376,6 +8431,27 @@ void for_each(V &&v)
         x.reason = HapticCutReason::max_on;
         x.supply_mv = 65535;
         v.value("fr.haptic.cut.event.max", "fr.haptic.cut.event", x, enc, fr::cap::decode_haptic_cut, "080210ffff03", true);
+    }
+    // fr.haptic.done.event.defaults (cap fr.haptic.done.event)
+    {
+        fr::cap::HapticDone x{};
+        x.program = HapticProgram::pulse;
+        x.reason = HapticDoneReason::done;
+        v.value("fr.haptic.done.event.defaults", "fr.haptic.done.event", x, enc, fr::cap::decode_haptic_done, "", true);
+    }
+    // fr.haptic.done.event.sample (cap fr.haptic.done.event)
+    {
+        fr::cap::HapticDone x{};
+        x.program = HapticProgram::tap;
+        x.reason = HapticDoneReason::hub_lost;
+        v.value("fr.haptic.done.event.sample", "fr.haptic.done.event", x, enc, fr::cap::decode_haptic_done, "08021003", true);
+    }
+    // fr.haptic.done.event.max (cap fr.haptic.done.event)
+    {
+        fr::cap::HapticDone x{};
+        x.program = HapticProgram::tap;
+        x.reason = HapticDoneReason::cut;
+        v.value("fr.haptic.done.event.max", "fr.haptic.done.event", x, enc, fr::cap::decode_haptic_done, "08021004", true);
     }
     // fr.haptic.active.state.defaults (cap fr.haptic.active.state)
     {

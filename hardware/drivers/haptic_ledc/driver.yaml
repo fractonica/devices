@@ -13,10 +13,12 @@ accepts_kinds: [gpio]
 config:                                 # same order as HapticLedc::Config
   out:     { type: gpio, from: bind.out, output: true, doc: "the transistor's base (through 470 Ohm) or gate; high is on" }
   pwm_hz:  { type: u16, default: 20000, range: [500, 40000], doc: "PWM frequency; 20 kHz is above hearing. A slow gate drive (a level shifter's pull-up onto a MOSFET's gate) may want less. Instances at one frequency share an LEDC timer" }
+  channel: { type: u8, from: ledc_channel, doc: "the LEDC channel codegen hands it (design haptic-h1 D5): the first free from the board's ledc_channels / 2 up, then down" }
 # fr.haptic traits its service reports (pwm()): the duty is PWM.
 traits: { pwm: true }
-# One LEDC channel each; a timer per distinct pwm_hz, timers 1 and 2 (fixture_gpio takes timer 0 and channels from 0 up,
-# st7789_spi timer 3 and channels from the top down, haptic_ledc channels from the middle up). The budget counts a timer
-# per instance (an upper bound: instances at one frequency share theirs).
+# One LEDC channel each, handed by codegen clear of the drivers with fixed slots (board.ts LEDC_SLOTS: drv8833_stepper,
+# ledc_buzzer, st7789_spi, dvp_camera, fixture_gpio); a timer per distinct pwm_hz, timers 1 and 2, refused by codegen when
+# a fixed driver holds the one it would take (ledc_buzzer: timer 2). The budget counts a timer per instance (an upper
+# bound: instances at one frequency share theirs).
 resources: { gpio: 1, ledc_channels: 1, ledc_timers: 1 }
 dependencies: {}

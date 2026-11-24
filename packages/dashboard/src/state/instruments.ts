@@ -19,7 +19,7 @@ const CAP_WORDS: Readonly<Record<string, string>> = {
   'fr.radio_tx': 'radio sender',
   'fr.scale': 'scale',
   'fr.battery': 'battery',
-  'fr.haptic': 'vibration',
+  'fr.haptic': 'haptic',
   'fr.storage': 'card',
   'fr.clock': 'clock',
   'fr.stepper': 'stepper',

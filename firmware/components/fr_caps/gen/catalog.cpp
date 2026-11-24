@@ -99,8 +99,8 @@ constexpr MemberInfo kBatteryProperties[] = {
     {5, "load_on"},
     {6, "gate_open"},
 };
-constexpr MemberInfo kHapticCommands[] = {{1, "pulse"}, {2, "play"}, {3, "stop"}};
-constexpr MemberInfo kHapticEvents[] = {{1, "cut"}};
+constexpr MemberInfo kHapticCommands[] = {{1, "pulse"}, {2, "play"}, {3, "stop"}, {4, "tap"}};
+constexpr MemberInfo kHapticEvents[] = {{1, "cut"}, {2, "done"}};
 constexpr MemberInfo kHapticProperties[] = {{1, "active"}, {2, "supply_mv"}};
 constexpr MemberInfo kStorageCommands[] = {
     {1, "info"},
@@ -201,7 +201,7 @@ constexpr CapInfo kCaps[] = {
     {0x000B, "fr.camera", {1, 0}, kCameraCommands, kCameraEvents, kCameraProperties},
     {0x000C, "fr.scale", {1, 0}, kScaleCommands, kScaleEvents, kScaleProperties},
     {0x000D, "fr.battery", {1, 0}, kBatteryCommands, kBatteryEvents, kBatteryProperties},
-    {0x000E, "fr.haptic", {1, 0}, kHapticCommands, kHapticEvents, kHapticProperties},
+    {0x000E, "fr.haptic", {1, 1}, kHapticCommands, kHapticEvents, kHapticProperties},
     {0x000F, "fr.storage", {1, 0}, kStorageCommands, kStorageEvents, kStorageProperties},
     {0x0010, "fr.clock", {1, 0}, kClockCommands, kClockEvents, kClockProperties},
     {0x0012, "fr.stepper", {1, 0}, kStepperCommands, kStepperEvents, kStepperProperties},

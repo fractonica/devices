@@ -14,7 +14,7 @@ import { EnrolledSchema, findOp, hubApiUrl, OP_NAMES, OPS, ProvisionResultSchema
  * for_hub as it read.
  */
 const label = z.string().regex(/^[A-Za-z0-9][A-Za-z0-9._-]{0,62}$/, 'expected a name of letters, digits, ".", "_" and "-"');
-const forHub = OPS.filter((o) => !/^device_(hubs_set|hubs_get|share)$|^network_join$|^network_admit$|^hub_(name_set|peers)$/.test(o.name)).map((o) => [
+const forHub = OPS.filter((o) => !/^device_(hubs_set|hubs_get|share)$|^network_join$|^network_admit$|^hub_(name_set|peers)$|^haptic_tap$/.test(o.name)).map((o) => [
   o.name,
   z.toJSONSchema(
     o.name === 'device_enroll'

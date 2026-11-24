@@ -1,30 +1,45 @@
 schema: fractonica/wiring@1
 id: stepper-c3
-title: Micro stepper on a DRV8833 and a passive buzzer, ESP32-C3 Super Mini
+title: Micro stepper on a DRV8833, a passive buzzer, a solenoid and a vibration motor, ESP32-C3 Super Mini
 summary: >-
   A 10 mm two-coil micro stepper on a DRV8833 dual H-bridge module (TB6612-style pinout), driven from an ESP32-C3
   Super Mini: AIN2, AIN1, STBY, BIN1 and BIN2 on GPIO5, 6, 7, 10 and 20, the motor supply from the board's 5V (USB).
-  The module has no fault pin. A passive buzzer module (S, +, −) on GPIO4.
+  The module has no fault pin. A passive buzzer module (S, +, −) on GPIO4. Haptics (design haptic-h1): a LIC-H-0825
+  lithium-ion capacitor on a protected TP4056 module fed from 5V, sensed on GPIO3; a micro solenoid on an AO3400 at
+  GPIO1 and a cylinder vibration motor on an AO3400 at GPIO0, both fed from the capacitor.
 board: esp32c3-supermini
 profile: c3s-stepper
 device: stepper-c3
 design: docs/design/stepper-s1.md
-covers: [motor, buzzer]
+covers: [motor, buzzer, cap, kick, buzz]
 safety:
   - "Unplug the board's USB before connecting or moving any wire."
   - "Never plug or unplug the motor while the module has power: the coil's energy arcs on the pins."
   - "The module has no current limit of its own: the firmware's power cap (the coil resistance and run current it is configured with) is the limit. Measure the coil before the first run."
   - "VM comes straight from USB 5 V: keep the motor's wires away from the board's pins; a short on VM is a short on the Mac's port."
   - "No GPIO goes to STBY before the pull-up check: a module that pulls it to VM puts 5 V on a 3.3 V pin."
+  - "The LIC is not a supercapacitor: never short it, never let it fall below 2.5 V, and never wire it straight to a load. It goes on the TP4056 module's B+ and B−; the loads take OUT+."
+  - "Each AO3400 gate gets its 10 kΩ to GND before the first power-up, so no load runs while the C3 boots, resets or is flashed."
+  - "Every flyback diode has its stripe toward +. Reversed, it shorts the capacitor each time the AO3400 turns on."
 bom:
   - { part: esp32c3-supermini-board, qty: 1, note: stepper-c3 }
   - { part: drv8833-module, qty: 1 }
   - { part: micro-stepper-10mm, qty: 1, note: "pins 1–4: A1 B1 A2 B2" }
   - { part: capacitor-electrolytic, value: "100 µF", qty: 1, note: "optional: across VM and the GND beside it, at the module; 10 V or more" }
   - { part: passive-buzzer-module, qty: 1, note: "buzzer: S, +, −; design buzzer-b1" }
-  - { part: resistor, value: "100 Ω", qty: 1, note: "only for a magnetic buzzer (10–50 Ω between S and −): in series with S" }
+  - { part: resistor, value: "100 Ω", qty: 3, note: "one in series with each AO3400 gate; a third only for a magnetic buzzer (10–50 Ω between S and −), in series with S" }
+  - { part: tp4056-protected, qty: 1, note: "haptics: charges the LIC from 5V" }
+  - { part: lic-h-0825, qty: 1, note: "haptics: the loads' supply" }
+  - { part: solenoid-micro-3v, qty: 1, note: kick }
+  - { part: erm-cylinder, qty: 1, note: buzz }
+  - { part: ao3400a, qty: 2, note: "#1 the solenoid, #2 the motor; bare SOT-23s soldered as the haptics section says" }
+  - { part: diode, value: 1N5819, qty: 2, note: "flybacks; a 1N4148 works across the motor. Not a 1N4007 under PWM" }
+  - { part: resistor, value: "10 kΩ", qty: 2, note: "gate to GND, one per AO3400" }
+  - { part: resistor, value: "1 MΩ", qty: 2, note: "the LIC's sense divider" }
+  - { part: capacitor-ceramic, value: "100 nF", qty: 1, note: "across the divider's lower 1 MΩ" }
 diagrams:
   - { id: map, title: "The C3 Super Mini, the DRV8833 and the motor", file: map.svg }
+  - { id: haptics, title: "The LIC, the solenoid and the vibration motor", file: haptics.svg }
 connections:
   - { pin: gpio.5, instance: motor, bind: ain2, to: "DRV8833 AIN2" }
   - { pin: gpio.6, instance: motor, bind: ain1, to: "DRV8833 AIN1" }
@@ -35,6 +50,11 @@ connections:
   - { pin: gnd, to: "DRV8833 GND" }
   - { pin: gpio.4, instance: buzzer, to: "buzzer S", via: "100 Ω in series for a magnetic buzzer" }
   - { pin: gnd, to: "buzzer −" }
+  - { pin: 5v, to: "TP4056 IN+" }
+  - { pin: gnd, to: "TP4056 IN− and OUT−, both AO3400 sources (pin 2), the 10 kΩ gate pull-downs, the divider's bottom" }
+  - { pin: gpio.3, instance: cap, bind: sense, to: "the divider's middle", via: "1 MΩ from TP4056 OUT+, 1 MΩ and 100 nF to GND" }
+  - { pin: gpio.1, instance: kick, bind: out, to: "AO3400 #1 gate (pin 1)", via: "100 Ω in series; 10 kΩ gate to GND; drain (pin 3) to the solenoid's −" }
+  - { pin: gpio.0, instance: buzz, bind: out, to: "AO3400 #2 gate (pin 1)", via: "100 Ω in series; 10 kΩ gate to GND; drain (pin 3) to the motor's −" }
 sections:
   - id: check
     title: Before wiring
@@ -98,3 +118,45 @@ sections:
         text: "After flashing c3s-stepper: fr send stepper-c3 buzzer.beep"
         check: "One short beep; fr events stepper-c3 --types 'buzzer.*' ends with buzzer.done done. fr send stepper-c3 buzzer.tone '{\"freq_hz\": 2000, \"ms\": 1000}' holds a tone for a second."
         note: "Quiet? Try pitches from 1000 to 4000 Hz: a magnetic buzzer is loudest near its resonance, which becomes beep_hz in the profile. Silent? Check S is on GPIO4 (not +), and that volume is not 0."
+  - id: haptics
+    title: The capacitor, the solenoid and the vibration motor
+    diagram: haptics
+    intro: "Design haptic-h1. The LIC-H-0825 (90 F) on a protected TP4056 module feeds both loads; each load hangs from OUT+ and is switched on its − side by an AO3400. GPIO0 is the board's latency-test pin no longer: the profile sets test_pin none. Wire it after the motor and the buzzer, or on its own."
+    steps:
+      - id: lic-check
+        text: "Multimeter on V across the LIC's legs (the stripe on its sleeve marks −)."
+        check: "Above 2.5 V (a new one is usually 3–4 V)."
+        note: "Below 2.5 V the cell may be damaged: stop and use another. Never short its legs, not even for a moment."
+      - id: switches
+        text: "The bare AO3400s (SOT-23; part ao3400a): pin 1 gate, pin 2 source, pin 3 drain, alone on its side. For each: tin the legs; solder a 100 Ω and a 10 kΩ to the gate leg, a wire to the source leg and one to the drain leg; tie the 10 kΩ's other end to the source wire. Glue or sleeve it onto a scrap of perfboard so no wire pulls on a leg."
+        check: "Meter on Ω: the 100 Ω's free end to the source wire reads about 10.1 kΩ; drain to source reads open in one direction (its body diode conducts the other way)."
+        note: "The 10 kΩ belongs on the gate side of the 100 Ω, so the gate is pulled low even with the GPIO wire off."
+      - id: charger
+        text: "USB unplugged. The Super Mini's 5V to the TP4056 module's IN+, GND to IN−. The LIC's + to B+, its − (the stripe) to B−. OUT− to GND as well. Nothing on OUT+ yet."
+        pins: [5v, gnd]
+        check: "With USB plugged in, OUT+ to GND climbs to 4.2 V within a few minutes (the module's red LED goes out, the blue or green one lights)."
+        note: "B− is not GND: the protection MOSFETs sit between B− and OUT−. The board resets while charging? The USB port gives too little: change the module's PROG resistor (1.2 kΩ) for 2.4 kΩ, about 0.5 A."
+      - id: sense
+        text: "USB unplugged. 1 MΩ from OUT+ to GPIO3, 1 MΩ from GPIO3 to GND, 100 nF across that lower 1 MΩ."
+        pins: [gpio.3]
+        check: "With USB in, GPIO3 to GND reads half of OUT+ (about 2.1 V when full). After flashing: fr devices get stepper-c3 shows cap.mv within 50 mV of OUT+ on the meter."
+        note: "Further off: fr send stepper-c3 cap.calibrate with the meter's reading."
+      - id: solenoid
+        text: "USB unplugged. The solenoid's + to OUT+, its − to AO3400 #1's drain. The 1N5819 across the solenoid, stripe to its +. AO3400 #1's source to GND, its 100 Ω's free end to GPIO1."
+        pins: [gpio.1]
+        check: "Before USB: the diode reads about 0.2–0.4 V on the meter's diode range from the solenoid's − to its + and open the other way."
+        note: "Only 1N4007s for now? It works for full-strength taps no longer than 30 ms (level 100, ms up to 30: no PWM); strength and longer taps wait for a Schottky (1N5819, 1N5817, SS14, SS34)."
+      - id: motor-erm
+        text: "USB unplugged. The motor's red lead to OUT+, its black lead to AO3400 #2's drain. A 1N5819 or 1N4148 across the motor, stripe to red. AO3400 #2's source to GND, its 100 Ω's free end to GPIO0."
+        pins: [gpio.0]
+        note: "Never a 1N4007 here: the motor is driven at hundreds of kHz (a sigma-delta channel), and a slow diode shorts the capacitor at every edge."
+      - id: first-buzz
+        text: "Plug in USB and wait for OUT+ to pass 3.1 V. fr send stepper-c3 buzz.pulse '{\"ms\": 300, \"level\": 30}', then level 60 and 100."
+        check: "Three buzzes, each stronger; fr events stepper-c3 --types 'buzz.*' shows buzz.done done after each."
+      - id: first-tap
+        text: "fr send stepper-c3 kick.tap '{\"period_ms\": 1000, \"ms\": 15, \"level\": 40}', then raise level by 10 until it strikes cleanly, then shorten ms to the shortest tap that still reaches the end of its stroke."
+        check: "One tap each, and kick.done done. After 20 taps the AO3400 and the coil are cool or barely warm."
+        note: "The coil only clicks? Raise level or ms. BUSY: the capacitor is below 3.1 V (wait for it to charge) or the duty budget (30 % of any 10 s) is spent."
+      - id: first-train
+        text: "fr send stepper-c3 kick.tap '{\"period_ms\": 125, \"ms\": 15, \"level\": 70, \"count\": 0}' taps 8 times a second until fr send stepper-c3 kick.stop. The dashboard's haptic page for kick sets the rate and strength while it runs."
+        check: "Every tap strikes; after 30 s the coil is under 50 °C to the touch."

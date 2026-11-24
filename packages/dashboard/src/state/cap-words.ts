@@ -60,6 +60,14 @@ const MEMBERS: Readonly<Record<string, Partial<MemberWords>>> = {
   'fr.scale.known_mg': { words: 'known weight' },
   'fr.haptic.ms': { words: 'for' },
   'fr.haptic.supply_mv': { words: 'supply' },
+  'fr.haptic.level': { words: 'strength' },
+  'fr.haptic.period_ms': { words: 'every' },
+  'fr.haptic.count': { words: 'taps' },
+  'fr.haptic.accent': { words: 'accent every' },
+  'fr.haptic.accent_level': { words: 'accent strength' },
+  'fr.haptic.active': { words: 'running' },
+  'fr.haptic.program': { words: 'what ran' },
+  'fr.haptic.reason': { words: 'how it ended' },
   'fr.storage.total_mb': { words: 'size', unit: 'MB' },
   'fr.storage.free_mb': { words: 'free', unit: 'MB' },
   'fr.clock.temp_c10': { words: 'temperature' },
@@ -137,6 +145,10 @@ const ENUMS: Readonly<Record<string, Readonly<Record<string, string>>>> = {
   'fr.stepper.FaultCause': { driver: 'driver', injected: 'injected' },
   'fr.buzzer.Sound': { tone: 'tone', beep: 'beep', melody: 'melody' },
   'fr.buzzer.DoneReason': { done: 'played out', stopped: 'stopped', replaced: 'replaced', hub_lost: 'hub went quiet', error: 'failed' },
+  'fr.haptic.Kind': { erm: 'vibration motor', solenoid: 'solenoid' },
+  'fr.haptic.Program': { pulse: 'pulse', play: 'pattern', tap: 'taps' },
+  'fr.haptic.DoneReason': { done: 'ran out', stopped: 'stopped', replaced: 'replaced', hub_lost: 'hub went quiet', cut: 'cut' },
+  'fr.haptic.CutReason': { low_supply: 'supply low', floor: 'supply at its floor', max_on: 'on too long' },
 };
 
 /** Suffixes that say a unit or a scale; the longest first. */
@@ -253,6 +265,7 @@ const COMMANDS: Readonly<Record<string, CommandWords>> = {
   'fr.haptic.pulse': { verb: 'pulse', does: 'Buzzes {inst} once.' },
   'fr.haptic.play': { verb: 'play a pattern', does: 'Buzzes {inst} in the pattern given.' },
   'fr.haptic.stop': { verb: 'stop', does: 'Stops {inst}.' },
+  'fr.haptic.tap': { verb: 'tap', does: 'Taps {inst} the times chosen at the rate chosen, or until it is stopped; while it taps, new settings change it in place and keep the beat.' },
   'fr.storage.info': { verb: 'read the card', does: 'Asks {inst} how full its card is.' },
   'fr.storage.list': { verb: 'list a folder', does: 'Lists a folder on the card.' },
   'fr.storage.remove': { verb: 'remove a file', does: 'Removes a file from the card. It cannot be undone.' },

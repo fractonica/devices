@@ -6,10 +6,11 @@
 // - battery_calibrate, battery_reset_calibration, battery_load (commands): fr.battery calibrate / reset_calibration / load.
 // - cell_add, cell_list, cell_show, cell_update, cell_install, cell_uninstall: the cell registry (hub only).
 // - cell_test (a job): a capacity test through the instance's test load (or a haptic instance, `via`).
-// - haptic_pulse, haptic_play, haptic_stop (commands): fr.haptic.
+// - haptic_pulse, haptic_play, haptic_stop, haptic_tap (commands): fr.haptic (tap: 1.1, design haptic-h1 D10).
 
 import { z } from 'zod';
 
+import { HAPTIC_TAP_MAX_ACCENT, HAPTIC_TAP_MAX_COUNT, HAPTIC_TAP_MAX_PERIOD_MS, HAPTIC_TAP_MIN_PERIOD_MS } from '../haptic.ts';
 import { deviceSel, op, selector, waitS } from './common.ts';
 
 /** fr.battery's chemistries (battery.cap.yaml Chemistry). */
@@ -42,6 +43,9 @@ export const CELL_TEST_MAX_S = 172_800;
 /** fr.haptic's bounds: pulse ms (u16; the node also refuses above max_on_ms), play steps. */
 export const HAPTIC_MAX_MS = 60_000;
 export const HAPTIC_MAX_STEPS = 32;
+// fr.haptic tap's bounds, the kinds' defaults and the cooldown-budget rule live in ../haptic.ts (no zod: the dashboard's
+// client entry exports them too).
+export { HAPTIC_KIND_DEFAULTS, HAPTIC_KINDS, HAPTIC_TAP_MAX_ACCENT, HAPTIC_TAP_MAX_COUNT, HAPTIC_TAP_MAX_PERIOD_MS, HAPTIC_TAP_MIN_PERIOD_MS, HAPTIC_WINDOW_MS, hapticLongestTap, hapticTrainFits, type HapticKind } from '../haptic.ts';
 /** Curve points kept per session (design D9). */
 export const CURVE_MAX_POINTS = 200;
 
@@ -219,6 +223,19 @@ export const HapticPlaySchema = z.looseObject({ ...who, steps: z.array(z.number(
 export type HapticPlay = z.infer<typeof HapticPlaySchema>;
 export const HapticStopSchema = z.looseObject({ ...who });
 export type HapticStop = z.infer<typeof HapticStopSchema>;
+export const HapticTapSchema = z.looseObject({
+  ...who,
+  period_ms: z.number().int(),
+  /** Taps a second (1000 / period_ms). */
+  hz: z.number(),
+  ms: z.number().int(),
+  level: z.number().int(),
+  /** 0 = until stop. */
+  count: z.number().int(),
+  accent: z.number().int(),
+  accent_level: z.number().int(),
+});
+export type HapticTap = z.infer<typeof HapticTapSchema>;
 
 /** `100,50,100` (the CLI) or [100, 50, 100]: the on/off steps of a haptic pattern. */
 export const hapticSteps = z
@@ -419,6 +436,27 @@ export const POWER_OPS = [
     input: z.object({ device: deviceSel, instance: hapticInstance }),
     output: HapticStopSchema,
     cli: { path: ['haptic', 'stop'], positional: ['device'] },
+  }),
+  op({
+    name: 'haptic_tap',
+    target: 'device',
+    kind: 'command',
+    tier: 'mutate',
+    summary:
+      "Tap a board's solenoid (or buzz its vibration motor) in a train (fr.haptic tap, 1.1): `count` taps (0 = until stopped; default 1), one every `period_ms` (or `hz` a second; default one a second), each on for `ms` at `level` %; with `accent` N, the first tap and every Nth after it at `accent_level` (a metronome's first beat). Sent while a train runs, it changes that train in place and keeps the beat (the next tap comes the new period after the last one; the count starts again), so a rate or strength can be changed live. DEVICE_BUSY as haptic_pulse (not for a change); INVALID_ARGS for ms 0, ms at or above the period, above max_on_ms, or a train whose worst 10 s would spend the cooldown budget (a solenoid's 30 %).",
+    input: z.object({
+      device: deviceSel,
+      instance: hapticInstance,
+      period_ms: z.number().int().min(HAPTIC_TAP_MIN_PERIOD_MS).max(HAPTIC_TAP_MAX_PERIOD_MS).optional().describe(`ms from one tap's start to the next (${HAPTIC_TAP_MIN_PERIOD_MS}..${HAPTIC_TAP_MAX_PERIOD_MS}); or hz; default 1000`),
+      hz: z.number().positive().max(1000 / HAPTIC_TAP_MIN_PERIOD_MS).optional().describe('taps a second (up to 50), instead of period_ms; rounded to a whole period in ms'),
+      ms: z.number().int().min(1).max(HAPTIC_MAX_MS).default(20).describe("each tap's on-time in ms (default 20); below the period and at most the instance's max_on_ms"),
+      level: z.number().int().min(1).max(100).default(100).describe('% of the rated voltage, 1..100 (default 100); a solenoid kicks at it'),
+      count: z.number().int().min(0).max(HAPTIC_TAP_MAX_COUNT).default(1).describe(`taps, 0..${HAPTIC_TAP_MAX_COUNT}; 0 = until stopped (default 1)`),
+      accent: z.number().int().min(0).max(HAPTIC_TAP_MAX_ACCENT).default(0).describe(`every Nth tap from the first at accent_level, 0..${HAPTIC_TAP_MAX_ACCENT}; 0 = none (default)`),
+      accent_level: z.number().int().min(1).max(100).default(100).describe('the accented taps\' level, 1..100 (default 100)'),
+    }),
+    output: HapticTapSchema,
+    cli: { path: ['haptic', 'tap'], positional: ['device'] },
   }),
 ] as const;
 

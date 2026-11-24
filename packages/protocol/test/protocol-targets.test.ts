@@ -29,12 +29,12 @@ describe('where an op runs (target)', () => {
     expect(names((o) => o.target === 'device')).toEqual(
       words(`audio_level audio_monitor audio_play audio_record battery_calibrate battery_load battery_reset_calibration battery_status binding_clear binding_set
         camera_sd_delete camera_sd_fetch camera_sd_list camera_set camera_snap camera_status camera_stream capability_list clock_aging clock_drift clock_read clock_set
-        clock_sync csi_status csi_stream device_adopt device_get device_hubs_get device_hubs_set device_update haptic_play haptic_pulse haptic_stop latency_probe
+        clock_sync csi_status csi_stream device_adopt device_get device_hubs_get device_hubs_set device_update haptic_play haptic_pulse haptic_stop haptic_tap latency_probe
         scale_calibrate scale_read scale_reset_calibration scale_status scale_tare scale_watch storage_bench storage_get storage_info storage_ls storage_mkdir
         storage_put storage_rm`),
     );
     // Everything else acts on the hub that is asked.
-    expect(names((o) => o.target === 'hub')).toHaveLength(ops.length - 2 - 11 - 13 - 47);
+    expect(names((o) => o.target === 'hub')).toHaveLength(ops.length - 2 - 11 - 13 - 48);
     for (const name of ['hub_status', 'build_start', 'artifact_list', 'network_join', 'hub_peers', 'job_get', 'job_wait', 'job_logs', 'job_cancel', 'ota_status', 'binding_list', 'time_now', 'cell_test', 'app_deploy']) {
       expect(ops.find((o) => o.name === name)!.target, name).toBe('hub');
     }

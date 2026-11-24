@@ -6,7 +6,7 @@
 import type { CallOptions, CapMeta, CmdResult, Sent } from '../types.ts';
 
 /** FNV-1a 32 of the canonical catalog JSON (the hub's CATALOG_HASH): what an app's hello says it was built against. */
-export const CATALOG_HASH = 0xf3b9dd7e;
+export const CATALOG_HASH = 0xecb03fd1;
 
 // ---- fr.button ----
 
@@ -952,6 +952,10 @@ export type HapticKind = 'erm' | 'solenoid';
 
 export type HapticCutReason = 'low_supply' | 'floor' | 'max_on';
 
+export type HapticProgram = 'pulse' | 'play' | 'tap';
+
+export type HapticDoneReason = 'done' | 'stopped' | 'replaced' | 'hub_lost' | 'cut';
+
 /** fr.haptic.pulse arguments (all optional: the device applies the defaults). */
 export interface HapticPulseArgs {
   /** (ms) */
@@ -970,6 +974,22 @@ export interface HapticPlayArgs {
   repeat?: number;
 }
 
+/** fr.haptic.tap arguments (all optional: the device applies the defaults). */
+export interface HapticTapArgs {
+  /** (ms; 20..60000) */
+  periodMs?: number;
+  /** (ms) */
+  ms?: number;
+  /** (1..100; default 100) */
+  level?: number;
+  /** taps; 0 = until stop (0..10000; default 1) */
+  count?: number;
+  /** every Nth tap from the first at accent_level; 0 = none (0..32; default 0) */
+  accent?: number;
+  /** (1..100; default 100) */
+  accentLevel?: number;
+}
+
 /** fr.haptic commands, as methods of an instance. */
 export interface HapticClient {
   /** On for `ms` at `level` % (1-100, default 100), replacing whatever runs. BUSY at or below the supply's critical, or past the cooldown budget; INVALID_ARGS above max_on_ms. Reliable: resolves on the RESULT ok, rejects with CommandError otherwise. */
@@ -978,6 +998,8 @@ export interface HapticClient {
   play(args?: HapticPlayArgs, opts?: CallOptions): Promise<CmdResult>;
   /** Off now; OK when nothing runs. Reliable: resolves on the RESULT ok, rejects with CommandError otherwise. */
   stop(opts?: CallOptions): Promise<CmdResult>;
+  /** 1.1. A train of `count` taps (0 = until stop), one every `period_ms`, each on for `ms` at `level` %; with `accent` N > 0 the first tap and every Nth after it are at `accent_level` instead. A tap while a train runs changes it in place: the next tap comes period_ms after the last one started (at once if that has passed), the count starts again, the accent counts on; no done. Anything else running is replaced. A change is not a start: never BUSY. BUSY as pulse; INVALID_ARGS for ms 0, ms >= period_ms, ms above max_on_ms, or a train whose worst 10 s could spend the cooldown budget: ceil(10000 / period_ms) x (ms + 1) >= cooldown_pct x 100 (when cooldown_pct < 100); a train started on an unspent budget is then never cut for it. Reliable: resolves on the RESULT ok, rejects with CommandError otherwise. */
+  tap(args?: HapticTapArgs, opts?: CallOptions): Promise<CmdResult>;
 }
 
 /** fr.haptic.cut event fields (normal). A running pulse or pattern was stopped by the supply or by max_on_ms. */
@@ -987,9 +1009,16 @@ export interface HapticCutFields {
   supplyMv: number;
 }
 
+/** fr.haptic.done event fields (normal). 1.1. A pulse, pattern or tap train ended: done (ran to its end), stopped (stop), replaced (by another program; a tap that changes a running train is not a replacement), hub_lost (the hub fell silent), cut (after the `cut` event). */
+export interface HapticDoneFields {
+  program: HapticProgram | number;
+  reason: HapticDoneReason | number;
+}
+
 /** fr.haptic events by wire name: `pad.on('<inst>.<event>', e => ...)`. */
 export interface HapticEvents {
   cut: HapticCutFields;
+  done: HapticDoneFields;
 }
 
 /** fr.haptic properties as the mirror holds them (`pad.<inst>.state`); a property a trait gates may be absent. */
@@ -1839,7 +1868,7 @@ export const CAP_META: Readonly<Record<string, CapMeta>> = {
   'fr.camera': { commands: { stream_start: { method: 'streamStart', delivery: 'reliable', args: true }, stream_stop: { method: 'streamStop', delivery: 'reliable', args: true }, set: { method: 'set', delivery: 'reliable', args: true }, sd_list: { method: 'sdList', delivery: 'reliable', args: true }, sd_fetch: { method: 'sdFetch', delivery: 'reliable', args: true }, sd_delete: { method: 'sdDelete', delivery: 'reliable', args: true } }, events: ['stream_ended'], props: ['frames', 'fps_x10', 'last_bytes', 'streaming', 'sd', 'sd_free_mb'] },
   'fr.scale': { commands: { tare: { method: 'tare', delivery: 'reliable', args: true }, calibrate: { method: 'calibrate', delivery: 'reliable', args: true }, read: { method: 'read', delivery: 'reliable' }, reset_calibration: { method: 'resetCalibration', delivery: 'reliable' }, watch_start: { method: 'watchStart', delivery: 'reliable', args: true }, watch_stop: { method: 'watchStop', delivery: 'reliable' }, inject: { method: 'inject', delivery: 'reliable', args: true, test: true } }, events: ['settled'], props: ['weight_mg', 'stable', 'calibrated', 'rate_hz'] },
   'fr.battery': { commands: { read: { method: 'read', delivery: 'reliable' }, calibrate: { method: 'calibrate', delivery: 'reliable', args: true }, reset_calibration: { method: 'resetCalibration', delivery: 'reliable' }, load: { method: 'load', delivery: 'reliable', args: true }, gate: { method: 'gate', delivery: 'reliable', args: true }, inject: { method: 'inject', delivery: 'reliable', args: true, test: true } }, events: ['charge', 'level_change', 'protect'], props: ['mv', 'percent', 'charger', 'level', 'load_on', 'gate_open'] },
-  'fr.haptic': { commands: { pulse: { method: 'pulse', delivery: 'reliable', args: true }, play: { method: 'play', delivery: 'reliable', args: true }, stop: { method: 'stop', delivery: 'reliable' } }, events: ['cut'], props: ['active', 'supply_mv'] },
+  'fr.haptic': { commands: { pulse: { method: 'pulse', delivery: 'reliable', args: true }, play: { method: 'play', delivery: 'reliable', args: true }, stop: { method: 'stop', delivery: 'reliable' }, tap: { method: 'tap', delivery: 'reliable', args: true } }, events: ['cut', 'done'], props: ['active', 'supply_mv'] },
   'fr.storage': { commands: { info: { method: 'info', delivery: 'reliable' }, list: { method: 'list', delivery: 'reliable', args: true }, stat: { method: 'stat', delivery: 'reliable', args: true }, read: { method: 'read', delivery: 'reliable', args: true }, write: { method: 'write', delivery: 'reliable', args: true }, remove: { method: 'remove', delivery: 'reliable', args: true }, mkdir: { method: 'mkdir', delivery: 'reliable', args: true }, rename: { method: 'rename', delivery: 'reliable', args: true }, remount: { method: 'remount', delivery: 'reliable' } }, events: ['mounted', 'unmounted'], props: ['state', 'total_mb', 'free_mb', 'card_type', 'busy'] },
   'fr.clock': { commands: { read: { method: 'read', delivery: 'reliable' }, set: { method: 'set', delivery: 'reliable', args: true }, set_aging: { method: 'setAging', delivery: 'reliable', args: true }, inject: { method: 'inject', delivery: 'reliable', args: true, test: true } }, events: ['lost_power', 'set'], props: ['unix', 'valid', 'temp_c10', 'offset_ms'] },
   'fr.stepper': { commands: { move_to: { method: 'moveTo', delivery: 'reliable', args: true }, move_by: { method: 'moveBy', delivery: 'reliable', args: true }, jog: { method: 'jog', delivery: 'reliable', args: true }, stop: { method: 'stop', delivery: 'reliable' }, halt: { method: 'halt', delivery: 'reliable' }, hold: { method: 'hold', delivery: 'reliable' }, release: { method: 'release', delivery: 'reliable' }, zero: { method: 'zero', delivery: 'reliable', args: true }, configure: { method: 'configure', delivery: 'reliable', args: true }, reset_settings: { method: 'resetSettings', delivery: 'reliable' }, inject_fault: { method: 'injectFault', delivery: 'reliable', test: true } }, events: ['done', 'fault'], props: ['position', 'target', 'speed_hz', 'motion', 'position_known', 'step_mode', 'max_speed_hz', 'accel', 'start_hz', 'coil_ohm', 'run_ma', 'hold_pct', 'release_ms', 'supply_mv', 'invert', 'limits', 'limit_min', 'limit_max', 'run_duty_pct', 'steps_per_rev'] },

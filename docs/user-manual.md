@@ -1556,3 +1556,140 @@ A command answers when its sound starts; a `volume` given with a sound is for th
 | It beeps on steady voltage by itself | It is an active buzzer (its own oscillator). `ledc_buzzer` still sounds it, but at its own pitch: tones and melodies all sound the same. |
 | A 3-pin module with a transistor (VCC, I/O, GND) stays on, or sounds only when the pin is low | It is active low: set `active_low: true` in the profile's buzzer config, and power its VCC from 3V3, never 5 V. |
 | `buzzer.done` `hub_lost` | The hub went quiet for 10 s while a sound it started was playing. Normal when the hub restarts. |
+
+## 24. Haptics: a solenoid and a vibration motor
+
+**The parts:** on **stepper-c3** (section 22's ESP32-C3 Super Mini), beside the motor and the buzzer:
+
+- a **micro solenoid** (5.7 Ω coil, 4 mm stroke, spring return), the instance `kick`;
+- a **cylinder vibration motor** (ERM), the instance `buzz`;
+- both fed from a **LIC-H-0825**, a 90 F lithium-ion capacitor, the instance `cap` (`fr.battery`). A protected TP4056
+  module charges it from the board's 5V.
+
+Each load hangs from the module's OUT+ and is switched on its − side by an **AO3400** MOSFET. The solenoid's gate is
+on **GPIO1** (PWM), the motor's on **GPIO0** (the C3's sigma-delta block, since the PWM channels are all taken), and
+the capacitor's voltage is measured on **GPIO3**. GPIO0 used to be the board's latency-test pin; the profile gives
+that up. The wiring guide `stepper-c3` on the Bench page has a haptics section with a drawing. The design is
+`docs/design/haptic-h1.md`.
+
+**Flyback diodes:** each load needs one, stripe toward +. It must be a fast one, a **1N5819** (or 1N5817, SS14, SS34;
+a 1N4148 also works across the motor). A **1N4007** is too slow wherever the output is PWM: the solenoid's strength
+(any `level` below 100), its hold (a tap longer than 30 ms) and the motor always. Until you have Schottkys, a 1N4007
+across the solenoid is fine for full-strength taps of 30 ms or less, and the motor waits.
+
+**What it does:**
+
+- `pulse`: on once, for a length.
+- `play`: a pattern of on and off steps.
+- `tap` (the solenoid's main command): a train of taps at a set rate, each with a set strength and length, a number of
+  times or until stopped. A new `tap` sent while a train runs changes it in place and keeps the beat, so you can
+  change the rate or strength while it taps.
+- **Strength** has two controls. `level` (1–100) sets how hard it pulls. `ms` sets how long: a short tap is a soft
+  tick, a longer one knocks against the stop.
+- With `accent`, every Nth tap plays at `accent_level`: a metronome's first beat.
+- Every program ends with a `done` event that says how it ended.
+
+### 24.1 First run, step by step
+
+1. **Meter the capacitor** before anything else: across its legs (the stripe marks −) it must read **above 2.5 V**.
+   Below that it may be damaged; use another. Never short it.
+2. **Wire it** as the guide's haptics section says, USB unplugged:
+   - the AO3400s first, each with its 100 Ω and its 10 kΩ gate pull-down;
+   - then the charger and the capacitor (on B+ and B−, never straight to a load);
+   - then the sense divider, then each load with its diode.
+   Plug in USB: OUT+ climbs to 4.2 V within a few minutes, and GPIO3 reads half of it.
+3. **Firmware:** `cap`, `kick` and `buzz` are in `c3s-stepper` since haptic-h1. Build the profile on the lab hub
+   (`fr build --profile c3s-stepper`) and update stepper-c3 (`fr ota` or a flash; section 14). The hub that holds the
+   board must know `fr.haptic` 1.1 too: a hub started before this version needs a restart (until then,
+   `fr diag <port> call kick.tap …` over USB works). Then `fr devices get stepper-c3` lists `cap` near the meter's
+   OUT+ (within 50 mV; else `fr send stepper-c3 cap.calibrate` with the meter's value), and `kick` and `buzz` with
+   `active` false.
+4. **The motor** (with its fast diode in):
+
+   ```bash
+   fr send stepper-c3 buzz.pulse '{"ms":300,"level":30}'
+   fr send stepper-c3 buzz.pulse '{"ms":300,"level":100}'
+   fr events stepper-c3 --types 'buzz.*'      # each ends with buzz.done {program: pulse, reason: done}
+   ```
+
+5. **One tap at a time:** start soft and raise the level by 10 until it strikes cleanly. Then shorten `ms` to the
+   shortest tap that still reaches the end of the stroke.
+
+   ```bash
+   fr send stepper-c3 kick.tap '{"period_ms":1000,"ms":15,"level":40}'
+   fr haptic tap stepper-c3 --instance kick --ms 15 --level 50
+   ```
+
+   After 20 taps, touch the AO3400 and the coil: cool or barely warm. `fr haptic tap` with neither `--hz` nor
+   `--period-ms` taps once a second, and `--count` defaults to 1. The hub refuses a train over the budget itself and
+   says the longest tap that rate allows ("a tap can be 13 ms at most").
+6. **A train:** 8 taps a second until stopped, then faster:
+
+   ```bash
+   fr haptic tap stepper-c3 --instance kick --hz 8 --ms 15 --level 70 --count 0
+   fr haptic tap stepper-c3 --instance kick --hz 15 --ms 12 --level 70 --count 0    # changes it in place, on the beat
+   fr haptic stop stepper-c3 --instance kick
+   ```
+
+   Note the fastest rate at which every tap still strikes: that is the spring's limit. After 30 s at 8 taps a second
+   the coil stays under 50 °C to the touch.
+7. **A metronome:** 120 beats a minute, four to the bar, the first beat strongest:
+
+   ```bash
+   fr haptic tap stepper-c3 --instance kick --period-ms 500 --ms 15 --level 50 --count 0 --accent 4 --accent-level 100
+   ```
+
+The dashboard's haptic page (the instruments `kick` and `buzz` of stepper-c3, each called "haptic") has the same,
+with sliders that change a running train live:
+
+- TAP and a tap train (rate, strength, tap length, count; START and STOP);
+- named patterns: double tap, triple tap, heartbeat, knock-knock and a roll for the solenoid; short, double, long and
+  heartbeat for the motor;
+- a metronome (tempo, beats to the bar, first-beat strength);
+- the capacitor's voltage, dipping on each tap.
+
+The device's Overview row offers TAP or BUZZ while still and STOP while running.
+
+### 24.2 Commands, limits and what `done` says
+
+| Command | What it does |
+|---|---|
+| `kick.tap '{"period_ms":125,"ms":15,"level":70,"count":0}'` | A tap every `period_ms` (20–60,000), each on for `ms` at `level` % (1–100); `count` taps (default 1; 0: until `stop`). `accent` N and `accent_level`: the first tap and every Nth after it at that level. Sent while a train runs: changes it in place, on the beat. |
+| `buzz.pulse '{"ms":300,"level":60}'` | On once for `ms` at `level` %. |
+| `kick.play '{"steps":[20,90,20],"level":80}'` | A pattern: on, off, on… in ms (up to 32 steps), `repeat` times. On the solenoid every off step must be above 0. |
+| `kick.stop` | Off now. |
+
+The firmware holds both loads inside their limits:
+
+- **Strength follows the capacitor.** `level` is a share of the load's rating (`rated_mv`), corrected for the
+  capacitor's voltage, so a level feels the same from 4.2 V down to 3 V.
+  - The solenoid's level 100 is everything the capacitor gives; level 71 is about 3 V.
+  - Each solenoid tap pulls in at its level for 30 ms, then holds at 40 % (or at its level, if that is lower).
+- **The solenoid's on-time is limited:** at most 1 s on without a break, and at most 30 % of any 10 s. A train whose
+  taps could spend that is refused (INVALID_ARGS) before it starts. At 20 taps a second a tap can be 13 ms at most;
+  at 8 taps a second, 36 ms. The motor may run continuously for up to 10 s.
+- **The capacitor protects itself:**
+  - the solenoid starts only above 3.1 V, the motor above 2.8 V;
+  - both stop at 2.8 V with a `cut` event;
+  - BUSY means the capacitor is too low or the 30 % budget is spent: wait a few seconds.
+
+| `done` reason | Meaning |
+|---|---|
+| `done` | It ran to its end. |
+| `stopped` | `stop` ended it. |
+| `replaced` | Another program took its place. A `tap` that changes a running train is not a replacement. |
+| `hub_lost` | It was started from the hub, and the hub fell silent for 10 s (or restarted): it stopped by itself. |
+| `cut` | The capacitor fell to 2.8 V or below, or the on-time limit ended it; a `cut` event with the reason and the voltage came first. |
+
+### 24.3 Haptics troubleshooting
+
+| You see | Do this |
+|---|---|
+| BUSY | The capacitor is below 3.1 V (solenoid) or 2.8 V (motor), or the solenoid spent its 30 % of the last 10 s. `fr devices get stepper-c3` shows `cap.mv`. Wait for it to charge. |
+| INVALID_ARGS on a tap | `ms` is 0, or not shorter than `period_ms`, or the train could spend the 30 % budget: shorten `ms` or slow the rate. The panel shows the longest tap each rate allows. |
+| The solenoid only clicks | Too weak to move against its spring: raise `level` or `ms`. |
+| The AO3400 gets warm | A 1N4007 (or no diode) across a PWM'd load: fit a 1N5819. Check each diode's stripe is toward +. |
+| A load runs at power-up or reset | The gate's 10 kΩ to GND is missing or on the wrong side of the 100 Ω. |
+| The board resets while charging | The USB port gives too little for the charger's 1 A: change the TP4056 module's PROG resistor (1.2 kΩ) for 2.4 kΩ (about 0.5 A). |
+| `cap.mv` far from the meter | `fr send stepper-c3 cap.calibrate` with the meter's reading of OUT+. |
+| Leaving the board unplugged for weeks | The capacitor drains slowly through the divider and the charger: store it charged, and meter it (above 2.5 V) before using it again. |

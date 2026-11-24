@@ -1,0 +1,28 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:fractonica:schema:fr.haptic.done.event",
+  "title": "fr.haptic.done event",
+  "description": "1.1. A pulse, pattern or tap train ended: done (ran to its end), stopped (stop), replaced (by another program; a tap that changes a running train is not a replacement), hub_lost (the hub fell silent), cut (after the `cut` event).",
+  "type": "object",
+  "properties": {
+    "program": {
+      "type": "string",
+      "enum": [
+        "pulse",
+        "play",
+        "tap"
+      ]
+    },
+    "reason": {
+      "type": "string",
+      "enum": [
+        "done",
+        "stopped",
+        "replaced",
+        "hub_lost",
+        "cut"
+      ]
+    }
+  },
+  "additionalProperties": false
+}

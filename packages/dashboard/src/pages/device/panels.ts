@@ -16,6 +16,7 @@ import { BUZZER_PANEL } from './panels/buzzer.tsx';
 import { CAMERA_PANEL } from './panels/camera/index.tsx';
 import { DISPLAY_PANEL } from './panels/display.tsx';
 import { GENERIC_PANEL } from './panels/generic.tsx';
+import { HAPTIC_PANEL } from './panels/haptic.tsx';
 import { LED_PANEL } from './panels/led.tsx';
 import { STEPPER_PANEL } from './panels/stepper.tsx';
 
@@ -55,6 +56,7 @@ export const PANELS: Readonly<Record<string, CapPanel>> = {
   'fr.display': DISPLAY_PANEL,
   'fr.stepper': STEPPER_PANEL,
   'fr.buzzer': BUZZER_PANEL,
+  'fr.haptic': HAPTIC_PANEL,
 };
 
 /**

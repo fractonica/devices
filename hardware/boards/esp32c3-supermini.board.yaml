@@ -30,7 +30,7 @@ rf: { max_tx_power_qdbm: 34, antenna: ceramic }
 test_pin: 0
 # gptimer: the chip's two general-purpose timers (one per group), which IDF's own services leave free on the C3
 # (esp_timer runs on SYSTIMER); drv8833_stepper draws one (design stepper-s1 D7). ADC1: GPIO0-4 (GPIO5 is ADC2).
-resources: { rmt_tx: 2, rmt_rx: 2, ledc_timers: 4, ledc_channels: 6, i2c: 1, adc1_channel: 5, i2s: 1, gptimer: 2 }
+resources: { rmt_tx: 2, rmt_rx: 2, ledc_timers: 4, ledc_channels: 6, i2c: 1, adc1_channel: 5, i2s: 1, gptimer: 2, sdm_channels: 4 }
 defaults:
   boot:   { cap: fr.button, driver: button_gpio, bind: buttons.boot }
   status: { cap: fr.led,    driver: led_gpio,    bind: leds.status }

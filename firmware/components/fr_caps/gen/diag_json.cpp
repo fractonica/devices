@@ -132,7 +132,9 @@ cJSON *to_json(const BatteryLevelChange &v);
 cJSON *to_json(const BatteryProtect &v);
 cJSON *to_json(const HapticPulseArgs &v);
 cJSON *to_json(const HapticPlayArgs &v);
+cJSON *to_json(const HapticTapArgs &v);
 cJSON *to_json(const HapticCut &v);
+cJSON *to_json(const HapticDone &v);
 cJSON *to_json(const StorageEntry &v);
 cJSON *to_json(const StorageInfoResult &v);
 cJSON *to_json(const StorageListArgs &v);
@@ -1415,12 +1417,34 @@ cJSON *to_json(const HapticPlayArgs &v)
     return finish(o, ok);
 }
 
+cJSON *to_json(const HapticTapArgs &v)
+{
+    cJSON *o = cJSON_CreateObject();
+    bool ok = o != nullptr;
+    ok = ok && add(o, "period_ms", json_number(v.period_ms));
+    ok = ok && add(o, "ms", json_number(v.ms));
+    ok = ok && add(o, "level", json_number(v.level));
+    ok = ok && add(o, "count", json_number(v.count));
+    ok = ok && add(o, "accent", json_number(v.accent));
+    ok = ok && add(o, "accent_level", json_number(v.accent_level));
+    return finish(o, ok);
+}
+
 cJSON *to_json(const HapticCut &v)
 {
     cJSON *o = cJSON_CreateObject();
     bool ok = o != nullptr;
     ok = ok && add(o, "reason", json_enum(v.reason));
     ok = ok && add(o, "supply_mv", json_number(v.supply_mv));
+    return finish(o, ok);
+}
+
+cJSON *to_json(const HapticDone &v)
+{
+    cJSON *o = cJSON_CreateObject();
+    bool ok = o != nullptr;
+    ok = ok && add(o, "program", json_enum(v.program));
+    ok = ok && add(o, "reason", json_enum(v.reason));
     return finish(o, ok);
 }
 
@@ -3108,6 +3132,35 @@ Status args_haptic_stop(const cJSON *obj)
     return {};
 }
 
+Status args_haptic_tap(const cJSON *obj, fr::wire::Writer &w)
+{
+    HapticTapArgs v{};
+    bool ok = true;
+    for (const cJSON *it = obj != nullptr ? obj->child : nullptr; ok && it != nullptr; it = it->next) {
+        const std::string_view key = it->string != nullptr ? it->string : "";
+        if (key == "period_ms") {
+            ok = from_json_uint(it, 0xFFFF, v.period_ms);
+        } else if (key == "ms") {
+            ok = from_json_uint(it, 0xFFFF, v.ms);
+        } else if (key == "level") {
+            ok = from_json_uint(it, 0xFF, v.level);
+        } else if (key == "count") {
+            ok = from_json_uint(it, 0xFFFF, v.count);
+        } else if (key == "accent") {
+            ok = from_json_uint(it, 0xFF, v.accent);
+        } else if (key == "accent_level") {
+            ok = from_json_uint(it, 0xFF, v.accent_level);
+        } else {
+            ok = false;  // unknown key
+        }
+    }
+    if (!ok || !valid(v)) {
+        return std::unexpected(Err::invalid_args);
+    }
+    encode(v, w);
+    return encoded(w);
+}
+
 Status args_storage_info(const cJSON *obj)
 {
     if (obj != nullptr && obj->child != nullptr) {
@@ -4744,6 +4797,8 @@ cJSON *haptic_to_json(uint8_t cls, uint8_t id, std::span<const uint8_t> body)
             return json_of(decode_haptic_play_args(body));
         case Haptic::kCmdStop:
             return json_empty(body);
+        case Haptic::kCmdTap:
+            return json_of(decode_haptic_tap_args(body));
         }
         break;
     case fr::wire::kClsResult:
@@ -4754,12 +4809,16 @@ cJSON *haptic_to_json(uint8_t cls, uint8_t id, std::span<const uint8_t> body)
             return json_empty(body);
         case Haptic::kCmdStop:
             return json_empty(body);
+        case Haptic::kCmdTap:
+            return json_empty(body);
         }
         break;
     case fr::wire::kClsEvent:
         switch (id) {
         case Haptic::kEventCut:
             return json_of(decode_haptic_cut(body));
+        case Haptic::kEventDone:
+            return json_of(decode_haptic_done(body));
         }
         break;
     case fr::wire::kClsState:
@@ -5666,6 +5725,9 @@ Status encode_args_json(uint16_t cap_id, const char *cmd, const cJSON *args, uin
         } else if (name == "stop") {
             id = Haptic::kCmdStop;
             s = args_haptic_stop(obj);
+        } else if (name == "tap") {
+            id = Haptic::kCmdTap;
+            s = args_haptic_tap(obj, w);
         }
         break;
     case Storage::kId:

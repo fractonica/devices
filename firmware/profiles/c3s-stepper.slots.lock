@@ -4,3 +4,6 @@ boot: 1
 status: 2
 motor: 3
 buzzer: 4
+cap: 5
+kick: 6
+buzz: 7

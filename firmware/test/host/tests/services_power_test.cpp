@@ -25,7 +25,10 @@ using fr::cap::BatteryChemistry;
 using fr::cap::BatteryConfig;
 using fr::cap::HapticConfig;
 using fr::cap::HapticCutReason;
+using fr::cap::HapticDoneReason;
 using fr::cap::HapticKind;
+using fr::cap::HapticProgram;
+using fr::cap::HapticTapArgs;
 using fr::hal::ChargerPins;
 using fr::power::Charger;
 using fr::power::ChargerDecoder;
@@ -760,6 +763,17 @@ struct HapRig {
         }
         return out_;
     }
+    /** fr.haptic.done events as (program, reason). */
+    std::vector<std::pair<uint64_t, uint64_t>> dones() const
+    {
+        std::vector<std::pair<uint64_t, uint64_t>> o;
+        for (const auto &e : bat.sink.events()) {
+            if (e.port == kHapPort && e.id == fr::cap::Haptic::kEventDone) {
+                o.emplace_back(frt::field_u(e.bytes, 1), frt::field_u(e.bytes, 2));
+            }
+        }
+        return o;
+    }
     std::vector<uint64_t> actives() const
     {
         std::vector<uint64_t> o;
@@ -1072,7 +1086,11 @@ TEST(haptic_stops_when_the_hub_goes_quiet)
     h.core().advance_ms(1'100);
     CHECK(!h.svc.active());
     CHECK_EQ(h.out.duty, 0);
-    CHECK(h.cuts().empty());  // nobody to hear it
+    CHECK(h.cuts().empty());
+    auto d = h.dones();  // 1.1: said in a done (heard if the hub comes back in time)
+    REQUIRE_EQ(d.size(), 1u);
+    CHECK_EQ(d[0].first, static_cast<uint64_t>(HapticProgram::pulse));
+    CHECK_EQ(d[0].second, static_cast<uint64_t>(HapticDoneReason::hub_lost));
 }
 
 #if FR_TEST_HOOKS
@@ -1122,6 +1140,295 @@ TEST(haptic_cooldown_counts_microseconds)
         h.core().advance_us(9'500);
     }
     CHECK(started <= 340);  // 3,000 ms / 9 ms = 333 at most
+}
+
+// ---- fr.haptic 1.1 (design haptic-h1 D2, D3) ----
+
+using DoneList = std::vector<std::pair<uint64_t, uint64_t>>;
+
+uint64_t u(HapticProgram p)
+{
+    return static_cast<uint64_t>(p);
+}
+uint64_t u(HapticDoneReason r)
+{
+    return static_cast<uint64_t>(r);
+}
+
+TEST(haptic_done_ends_every_program_once)
+{
+    HapRig h;
+    REQUIRE(h.start());
+    CHECK(h.svc.pulse({.ms = 100}).has_value());
+    h.core().advance_ms(150);
+    CHECK(h.svc.play({.steps = {50, 50, 50}, .level = 80, .repeat = 1}).has_value());
+    h.core().advance_ms(20);
+    CHECK(h.svc.pulse({.ms = 500}).has_value());  // replaces the pattern
+    CHECK(h.svc.active());
+    h.core().advance_ms(20);
+    CHECK(h.svc.stop().has_value());
+    CHECK(h.svc.stop().has_value());  // nothing runs: no second done
+    const DoneList want = {
+        {u(HapticProgram::pulse), u(HapticDoneReason::done)},
+        {u(HapticProgram::play), u(HapticDoneReason::replaced)},
+        {u(HapticProgram::pulse), u(HapticDoneReason::stopped)},
+    };
+    CHECK(h.dones() == want);
+    // `active` did not drop between the pattern and the pulse that replaced it.
+    const std::vector<uint64_t> actives = {1, 0, 1, 0};
+    CHECK(h.actives() == actives);
+}
+
+TEST(haptic_done_after_a_cut)
+{
+    HapticConfig c{};
+    c.max_on_ms = 200;
+    HapRig h(c);
+    REQUIRE(h.start());
+    CHECK(h.svc.play({.steps = {150, 0, 150}, .level = 100, .repeat = 1}).has_value());
+    h.core().advance_ms(300);
+    CHECK(!h.svc.active());
+    REQUIRE_EQ(h.cuts().size(), 1u);
+    const DoneList want = {{u(HapticProgram::play), u(HapticDoneReason::cut)}};
+    CHECK(h.dones() == want);
+    // The cut came first.
+    size_t cut_at = 0, done_at = 0, i = 0;
+    for (const auto &e : h.bat.sink.events()) {
+        if (e.port == kHapPort && e.id == fr::cap::Haptic::kEventCut) {
+            cut_at = i;
+        }
+        if (e.port == kHapPort && e.id == fr::cap::Haptic::kEventDone) {
+            done_at = i;
+        }
+        ++i;
+    }
+    CHECK(cut_at < done_at);
+}
+
+TEST(haptic_solenoid_kick_follows_level)
+{
+    HapticConfig c{};
+    c.kind = HapticKind::solenoid;
+    c.rated_mv = 3600;  // the rig's supply: no compensation to think about
+    HapRig h(c);
+    REQUIRE(h.start());
+    CHECK(h.svc.pulse({.ms = 200, .level = 50}).has_value());
+    CHECK_EQ(h.out.duty, 500);  // the kick at the level (1.0: 1000)
+    h.core().advance_ms(31);
+    CHECK_EQ(h.out.duty, 400);  // the hold: hold_pct 40, below the level
+    CHECK(h.svc.pulse({.ms = 200, .level = 30}).has_value());
+    CHECK_EQ(h.out.duty, 300);
+    h.core().advance_ms(31);
+    CHECK_EQ(h.out.duty, 300);  // never holds harder than it kicked
+    CHECK(h.svc.stop().has_value());
+    // rated above the supply saturates: the 1.0 kick for anyone who never set a level.
+    HapticConfig c2 = c;
+    c2.rated_mv = 4200;
+    HapRig h2(c2);
+    REQUIRE(h2.start());
+    CHECK(h2.svc.pulse({.ms = 100}).has_value());
+    CHECK_EQ(h2.out.duty, 1000);
+    CHECK(h2.svc.pulse({.ms = 100, .level = 71}).has_value());
+    CHECK_EQ(h2.out.duty, 828);  // 710 x 4200 / 3600
+}
+
+TEST(haptic_tap_train_runs_its_count)
+{
+    HapRig h;
+    REQUIRE(h.start());
+    const TimeUs t0 = h.core().now();
+    CHECK(h.svc.tap({.period_ms = 100, .ms = 20, .level = 100, .count = 3}).has_value());
+    CHECK(h.svc.program() == HapticProgram::tap);
+    CHECK(h.out.duty > 0);
+    h.core().advance_ms(19);
+    CHECK(h.out.duty > 0);
+    h.core().advance_ms(2);
+    CHECK_EQ(h.out.duty, 0);
+    h.core().advance_ms(80);  // 101
+    CHECK(h.out.duty > 0);
+    h.core().advance_ms(110);  // 211: the third tap is on
+    CHECK(h.out.duty > 0);
+    CHECK(h.svc.active());
+    h.core().advance_ms(10);  // 221
+    CHECK(!h.svc.active());
+    const DoneList want = {{u(HapticProgram::tap), u(HapticDoneReason::done)}};
+    CHECK(h.dones() == want);
+    // Three rising edges, at 0, 100 and 200 ms.
+    std::vector<TimeUs> ons;
+    uint16_t prev = 0;
+    for (const auto &w : h.out.writes) {
+        if (w.duty > 0 && prev == 0) {
+            ons.push_back(w.at - t0);
+        }
+        prev = w.duty;
+    }
+    const std::vector<TimeUs> want_ons = {0, 100'000, 200'000};
+    CHECK(ons == want_ons);
+}
+
+TEST(haptic_tap_change_keeps_the_beat)
+{
+    HapRig h;
+    REQUIRE(h.start());
+    const TimeUs t0 = h.core().now();
+    CHECK(h.svc.tap({.period_ms = 200, .ms = 20, .level = 100, .count = 0}).has_value());
+    h.core().advance_ms(50);
+    // Between taps: the next comes 100 ms after the last one started (at 100, not 250 or 150).
+    CHECK(h.svc.tap({.period_ms = 100, .ms = 20, .level = 100, .count = 0}).has_value());
+    h.core().advance_ms(49);  // 99
+    CHECK_EQ(h.out.duty, 0);
+    h.core().advance_ms(2);  // 101
+    CHECK(h.out.duty > 0);
+    h.core().advance_ms(29);  // 130: slower, from the tap at 100: next at 400
+    CHECK(h.svc.tap({.period_ms = 300, .ms = 20, .level = 100, .count = 0}).has_value());
+    h.core().advance_ms(260);  // 390
+    CHECK_EQ(h.out.duty, 0);
+    h.core().advance_ms(15);  // 405
+    CHECK(h.out.duty > 0);
+    h.core().advance_ms(45);  // 450: faster, overdue (400 + 30 < 450): a tap now
+    CHECK(h.svc.tap({.period_ms = 30, .ms = 10, .level = 100, .count = 0}).has_value());
+    CHECK(h.out.duty > 0);
+    h.core().advance_ms(11);  // 461
+    CHECK_EQ(h.out.duty, 0);
+    h.core().advance_ms(20);  // 481: the next at 480
+    CHECK(h.out.duty > 0);
+    // While a tap is on: the new ms applies to it.
+    h.core().advance_ms(2);  // 482, on since 480
+    CHECK(h.svc.tap({.period_ms = 30, .ms = 1, .level = 100, .count = 0}).has_value());
+    CHECK_EQ(h.out.duty, 0);
+    CHECK(h.svc.active());
+    CHECK(h.dones().empty());  // changes are not ends
+    std::vector<TimeUs> ons;
+    uint16_t prev = 0;
+    for (const auto &w : h.out.writes) {
+        if (w.duty > 0 && prev == 0) {
+            ons.push_back(w.at - t0);
+        }
+        prev = w.duty;
+    }
+    const std::vector<TimeUs> want_ons = {0, 100'000, 400'000, 450'000, 480'000};
+    CHECK(ons == want_ons);
+}
+
+TEST(haptic_tap_change_restarts_the_count)
+{
+    HapRig h;
+    REQUIRE(h.start());
+    CHECK(h.svc.tap({.period_ms = 100, .ms = 10, .level = 100, .count = 2}).has_value());
+    h.core().advance_ms(50);
+    // Between taps: the tap that ended, then two more (100, 200); done when the one at 200 ends.
+    CHECK(h.svc.tap({.period_ms = 100, .ms = 10, .level = 100, .count = 2}).has_value());
+    h.core().advance_ms(155);  // 205
+    CHECK(h.svc.active());
+    h.core().advance_ms(10);  // 215
+    CHECK(!h.svc.active());
+    // While a tap is on, it is the first of the new count.
+    CHECK(h.svc.tap({.period_ms = 100, .ms = 10, .level = 100, .count = 5}).has_value());
+    h.core().advance_ms(5);
+    CHECK(h.svc.tap({.period_ms = 100, .ms = 10, .level = 100, .count = 1}).has_value());
+    CHECK(h.svc.active());
+    h.core().advance_ms(6);
+    CHECK(!h.svc.active());
+    const DoneList want = {{u(HapticProgram::tap), u(HapticDoneReason::done)},
+                           {u(HapticProgram::tap), u(HapticDoneReason::done)}};
+    CHECK(h.dones() == want);
+}
+
+TEST(haptic_tap_accent)
+{
+    HapRig h;  // erm, rated 3000 on 3600
+    REQUIRE(h.start());
+    CHECK(h.svc.tap({.period_ms = 100, .ms = 20, .level = 50, .count = 0, .accent = 4, .accent_level = 100})
+              .has_value());
+    std::vector<uint16_t> duties;
+    for (int i = 0; i < 6; ++i) {
+        duties.push_back(h.out.duty);
+        h.core().advance_ms(100);
+    }
+    const std::vector<uint16_t> want = {833, 417, 417, 417, 833, 417};
+    CHECK(duties == want);
+    // A change keeps the bar's count: tap 6 now; with accent 3 the next accent is tap 7 (index 6).
+    CHECK(h.svc.tap({.period_ms = 100, .ms = 20, .level = 50, .count = 0, .accent = 3, .accent_level = 100})
+              .has_value());
+    CHECK_EQ(h.out.duty, 833);  // the tap at 600 ms is on, and 6 % 3 == 0
+    CHECK_EQ(h.svc.taps_played(), 7u);
+}
+
+TEST(haptic_tap_refusals)
+{
+    HapticConfig c{};
+    c.kind = HapticKind::solenoid;  // max_on 1,000; budget 30 % of 10 s
+    HapRig h(c);
+    REQUIRE(h.start());
+    CHECK(h.svc.tap({.period_ms = 100, .ms = 0}).error() == fr::Err::invalid_args);
+    CHECK(h.svc.tap({.period_ms = 100, .ms = 100}).error() == fr::Err::invalid_args);
+    CHECK(h.svc.tap({.period_ms = 10, .ms = 2}).error() == fr::Err::invalid_args);
+    CHECK(h.svc.tap({.period_ms = 5000, .ms = 1001}).error() == fr::Err::invalid_args);
+    // 20 a second: 200 taps in 10 s, each counted ms + 1: 13 ms fits (2,800 < 3,000), 14 does not (3,000).
+    CHECK(HapticService::train_fits(50, 13, 30));
+    CHECK(!HapticService::train_fits(50, 14, 30));
+    CHECK(HapticService::train_fits(20, 19, 100));
+    CHECK(h.svc.tap({.period_ms = 50, .ms = 14, .count = 0}).error() == fr::Err::invalid_args);
+    CHECK(h.svc.tap({.period_ms = 50, .ms = 13, .count = 0}).has_value());
+    CHECK(!h.svc.active() || h.svc.program() == HapticProgram::tap);
+}
+
+TEST(haptic_tap_train_inside_the_budget_is_never_cut)
+{
+    HapticConfig c{};
+    c.kind = HapticKind::solenoid;
+    c.rated_mv = 4200;
+    HapRig h(c);
+    REQUIRE(h.start());
+    CHECK(h.svc.tap({.period_ms = 50, .ms = 13, .level = 100, .count = 0}).has_value());
+    for (int i = 0; i < 300; ++i) {  // 30 s
+        h.core().advance_ms(100);
+        h.bat.cell.pin_mv = 1800;  // the supply holds
+    }
+    CHECK(h.svc.active());
+    CHECK(h.cuts().empty());
+    CHECK(h.svc.spent_ms() < 3000u);
+    // And one every 5 s, the longest tap a solenoid's max_on allows, on a budget the last train no longer spends.
+    CHECK(h.svc.stop().has_value());
+    h.core().advance_ms(10'100);
+    CHECK(h.svc.tap({.period_ms = 5000, .ms = 1000, .level = 100, .count = 0}).has_value());
+    for (int i = 0; i < 300; ++i) {
+        h.core().advance_ms(100);
+    }
+    CHECK(h.svc.active());
+    CHECK(h.cuts().empty());
+}
+
+TEST(haptic_tap_replaces_and_is_replaced)
+{
+    HapRig h;
+    REQUIRE(h.start());
+    CHECK(h.svc.pulse({.ms = 1000}).has_value());
+    h.core().advance_ms(10);
+    CHECK(h.svc.tap({.period_ms = 100, .ms = 20, .count = 0}).has_value());
+    h.core().advance_ms(10);
+    CHECK(h.svc.pulse({.ms = 50}).has_value());
+    h.core().advance_ms(60);
+    const DoneList want = {{u(HapticProgram::pulse), u(HapticDoneReason::replaced)},
+                           {u(HapticProgram::tap), u(HapticDoneReason::replaced)},
+                           {u(HapticProgram::pulse), u(HapticDoneReason::done)}};
+    CHECK(h.dones() == want);
+}
+
+TEST(haptic_tap_busy_on_a_low_supply_but_a_change_is_not_a_start)
+{
+    HapticConfig c{};
+    c.kind = HapticKind::solenoid;
+    HapRig h(c);
+    REQUIRE(h.start());
+    CHECK(h.svc.tap({.period_ms = 200, .ms = 20, .count = 0}).has_value());
+    // The LIC sags under the solenoid's 3,100 mV start margin, still above critical (2,800).
+    h.bat.settle(3050, 3000);
+    REQUIRE(h.svc.supply()->mv() < 3100);
+    CHECK(h.svc.active());
+    CHECK(h.svc.tap({.period_ms = 100, .ms = 20, .count = 0}).has_value());  // a change: not refused
+    CHECK(h.svc.stop().has_value());
+    CHECK(h.svc.tap({.period_ms = 100, .ms = 20, .count = 0}).error() == fr::Err::busy);  // a start: refused
 }
 
 }  // namespace

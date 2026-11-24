@@ -35,7 +35,7 @@ const POWER_OP_NAMES = [
 
 describe('POWER-1 ops (design power-p1 D11)', () => {
   it('adds fourteen ops on their CLI paths and moves REGISTRY_HASH once', () => {
-    const power1 = OPS.filter((o) => !/^(wiring|part|storage|clock|app|time)_|^device_adopt$|^port_(lend|ignore|claim)$|^hub_doctor_fix$|^device_enroll$|^device_(hubs_set|hubs_get|share)$|^network_join$|^network_admit$|^hub_(name_set|peers)$/.test(o.name)); // WIRING-1 adds eleven (protocol-wiring.test.ts)
+    const power1 = OPS.filter((o) => !/^(wiring|part|storage|clock|app|time)_|^device_adopt$|^port_(lend|ignore|claim)$|^hub_doctor_fix$|^device_enroll$|^device_(hubs_set|hubs_get|share)$|^network_join$|^network_admit$|^hub_(name_set|peers)$|^haptic_tap$/.test(o.name)); // WIRING-1 adds eleven (protocol-wiring.test.ts)
     expect(power1).toHaveLength(82);
     expect(power1.slice(-14).map((o) => o.name)).toEqual(POWER_OP_NAMES);
     const paths: Record<string, [string[], string[]?, string?, string?]> = {
@@ -140,7 +140,8 @@ describe('POWER-1 ops (design power-p1 D11)', () => {
     expect(haptic.id).toBe(0x000e);
     expect(battery.commands.map((c) => c.name)).toEqual(['read', 'calibrate', 'reset_calibration', 'load', 'gate', 'inject']);
     expect(battery.events.map((e) => e.name)).toEqual(['charge', 'level_change', 'protect']);
-    expect(haptic.commands.map((c) => c.name)).toEqual(['pulse', 'play', 'stop']);
-    expect(haptic.events.map((e) => e.name)).toEqual(['cut']);
+    // fr.haptic 1.1 (design haptic-h1 D2) adds tap and done (protocol-haptic-h1.test.ts).
+    expect(haptic.commands.map((c) => c.name)).toEqual(['pulse', 'play', 'stop', 'tap']);
+    expect(haptic.events.map((e) => e.name)).toEqual(['cut', 'done']);
   });
 });

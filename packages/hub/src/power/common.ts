@@ -73,11 +73,24 @@ export function powerFailed(dev: Device, inst: string, what: string, o: CommandO
     return new FrError('DEVICE_BUSY', `${dev.alias} ${inst} ${what}: refused, ${why}${said}`, { details, remediation: [status] });
   }
   if (o.status === 'unsupported') {
-    const why = what.startsWith('load') ? 'no test load is wired to this instance (bind a `load` pin in the profile)' : what === 'gate' ? 'no charge gate is wired' : 'the node does not support it';
+    const why = what.startsWith('load')
+      ? 'no test load is wired to this instance (bind a `load` pin in the profile)'
+      : what === 'gate'
+        ? 'no charge gate is wired'
+        : what.startsWith('tap')
+          ? 'its firmware has fr.haptic 1.0, which has no tap: build and flash a newer one'
+          : 'the node does not support it';
     return new FrError('CAPABILITY_UNSUPPORTED', `${dev.alias} ${inst} ${what}: ${why}${said}`, { details });
   }
   if (o.status === 'invalid_args') {
-    const why = what === 'calibrate' ? 'the divider would fall outside 1.000-20.000: check the meter reading and that it is this instance\'s cell' : what.startsWith('pulse') || what.startsWith('play') ? "an on-time above the instance's max_on_ms, or no steps" : 'refused';
+    const why =
+      what === 'calibrate'
+        ? 'the divider would fall outside 1.000-20.000: check the meter reading and that it is this instance\'s cell'
+        : what.startsWith('tap')
+          ? "a tap at or above its period, above the instance's max_on_ms, or a train that would spend the cooldown budget (fr.haptic 1.1; a 1.0 firmware has no tap)"
+          : what.startsWith('pulse') || what.startsWith('play')
+            ? "an on-time above the instance's max_on_ms, or no steps"
+            : 'refused';
     return new FrError('INVALID_ARGS', `${dev.alias} ${inst} ${what}: ${why}${said}`, { details });
   }
   return commandFailed(dev, `${inst} ${what}`, o);

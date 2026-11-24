@@ -10,7 +10,7 @@ import { DeviceHubsSchema, findOp, hubEntry, MULTI_HUB_OPS, OPS, REGISTRY_HASH, 
 import { decodeNodeHubsGetResult, decodeNodeHubsSetArgs, encodeNodeHubsGetResult, encodeNodeHubsSetArgs, findCap } from '../src/gen/index.ts';
 
 /** The ops as they were here, before the hubs' link added its three (design multi-hub-m2; protocol-peers.test.ts). */
-const m1 = OPS.filter((o) => !/^network_admit$|^hub_(name_set|peers)$/.test(o.name));
+const m1 = OPS.filter((o) => !/^network_admit$|^hub_(name_set|peers)$|^haptic_tap$/.test(o.name));
 const hashOf = (ops: readonly { name: string; input: z.ZodType }[]) =>
   createHash('sha256')
     .update(JSON.stringify(ops.map((o) => [o.name, z.toJSONSchema(o.input)])))

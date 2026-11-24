@@ -15,6 +15,16 @@ export type HapticCutReason = keyof typeof HapticCutReason;
 
 const HapticCutReasonNames = $.enumNames(HapticCutReason);
 
+export const HapticProgram = { pulse: 0, play: 1, tap: 2 } as const;
+export type HapticProgram = keyof typeof HapticProgram;
+
+const HapticProgramNames = $.enumNames(HapticProgram);
+
+export const HapticDoneReason = { done: 0, stopped: 1, replaced: 2, hub_lost: 3, cut: 4 } as const;
+export type HapticDoneReason = keyof typeof HapticDoneReason;
+
+const HapticDoneReasonNames = $.enumNames(HapticDoneReason);
+
 /** Descriptor traits. */
 export interface HapticTraits {
   /** the output is PWM (level and compensation); else on/off only */
@@ -148,6 +158,67 @@ export function decodeHapticPlayArgs(bytes: Uint8Array): Decoded<HapticPlayArgs>
   return $.done(r, v);
 }
 
+/** fr.haptic.tap arguments (command 4, reliable). 1.1. A train of `count` taps (0 = until stop), one every `period_ms`, each on for `ms` at `level` %; with `accent` N > 0 the first tap and every Nth after it are at `accent_level` instead. A tap while a train runs changes it in place: the next tap comes period_ms after the last one started (at once if that has passed), the count starts again, the accent counts on; no done. Anything else running is replaced. A change is not a start: never BUSY. BUSY as pulse; INVALID_ARGS for ms 0, ms >= period_ms, ms above max_on_ms, or a train whose worst 10 s could spend the cooldown budget: ceil(10000 / period_ms) x (ms + 1) >= cooldown_pct x 100 (when cooldown_pct < 100); a train started on an unspent budget is then never cut for it. */
+export interface HapticTapArgs {
+  /** (ms; 20..60000) */
+  period_ms: number;
+  /** (ms) */
+  ms: number;
+  /** (1..100; default 100) */
+  level: number;
+  /** taps; 0 = until stop (0..10000; default 1) */
+  count: number;
+  /** every Nth tap from the first at accent_level; 0 = none (0..32; default 0) */
+  accent: number;
+  /** (1..100; default 100) */
+  accent_level: number;
+}
+
+/** Absent fields take their defaults; throws RangeError on a value the field type cannot carry. */
+export function encodeHapticTapArgs(v: Partial<HapticTapArgs> = {}): Uint8Array {
+  const w = new Writer();
+  const f1 = $.int(v.period_ms ?? 0, 0, 65535, 'period_ms');
+  if (f1 !== 0) w.fieldUint(1, f1);
+  const f2 = $.int(v.ms ?? 0, 0, 65535, 'ms');
+  if (f2 !== 0) w.fieldUint(2, f2);
+  w.fieldUint(3, $.int(v.level ?? 100, 0, 255, 'level'));
+  w.fieldUint(4, $.int(v.count ?? 1, 0, 65535, 'count'));
+  const f5 = $.int(v.accent ?? 0, 0, 255, 'accent');
+  if (f5 !== 0) w.fieldUint(5, f5);
+  w.fieldUint(6, $.int(v.accent_level ?? 100, 0, 255, 'accent_level'));
+  return w.finish();
+}
+
+export function decodeHapticTapArgs(bytes: Uint8Array): Decoded<HapticTapArgs> {
+  const r = new Reader(bytes);
+  const v: HapticTapArgs = { period_ms: 0, ms: 0, level: 100, count: 1, accent: 0, accent_level: 100 };
+  while (r.next()) {
+    switch (r.field) {
+      case 1:
+        v.period_ms = r.readUint(65535);
+        break;
+      case 2:
+        v.ms = r.readUint(65535);
+        break;
+      case 3:
+        v.level = r.readUint(255);
+        break;
+      case 4:
+        v.count = r.readUint(65535);
+        break;
+      case 5:
+        v.accent = r.readUint(255);
+        break;
+      case 6:
+        v.accent_level = r.readUint(255);
+        break;
+      default:
+        r.skip();
+    }
+  }
+  return $.done(r, v);
+}
+
 /** fr.haptic.cut event (id 1, normal). A running pulse or pattern was stopped by the supply or by max_on_ms. */
 export interface HapticCut {
   reason: HapticCutReason | number;
@@ -175,6 +246,40 @@ export function decodeHapticCut(bytes: Uint8Array): Decoded<HapticCut> {
         break;
       case 2:
         v.supply_mv = r.readUint(65535);
+        break;
+      default:
+        r.skip();
+    }
+  }
+  return $.done(r, v);
+}
+
+/** fr.haptic.done event (id 2, normal). 1.1. A pulse, pattern or tap train ended: done (ran to its end), stopped (stop), replaced (by another program; a tap that changes a running train is not a replacement), hub_lost (the hub fell silent), cut (after the `cut` event). */
+export interface HapticDone {
+  program: HapticProgram | number;
+  reason: HapticDoneReason | number;
+}
+
+/** Absent fields take their defaults; throws RangeError on a value the field type cannot carry. */
+export function encodeHapticDone(v: Partial<HapticDone> = {}): Uint8Array {
+  const w = new Writer();
+  const f1 = $.enumValue(HapticProgram, v.program ?? 'pulse', 'program', 255);
+  if (f1 !== 0) w.fieldUint(1, f1);
+  const f2 = $.enumValue(HapticDoneReason, v.reason ?? 'done', 'reason', 255);
+  if (f2 !== 0) w.fieldUint(2, f2);
+  return w.finish();
+}
+
+export function decodeHapticDone(bytes: Uint8Array): Decoded<HapticDone> {
+  const r = new Reader(bytes);
+  const v: HapticDone = { program: 'pulse', reason: 'done' };
+  while (r.next()) {
+    switch (r.field) {
+      case 1:
+        v.program = $.readEnum(r, HapticProgramNames, 255);
+        break;
+      case 2:
+        v.reason = $.readEnum(r, HapticDoneReasonNames, 255);
         break;
       default:
         r.skip();
@@ -244,16 +349,18 @@ export function decodeHapticSupplyMvState(bytes: Uint8Array): Decoded<HapticSupp
 export const HAPTIC_CAP: $.CapInfo = {
   id: 0x000e,
   name: 'fr.haptic',
-  version: { major: 1, minor: 0 },
+  version: { major: 1, minor: 1 },
   section: 'standard',
   traits: { fields: [{ name: 'pwm' }], maxSize: 2, encode: encodeHapticTraits, decode: decodeHapticTraits },
   commands: [
     { id: 1, name: 'pulse', delivery: 'reliable', idempotent: false, visibility: 'public', args: { fields: [{ name: 'ms' }, { name: 'level', range: [1, 100] }], maxSize: 7, encode: encodeHapticPulseArgs, decode: decodeHapticPulseArgs }, result: null },
     { id: 2, name: 'play', delivery: 'reliable', idempotent: false, visibility: 'public', args: { fields: [{ name: 'steps' }, { name: 'level', range: [1, 100] }, { name: 'repeat', range: [1, 100] }], maxSize: 104, encode: encodeHapticPlayArgs, decode: decodeHapticPlayArgs }, result: null },
     { id: 3, name: 'stop', delivery: 'reliable', idempotent: true, visibility: 'public', args: $.EMPTY_CODEC, result: null },
+    { id: 4, name: 'tap', delivery: 'reliable', idempotent: false, visibility: 'public', args: { fields: [{ name: 'period_ms', range: [20, 60000], zeroExempt: true }, { name: 'ms' }, { name: 'level', range: [1, 100] }, { name: 'count', range: [0, 10000] }, { name: 'accent', range: [0, 32] }, { name: 'accent_level', range: [1, 100] }], maxSize: 21, encode: encodeHapticTapArgs, decode: decodeHapticTapArgs }, result: null },
   ],
   events: [
     { id: 1, name: 'cut', priority: 'normal', codec: { fields: [{ name: 'reason', members: HapticCutReason }, { name: 'supply_mv' }], maxSize: 7, encode: encodeHapticCut, decode: decodeHapticCut } },
+    { id: 2, name: 'done', priority: 'normal', codec: { fields: [{ name: 'program', members: HapticProgram }, { name: 'reason', members: HapticDoneReason }], maxSize: 6, encode: encodeHapticDone, decode: decodeHapticDone } },
   ],
   properties: [
     { id: 1, name: 'active', codec: { fields: [{ name: 'active' }], maxSize: 2, encode: encodeHapticActiveState, decode: decodeHapticActiveState } },

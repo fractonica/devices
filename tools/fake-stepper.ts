@@ -1,7 +1,9 @@
 // A fake stepper board for the scratch hub (tools/dash-dev.ts --stepper; design stepper-s1 D16): a FakeNode with
-// c3s-stepper's instances (boot fr.button, status fr.led, motor fr.stepper, buzzer fr.buzzer) whose motor answers as
-// StepperService does (D10-D12), and whose buzzer as BuzzerService (tools/fake-buzzer.ts, design buzzer-b1 D10), so
-// the dashboard's stepper and buzzer panels can be worked on without a board:
+// c3s-stepper's instances (boot fr.button, status fr.led, motor fr.stepper, buzzer fr.buzzer, and since design
+// haptic-h1 cap fr.battery, kick and buzz fr.haptic) whose motor answers as StepperService does (D10-D12), whose buzzer
+// as BuzzerService (tools/fake-buzzer.ts, design buzzer-b1 D10), and whose capacitor, solenoid and vibration motor as
+// BatteryService and HapticService (tools/fake-haptic.ts, design haptic-h1 D12), so the dashboard's stepper, buzzer
+// and haptic panels can be worked on without a board:
 // - the motion states (released, holding, moving, stopping, fault) and the service's answers: INVALID_ARGS above
 //   max_speed_hz or accel, beyond the limits or ±10⁹, or for limit_min ≥ limit_max; BUSY in a fault's back-off, with
 //   limits on and the position unknown, for hold, zero and configure while moving, and for a new step_mode or
@@ -35,13 +37,18 @@ import {
 
 import { FakeNode, STATUS } from '../packages/hub/test/fake-node.ts';
 import { BuzzerSim } from './fake-buzzer.ts';
+import { BUZZ_CONFIG, BUZZ_PORT, CAP_PORT, HAPTIC_CAPS, HapticSim, KICK_CONFIG, KICK_PORT, LicSim } from './fake-haptic.ts';
 
-/** c3s-stepper's instances and slots (design stepper-s1 D13, buzzer-b1 D8): boot 1, status 2, motor 3, buzzer 4. */
+/**
+ * c3s-stepper's instances and slots (design stepper-s1 D13, buzzer-b1 D8, haptic-h1 D6): boot 1, status 2, motor 3,
+ * buzzer 4, cap 5, kick 6, buzz 7.
+ */
 export const STEPPER_CAPS = [
   { port: 1, cap_id: 0x0001, name: 'boot' },
   { port: 2, cap_id: 0x0002, name: 'status' },
   { port: 3, cap_id: 0x0012, name: 'motor' },
   { port: 4, cap_id: 0x0013, name: 'buzzer' },
+  ...HAPTIC_CAPS,
 ];
 export const MOTOR_PORT = 3;
 export const BUZZER_PORT = 4;
@@ -579,8 +586,14 @@ export interface FakeStepper {
   node: FakeNode;
   sim: StepperSim;
   buzzer: BuzzerSim;
+  /** The LIC (fr.battery `cap`), the solenoid (`kick`) and the vibration motor (`buzz`). */
+  cell: LicSim;
+  kick: HapticSim;
+  buzz: HapticSim;
   /** nFAULT fell: fault {driver}. */
   fault(): void;
+  /** The capacitor drawn down to 3.0 V, its charger held off for 30 s (BUSY, then a cut). */
+  drain(): void;
   stop(): Promise<void>;
 }
 
@@ -646,6 +659,58 @@ export async function startFakeStepper(o: FakeStepperOptions): Promise<FakeStepp
       return { status: d.ok ? buzzer.command(c.name, d.value) : STATUS.INVALID_ARGS };
     });
   }
+  // The capacitor, the solenoid and the vibration motor (design haptic-h1 D12).
+  const batCap = findCap('fr.battery')!;
+  const hapCap = findCap('fr.haptic')!;
+  const hub = () => (node.welcome && !node.tcpClosed ? { epoch: node.welcome.hub_epoch, heardAt } : null);
+  const cell = new LicSim({
+    now: () => performance.now(),
+    out: {
+      state(name, value) {
+        if (!closed) {
+          node.state(CAP_PORT, batCap.properties.find((p) => p.name === name)!.id, enc('fr.battery', 'state', name, { [name]: value }));
+        }
+      },
+      event(name, fields) {
+        if (!closed) {
+          node.event(CAP_PORT, batCap.events.find((e) => e.name === name)!.id, enc('fr.battery', 'event', name, fields));
+        }
+      },
+    },
+  });
+  const haptic = (port: number, config: typeof KICK_CONFIG | typeof BUZZ_CONFIG) =>
+    new HapticSim({
+      config: { kind: config.kind, rated_mv: config.rated_mv },
+      now: () => performance.now(),
+      supply: cell,
+      draw: (ampMs) => cell.draw(ampMs),
+      hub,
+      out: {
+        state(name, value) {
+          if (!closed) {
+            node.state(port, hapCap.properties.find((p) => p.name === name)!.id, enc('fr.haptic', 'state', name, { [name]: value }));
+          }
+        },
+        event(name, fields) {
+          if (!closed) {
+            node.event(port, hapCap.events.find((e) => e.name === name)!.id, enc('fr.haptic', 'event', name, fields));
+          }
+        },
+      },
+    });
+  const kick = haptic(KICK_PORT, KICK_CONFIG);
+  const buzz = haptic(BUZZ_PORT, BUZZ_CONFIG);
+  for (const c of batCap.commands) {
+    node.handlers.set(`${CAP_PORT}/${c.id}`, () => ({ status: cell.command(c.name) }));
+  }
+  for (const [port, sim] of [[KICK_PORT, kick], [BUZZ_PORT, buzz]] as const) {
+    for (const c of hapCap.commands) {
+      node.handlers.set(`${port}/${c.id}`, (args) => {
+        const d = decodeMember('fr.haptic', 'args', c.name, args);
+        return { status: d.ok ? sim.command(c.name, d.value) : STATUS.INVALID_ARGS };
+      });
+    }
+  }
   // The status LED's set, as the camera's fake keeps it.
   node.handlers.set('2/1', (args) => {
     const d = decodeMember('fr.led', 'args', 'set', args);
@@ -658,6 +723,9 @@ export async function startFakeStepper(o: FakeStepperOptions): Promise<FakeStepp
   await node.connect(10_000);
   sim.reportAll();
   buzzer.reportAll();
+  cell.reportAll();
+  kick.reportAll();
+  buzz.reportAll();
   const timer = setInterval(() => {
     if (node.frames.length !== framesSeen) {
       framesSeen = node.frames.length;
@@ -665,12 +733,19 @@ export async function startFakeStepper(o: FakeStepperOptions): Promise<FakeStepp
     }
     sim.tick();
     buzzer.tick();
+    kick.tick();
+    buzz.tick();
+    cell.tick();
   }, TICK_MS);
   return {
     node,
     sim,
     buzzer,
+    cell,
+    kick,
+    buzz,
     fault: () => sim.fault('driver'),
+    drain: () => cell.drain(),
     async stop() {
       closed = true;
       clearInterval(timer);

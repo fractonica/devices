@@ -118,6 +118,8 @@ export const CapInstanceSchema = z.looseObject({
   /** From the running build's manifest (design c6 D13); null for firmware the hub did not build. */
   traits: z.record(z.string(), z.unknown()).nullable(),
   driver: z.string().optional(),
+  /** The build's config for the instance (the manifest's), when it set any; absent for firmware the hub did not build. */
+  config: z.record(z.string(), z.unknown()).optional(),
 });
 
 /** The chips a registry row names (the hub's CHIP_IDS). */

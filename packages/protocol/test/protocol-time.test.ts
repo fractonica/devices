@@ -6,8 +6,8 @@ import { findOp, HUB_EVENT_FIELDS, HUB_EVENT_TYPES, LOCAL_TIME_OPS, OPS, REGISTR
 
 describe('time ops', () => {
   it('adds four read-only queries at the end, on `fr time …`, and moves REGISTRY_HASH', () => {
-    expect(OPS.filter((o) => o.name !== 'hub_doctor_fix' && o.name !== 'device_enroll' && !/^device_(hubs_set|hubs_get|share)$|^network_join$|^network_admit$|^hub_(name_set|peers)$/.test(o.name))).toHaveLength(122); // the dashboard's health adds one (protocol-hub-health.test.ts), a board for another hub one (protocol-for-hub.test.ts)
-    expect(OPS.filter((o) => !/^device_(hubs_set|hubs_get|share)$|^network_join$|^network_admit$|^hub_(name_set|peers)$/.test(o.name)).slice(-4).map((o) => o.name)).toEqual(['time_now', 'time_convert', 'time_ladder', 'time_next']); // the multi-hub ops follow (protocol-multi-hub.test.ts)
+    expect(OPS.filter((o) => o.name !== 'hub_doctor_fix' && o.name !== 'device_enroll' && !/^device_(hubs_set|hubs_get|share)$|^network_join$|^network_admit$|^hub_(name_set|peers)$|^haptic_tap$/.test(o.name))).toHaveLength(122); // the dashboard's health adds one (protocol-hub-health.test.ts), a board for another hub one (protocol-for-hub.test.ts)
+    expect(OPS.filter((o) => !/^device_(hubs_set|hubs_get|share)$|^network_join$|^network_admit$|^hub_(name_set|peers)$|^haptic_tap$/.test(o.name)).slice(-4).map((o) => o.name)).toEqual(['time_now', 'time_convert', 'time_ladder', 'time_next']); // the multi-hub ops follow (protocol-multi-hub.test.ts)
     expect(LOCAL_TIME_OPS).toEqual(TIME_OPS.map((o) => o.name));
     for (const o of TIME_OPS) {
       expect(o, o.name).toMatchObject({ kind: 'query', tier: 'read' });

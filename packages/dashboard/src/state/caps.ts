@@ -18,6 +18,8 @@ export interface InstanceView {
   v: string;
   traits: Record<string, unknown> | null;
   driver?: string;
+  /** The build's config (capability_list, from the manifest) when it set any: a haptic's kind and limits. */
+  config?: Record<string, unknown>;
 }
 
 export function traitAllows(req: CatalogRequires | undefined, traits: Record<string, unknown> | null): boolean {

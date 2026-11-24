@@ -18,13 +18,10 @@ namespace fr::drv {
 namespace {
 
 constexpr const char *TAG = "haptic_ledc";
-// LEDC timers 1 and 2, channels from the middle up: clear of fixture_gpio (timer 0, channels from 0 up) and st7789_spi
-// (timer 3, channels from the top down). Codegen counts the channels against the board's ledc_channels.
-// A timer per distinct pwm_hz: LEDC timers 1 and 2.
+// The channel is codegen's (design haptic-h1 D5: board.ts bindLedc), clear of every driver with fixed LEDC slots. A
+// timer per distinct pwm_hz: LEDC timers 1 and 2 (codegen refuses a profile where a fixed driver holds the one taken).
 constexpr ledc_mode_t kMode = LEDC_LOW_SPEED_MODE;
 constexpr ledc_timer_t kTimers[] = {LEDC_TIMER_1, LEDC_TIMER_2};
-constexpr int kFirstChannel = LEDC_CHANNEL_MAX / 2;
-int s_next = kFirstChannel;
 uint16_t s_timer_hz[2] = {0, 0};  // 0: free
 
 // Every instance's pad, for the restart and panic hooks (design power-p1 review B1): a CPU reset (esp_restart_noos, a
@@ -60,7 +57,7 @@ uint32_t steps_of(uint16_t permille)
 
 Status HapticLedc::init(Core &)
 {
-    if (!GPIO_IS_VALID_OUTPUT_GPIO(cfg_.out) || s_next >= LEDC_CHANNEL_MAX) {
+    if (!GPIO_IS_VALID_OUTPUT_GPIO(cfg_.out) || cfg_.channel >= LEDC_CHANNEL_MAX) {
         return std::unexpected(Err::invalid_args);
     }
     const auto pin = static_cast<gpio_num_t>(cfg_.out);
@@ -113,15 +110,15 @@ Status HapticLedc::init(Core &)
     ledc_channel_config_t c = {};
     c.gpio_num = cfg_.out;
     c.speed_mode = kMode;
-    c.channel = static_cast<ledc_channel_t>(s_next);
+    c.channel = static_cast<ledc_channel_t>(cfg_.channel);
     c.timer_sel = kTimers[timer];
     c.duty = 0;
     c.hpoint = 0;
     if (ledc_channel_config(&c) != ESP_OK) {
-        ESP_LOGE(TAG, "GPIO%u: LEDC channel %d refused", unsigned{cfg_.out}, s_next);
+        ESP_LOGE(TAG, "GPIO%u: LEDC channel %u refused", unsigned{cfg_.out}, unsigned{cfg_.channel});
         return std::unexpected(Err::failed);
     }
-    channel_ = static_cast<int8_t>(s_next++);
+    channel_ = static_cast<int8_t>(cfg_.channel);
     for (int8_t &p : s_pins) {
         if (p < 0) {
             p = static_cast<int8_t>(cfg_.out);

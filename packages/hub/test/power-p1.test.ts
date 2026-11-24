@@ -188,6 +188,11 @@ async function board(): Promise<Board> {
       b.lic.pulsing = false;
       return undefined;
     });
+    node.handlers.set(`${port}/4`, (args) => {
+      const a = dec('fr.haptic', 'tap', args);
+      b.sent.push({ inst, cmd: 'tap', args: a });
+      return answer(`${inst}.tap`) ?? undefined;
+    });
   }
   await node.connected(r.events);
   return b;
@@ -304,6 +309,56 @@ describe('battery and haptic ops against a fake c6w-scale board (D11)', { timeou
     b.refuse['kick.play'] = STATUS.INVALID_ARGS;
     await expect(call(b, 'haptic_play', { device: 'scale-c6', instance: 'kick', steps: [2000], level: 100, repeat: 1 })).rejects.toMatchObject({ code: 'INVALID_ARGS', message: expect.stringContaining('max_on_ms') });
     await expect(call(b, 'haptic_pulse', { device: 'scale-c6', instance: 'battery', ms: 200, level: 100 })).rejects.toMatchObject({ code: 'INVALID_ARGS', message: expect.stringContaining('fr.battery, not fr.haptic') });
+  });
+
+  it('haptic tap (fr.haptic 1.1, design haptic-h1 D10): a rate becomes a period, the build\'s budget refuses first, the node\'s refusals in words', async () => {
+    const b = await board();
+    b.lic.stepMv = 0;
+    expect(await call(b, 'haptic_tap', { device: 'scale-c6', instance: 'kick', hz: 8, ms: 15, level: 70, count: 0 })).toEqual({
+      device: DEV,
+      alias: 'scale-c6',
+      instance: 'kick',
+      period_ms: 125,
+      hz: 8,
+      ms: 15,
+      level: 70,
+      count: 0,
+      accent: 0,
+      accent_level: 100,
+    });
+    expect(await call(b, 'haptic_tap', { device: 'scale-c6', instance: 'kick', hz: 3, ms: 20 })).toMatchObject({ period_ms: 333, hz: 3.003 });
+    expect(await call(b, 'haptic_tap', { device: 'scale-c6', period_ms: 500, ms: 40, accent: 4, accent_level: 100, level: 50, count: 0 })).toMatchObject({ instance: 'buzz', period_ms: 500 });
+    expect(await call(b, 'haptic_tap', { device: 'scale-c6', instance: 'kick' })).toMatchObject({ period_ms: 1000, ms: 20, count: 1 }); // one tap
+    expect(b.sent.map((s) => [s.inst, s.cmd, s.args])).toEqual([
+      ['kick', 'tap', { period_ms: 125, ms: 15, level: 70, count: 0, accent: 0, accent_level: 100 }],
+      ['kick', 'tap', { period_ms: 333, ms: 20, level: 100, count: 1, accent: 0, accent_level: 100 }],
+      ['buzz', 'tap', { period_ms: 500, ms: 40, level: 50, count: 0, accent: 4, accent_level: 100 }],
+      ['kick', 'tap', { period_ms: 1000, ms: 20, level: 100, count: 1, accent: 0, accent_level: 100 }],
+    ]);
+    await expect(call(b, 'haptic_tap', { device: 'scale-c6', period_ms: 100, hz: 10 })).rejects.toMatchObject({ code: 'INVALID_ARGS', message: expect.stringContaining('not both') });
+    await expect(call(b, 'haptic_tap', { device: 'scale-c6', period_ms: 20, ms: 20 })).rejects.toMatchObject({ code: 'INVALID_ARGS', message: expect.stringContaining('needs a break') });
+    // Without the build's manifest the node decides; its refusal comes back in fr.haptic's words.
+    b.refuse['kick.tap'] = STATUS.INVALID_ARGS;
+    await expect(call(b, 'haptic_tap', { device: 'scale-c6', instance: 'kick', hz: 20, ms: 14, count: 0 })).rejects.toMatchObject({ code: 'INVALID_ARGS', message: expect.stringContaining('cooldown budget') });
+    b.refuse['kick.tap'] = STATUS.UNSUPPORTED;
+    await expect(call(b, 'haptic_tap', { device: 'scale-c6', instance: 'kick', hz: 2 })).rejects.toMatchObject({ code: 'CAPABILITY_UNSUPPORTED', message: expect.stringContaining('fr.haptic 1.0') });
+    delete b.refuse['kick.tap'];
+    b.refuse['buzz.tap'] = STATUS.BUSY;
+    await expect(call(b, 'haptic_tap', { device: 'scale-c6', hz: 2 })).rejects.toMatchObject({ code: 'DEVICE_BUSY' });
+    delete b.refuse['buzz.tap'];
+    // With the build's manifest (kick: a solenoid, 30 % of 10 s, max_on 1,000 ms) the hub refuses first, with the longest tap.
+    addManifest(b);
+    const sent = b.sent.length;
+    await expect(call(b, 'haptic_tap', { device: 'scale-c6', instance: 'kick', hz: 20, ms: 14, count: 0 })).rejects.toMatchObject({
+      code: 'INVALID_ARGS',
+      message: expect.stringContaining('a tap can be 13 ms at most'),
+      details: { period_ms: 50, longest_ms: 13, cooldown_pct: 30 },
+    });
+    await expect(call(b, 'haptic_tap', { device: 'scale-c6', instance: 'kick', period_ms: 5000, ms: 1001 })).rejects.toMatchObject({ code: 'INVALID_ARGS', message: expect.stringContaining('max_on_ms (1000 ms)') });
+    expect(b.sent.length).toBe(sent);
+    expect(await call(b, 'haptic_tap', { device: 'scale-c6', instance: 'kick', hz: 20, ms: 13, count: 0 })).toMatchObject({ period_ms: 50, ms: 13 });
+    // An ERM has no budget: 19 ms of every 20 is fine.
+    expect(await call(b, 'haptic_tap', { device: 'scale-c6', instance: 'buzz', period_ms: 20, ms: 19, count: 0 })).toMatchObject({ period_ms: 20, ms: 19 });
   });
 
   it('a haptic cut and the battery events become the hub power.* events, with the installed cell', async () => {

@@ -293,12 +293,27 @@ describe('the repo', () => {
   it('stepper-c3 covers the buzzer on GPIO4 and meters it before it is wired (design buzzer-b1 §10)', () => {
     // A magnetic coil straight on a GPIO draws too much: the meter step decides the series resistor first.
     const g = loadCatalog(REPO).guides.get('stepper-c3')!;
-    expect(g.covers).toEqual(['motor', 'buzzer']);
+    expect(g.covers).toEqual(['motor', 'buzzer', 'cap', 'kick', 'buzz']);
     expect(g.connections.find((c) => c.instance === 'buzzer')).toMatchObject({ pin: 'gpio.4', check: 'ok' });
     const steps = g.sections.find((s) => s.id === 'buzzer')!.steps;
     expect(steps.map((s) => s.id)).toEqual(['buzzer-meter', 'buzzer-wire', 'buzzer-first-beep']);
     expect(steps[0]!.pins).toEqual([]);
     expect(steps[1]!.pins).toEqual(['gpio.4', 'gnd']);
     expect(g.bom.map((b) => b.part)).toContain('passive-buzzer-module');
+  });
+
+  it('stepper-c3 covers the haptics: the LIC on GPIO3, the solenoid on GPIO1, the motor on GPIO0, checked before power (design haptic-h1 D9)', () => {
+    const g = loadCatalog(REPO).guides.get('stepper-c3')!;
+    expect(g.connections.filter((c) => ['cap', 'kick', 'buzz'].includes(c.instance ?? '')).map((c) => [c.instance, c.bind, c.pin, c.check])).toEqual([
+      ['cap', 'sense', 'gpio.3', 'ok'],
+      ['kick', 'out', 'gpio.1', 'ok'],
+      ['buzz', 'out', 'gpio.0', 'ok'],
+    ]);
+    const steps = g.sections.find((s) => s.id === 'haptics')!.steps;
+    // The cell is metered and the switches pulled down before anything is powered; the motor never on a 1N4007.
+    expect(steps.map((s) => s.id).slice(0, 3)).toEqual(['lic-check', 'switches', 'charger']);
+    expect(steps.find((s) => s.id === 'motor-erm')!.note).toMatch(/Never a 1N4007/);
+    expect(g.diagrams.map((d) => d.id)).toEqual(['map', 'haptics']);
+    expect(g.bom.map((b) => b.part)).toEqual(expect.arrayContaining(['lic-h-0825', 'tp4056-protected', 'solenoid-micro-3v', 'ao3400a', 'erm-cylinder']));
   });
 });

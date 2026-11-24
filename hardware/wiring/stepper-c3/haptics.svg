@@ -1,0 +1,119 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="100%" viewBox="0 0 760 600" role="img"><title>Haptics on the C3 Super Mini: the LIC on a protected TP4056, the solenoid on GPIO1 and the vibration motor on GPIO0</title><desc>The Super Mini's 5V to the protected TP4056 module's IN+, IN− and OUT− to GND. B+ and B− to the LIC-H-0825 lithium-ion capacitor (its stripe marks −; B− is not GND). OUT+ feeds the solenoid's +, the motor's + and the sense divider: 1 MΩ from OUT+ to GPIO3, 1 MΩ and 100 nF from GPIO3 to GND. GPIO1 through 100 Ω to the gate (pin 1) of AO3400 #1, 10 kΩ from that gate to GND, its source (pin 2) to GND, its drain (pin 3) to the solenoid's −, a 1N5819 across the solenoid with its stripe toward +. GPIO0 the same to AO3400 #2 and the motor, a 1N5819 or 1N4148 across the motor.</desc>
+<!-- left: the C3's pins; top: the charger, the LIC and the divider; below: the two low-side switches. Every ground symbol is GND. -->
+<g fill="none" stroke="#D85A30" stroke-width="1.5">
+  <path d="M100 75 H150"/>
+  <path d="M310 75 H680"/>
+</g>
+<text class="ts" x="495" y="64" text-anchor="middle">OUT+ (2.8–4.2 V)</text>
+<g fill="none" stroke="var(--s)" stroke-width="1.5">
+  <!-- charger grounds, B+ and B- -->
+  <path d="M150 120 H130 V132"/><path d="M310 120 H330 V132"/>
+  <path d="M190 152 V178"/><path d="M270 152 V178"/>
+  <!-- the divider -->
+  <path d="M400 75 V110 M400 160 V270 M400 320 V332"/>
+  <path d="M100 245 H400"/>
+  <path d="M400 245 H440 V278 M440 286 V332"/>
+  <!-- the solenoid and its switch -->
+  <path d="M540 75 V100 M540 160 V330 M540 390 V402"/>
+  <path d="M540 85 H600 V110 M600 134 V185 H540"/>
+  <path d="M100 360 H200 M255 360 H500"/>
+  <path d="M460 360 V380 M460 420 V432"/>
+  <!-- the motor and its switch -->
+  <path d="M680 75 V100 M680 160 V440 M680 500 V512"/>
+  <path d="M680 85 H735 V110 M735 134 V185 H680"/>
+  <path d="M100 470 H200 M255 470 H640"/>
+  <path d="M600 470 V490 M600 530 V542"/>
+  <path d="M100 545 H130 V557"/>
+</g>
+<!-- ground symbols -->
+<g fill="none" stroke="var(--s)" stroke-width="1.5">
+  <path d="M120 132 H140 M124 136 H136 M128 140 H132"/>
+  <path d="M320 132 H340 M324 136 H336 M328 140 H332"/>
+  <path d="M390 332 H410 M394 336 H406 M398 340 H402"/>
+  <path d="M430 332 H450 M434 336 H446 M438 340 H442"/>
+  <path d="M530 402 H550 M534 406 H546 M538 410 H542"/>
+  <path d="M450 432 H470 M454 436 H466 M458 440 H462"/>
+  <path d="M670 512 H690 M674 516 H686 M678 520 H682"/>
+  <path d="M590 542 H610 M594 546 H606 M598 550 H602"/>
+  <path d="M120 557 H140 M124 561 H136 M128 565 H132"/>
+</g>
+<g fill="var(--s)">
+  <circle cx="400" cy="245" r="4"/><circle cx="540" cy="185" r="4"/><circle cx="680" cy="185" r="4"/>
+  <circle cx="460" cy="360" r="4"/><circle cx="600" cy="470" r="4"/>
+</g>
+<g fill="#D85A30"><circle cx="400" cy="75" r="4"/><circle cx="540" cy="85" r="4"/><circle cx="680" cy="85" r="4"/></g>
+<!-- the C3's pins -->
+<g class="c-teal">
+  <rect x="30" y="60" width="70" height="30" rx="6" stroke-width="0.5"/><text class="th" x="65" y="75" text-anchor="middle" dominant-baseline="central">5V</text>
+  <rect x="30" y="230" width="70" height="30" rx="6" stroke-width="0.5"/><text class="th" x="65" y="245" text-anchor="middle" dominant-baseline="central">GPIO3</text>
+  <rect x="30" y="345" width="70" height="30" rx="6" stroke-width="0.5"/><text class="th" x="65" y="360" text-anchor="middle" dominant-baseline="central">GPIO1</text>
+  <rect x="30" y="455" width="70" height="30" rx="6" stroke-width="0.5"/><text class="th" x="65" y="470" text-anchor="middle" dominant-baseline="central">GPIO0</text>
+  <rect x="30" y="530" width="70" height="30" rx="6" stroke-width="0.5"/><text class="th" x="65" y="545" text-anchor="middle" dominant-baseline="central">GND</text>
+</g>
+<!-- the charger and the LIC -->
+<g class="c-purple">
+  <rect x="150" y="40" width="160" height="112" rx="6" stroke-width="0.5"/>
+  <text class="th" x="230" y="100" text-anchor="middle" dominant-baseline="central">TP4056 (protected)</text>
+</g>
+<g class="ts">
+  <text x="156" y="79">IN+</text><text x="156" y="124">IN−</text>
+  <text x="304" y="79" text-anchor="end">OUT+</text><text x="304" y="124" text-anchor="end">OUT−</text>
+  <text x="190" y="146" text-anchor="middle">B+</text><text x="270" y="146" text-anchor="middle">B−</text>
+</g>
+<g class="c-gray">
+  <rect x="170" y="178" width="120" height="48" rx="6" stroke-width="0.5"/>
+  <text class="th" x="230" y="196" text-anchor="middle" dominant-baseline="central">LIC-H-0825</text>
+  <text class="ts" x="230" y="215" text-anchor="middle" dominant-baseline="central">90 F · stripe = −</text>
+</g>
+<text class="ts" x="298" y="206">B− is not GND</text>
+<!-- resistors and the capacitor -->
+<g class="c-amber">
+  <rect x="392" y="110" width="16" height="50" rx="2" stroke-width="0.5"/>
+  <rect x="392" y="270" width="16" height="50" rx="2" stroke-width="0.5"/>
+  <rect x="200" y="352" width="55" height="16" rx="2" stroke-width="0.5"/>
+  <rect x="452" y="380" width="16" height="40" rx="2" stroke-width="0.5"/>
+  <rect x="200" y="462" width="55" height="16" rx="2" stroke-width="0.5"/>
+  <rect x="592" y="490" width="16" height="40" rx="2" stroke-width="0.5"/>
+</g>
+<g stroke="var(--p)" stroke-width="2.5"><line x1="428" y1="278" x2="452" y2="278"/><line x1="428" y1="286" x2="452" y2="286"/></g>
+<g class="ts">
+  <text x="386" y="139" text-anchor="end">1 MΩ</text>
+  <text x="386" y="299" text-anchor="end">1 MΩ</text>
+  <text x="458" y="286">100 nF</text>
+  <text x="227" y="345" text-anchor="middle">100 Ω</text>
+  <text x="446" y="404" text-anchor="end">10 kΩ</text>
+  <text x="227" y="455" text-anchor="middle">100 Ω</text>
+  <text x="586" y="514" text-anchor="end">10 kΩ</text>
+</g>
+<!-- the loads and their diodes -->
+<g class="c-coral">
+  <rect x="505" y="100" width="70" height="60" rx="6" stroke-width="0.5"/>
+  <text class="th" x="540" y="122" text-anchor="middle" dominant-baseline="central">Solenoid</text>
+  <text class="ts" x="540" y="142" text-anchor="middle" dominant-baseline="central">5.7 Ω</text>
+  <rect x="645" y="100" width="70" height="60" rx="6" stroke-width="0.5"/>
+  <text class="th" x="680" y="122" text-anchor="middle" dominant-baseline="central">Motor</text>
+  <text class="ts" x="680" y="142" text-anchor="middle" dominant-baseline="central">ERM</text>
+</g>
+<g fill="none" stroke="var(--p)" stroke-width="1.5">
+  <polygon points="588,134 612,134 600,110"/><polygon points="723,134 747,134 735,110"/>
+</g>
+<g stroke="var(--p)" stroke-width="2.5"><line x1="588" y1="110" x2="612" y2="110"/><line x1="723" y1="110" x2="747" y2="110"/></g>
+<g class="ts">
+  <text x="532" y="228" text-anchor="end">1N5819, stripe to +</text>
+  <text x="756" y="204" text-anchor="end">1N5819</text><text x="756" y="218" text-anchor="end">or 1N4148</text>
+</g>
+<!-- the switches -->
+<g class="c-purple">
+  <rect x="500" y="330" width="80" height="60" rx="6" stroke-width="0.5"/>
+  <text class="th" x="540" y="352" text-anchor="middle" dominant-baseline="central">AO3400 #1</text>
+  <text class="ts" x="540" y="372" text-anchor="middle" dominant-baseline="central">G1 · S2 · D3</text>
+  <rect x="640" y="440" width="80" height="60" rx="6" stroke-width="0.5"/>
+  <text class="th" x="680" y="462" text-anchor="middle" dominant-baseline="central">AO3400 #2</text>
+  <text class="ts" x="680" y="482" text-anchor="middle" dominant-baseline="central">G1 · S2 · D3</text>
+</g>
+<g class="ts">
+  <text x="548" y="324">D</text><text x="528" y="400" text-anchor="end">S</text><text x="492" y="352" text-anchor="end">G</text>
+  <text x="688" y="434">D</text><text x="668" y="510" text-anchor="end">S</text><text x="632" y="462" text-anchor="end">G</text>
+</g>
+<text class="ts" x="400" y="590" text-anchor="middle">Gate high → AO3400 on → load on. The 10 kΩ holds each gate low through boot, reset and flashing.</text>
+</svg>

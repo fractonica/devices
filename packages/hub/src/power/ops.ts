@@ -5,9 +5,25 @@
 // - battery_calibrate, battery_reset_calibration, battery_load (commands): the node's RESULT, its refusals in the
 //   capability's words (common.ts powerFailed).
 // - cell_* (the registry, cells.ts); cell_install and cell_uninstall tell the tracker; cell_test is a job (test.ts).
-// - haptic_pulse, haptic_play, haptic_stop (commands).
+// - haptic_pulse, haptic_play, haptic_stop, haptic_tap (commands). haptic_tap (fr.haptic 1.1, design haptic-h1 D10): a
+//   rate becomes a period; a train the build's budget refuses is refused here first, in words, with the longest tap
+//   that fits (the node's rule, hapticTrainFits).
 
-import { FrError, MAX_WAIT_S, parseHapticSteps, type BatteryRow, type BatteryStatus, type CellShow, type PowerOpName } from '@fractonica/protocol';
+import {
+  FrError,
+  HAPTIC_KIND_DEFAULTS,
+  HAPTIC_TAP_MAX_PERIOD_MS,
+  HAPTIC_TAP_MIN_PERIOD_MS,
+  hapticLongestTap,
+  hapticTrainFits,
+  MAX_WAIT_S,
+  parseHapticSteps,
+  type BatteryRow,
+  type BatteryStatus,
+  type CellShow,
+  type HapticTap,
+  type PowerOpName,
+} from '@fractonica/protocol';
 
 import { onlineDevice } from '../audio/ops.ts';
 import type { Device, Handler, HubContext, OpInput } from '../context.ts';
@@ -261,5 +277,55 @@ export const POWER_HANDLERS: Record<PowerOpName, Handler> = {
     await powerCommand(hub, dev, inst, 'stop', {});
     return { device: dev.device_id, alias: dev.alias, instance: inst };
   },
+
+  haptic_tap: async (input: OpInput<'haptic_tap'>, hub): Promise<HapticTap> => {
+    const dev = onlineDevice(hub, input.device);
+    const inst = hapticInstance(hub, dev, input.instance).name;
+    const period = tapPeriod(input.period_ms, input.hz);
+    if (input.ms >= period) {
+      throw new FrError('INVALID_ARGS', `a tap of ${input.ms} ms does not fit in a period of ${period} ms: each tap needs a break before the next`);
+    }
+    const limits = hapticLimits(manifestEntry(hub, dev, inst)?.config ?? null);
+    if (limits) {
+      if (input.ms > limits.max_on_ms) {
+        throw new FrError('INVALID_ARGS', `${dev.alias} ${inst}: a tap of ${input.ms} ms is above its max_on_ms (${limits.max_on_ms} ms)`);
+      }
+      if (!hapticTrainFits(period, input.ms, limits.cooldown_pct)) {
+        const longest = hapticLongestTap(period, limits.max_on_ms, limits.cooldown_pct);
+        throw new FrError(
+          'INVALID_ARGS',
+          `${dev.alias} ${inst}: ${input.ms} ms taps every ${period} ms would spend its cooldown budget (${limits.cooldown_pct} % of any 10 s); at this rate a tap can be ${longest} ms at most${longest > 0 ? '' : ' (none fits: slow down)'}`,
+          { details: { period_ms: period, longest_ms: longest, cooldown_pct: limits.cooldown_pct } },
+        );
+      }
+    }
+    const args = { period_ms: period, ms: input.ms, level: input.level, count: input.count, accent: input.accent, accent_level: input.accent_level };
+    await powerCommand(hub, dev, inst, 'tap', args, `tap ${input.ms} ms every ${period} ms`);
+    return { device: dev.device_id, alias: dev.alias, instance: inst, ...args, hz: Math.round((1000 / period) * 1000) / 1000 };
+  },
 };
+
+/** haptic_tap's period: period_ms, or a rate rounded to a whole period; one a second when neither is given. */
+export function tapPeriod(periodMs: number | undefined, hz: number | undefined): number {
+  if (periodMs !== undefined && hz !== undefined) {
+    throw new FrError('INVALID_ARGS', 'give period_ms or hz, not both');
+  }
+  const period = periodMs ?? (hz !== undefined ? Math.round(1000 / hz) : 1000);
+  if (period < HAPTIC_TAP_MIN_PERIOD_MS || period > HAPTIC_TAP_MAX_PERIOD_MS) {
+    throw new FrError('INVALID_ARGS', `a period of ${period} ms is outside ${HAPTIC_TAP_MIN_PERIOD_MS}..${HAPTIC_TAP_MAX_PERIOD_MS} ms (50 taps a second down to one a minute)`);
+  }
+  return period;
+}
+
+/** An fr.haptic instance's on-time limits from its build's config (0 = the kind's default), or null for an unknown build. */
+export function hapticLimits(config: Record<string, unknown> | null): { max_on_ms: number; cooldown_pct: number } | null {
+  if (!config) {
+    return null;
+  }
+  const kind = config.kind === 'solenoid' || config.kind === 1 ? 'solenoid' : 'erm';
+  const d = HAPTIC_KIND_DEFAULTS[kind];
+  const maxOn = num(config.max_on_ms);
+  const cool = num(config.cooldown_pct);
+  return { max_on_ms: maxOn && maxOn > 0 ? maxOn : d.max_on_ms, cooldown_pct: cool && cool > 0 ? cool : d.cooldown_pct };
+}
 

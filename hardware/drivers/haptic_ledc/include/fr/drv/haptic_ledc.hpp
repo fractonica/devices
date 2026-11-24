@@ -1,5 +1,5 @@
-// haptic_ledc (design power-p1 D7; spec 07 §7.8): hal::HapticOutput on one GPIO, LEDC low-speed PWM at pwm_hz (20 kHz)
-// with 10-bit duty. The pin is latched low before LEDC takes it, so the load never starts at boot. HapticService writes
+// haptic_ledc (design power-p1 D7, haptic-h1 D5; spec 07 §7.8): hal::HapticOutput on one GPIO, LEDC low-speed PWM at
+// pwm_hz (20 kHz) with 10-bit duty, on the LEDC channel codegen hands it. The pin is latched low before LEDC takes it, so the load never starts at boot. HapticService writes
 // the duty from the core task; the driver has no task or timer.
 #pragma once
 
@@ -17,6 +17,7 @@ public:
     struct Config {
         uint8_t out = 0;
         uint16_t pwm_hz = 20000;
+        uint8_t channel = 0;  // handed by codegen (design haptic-h1 D5)
     };
 
     explicit HapticLedc(const Config &cfg) : cfg_(cfg) {}

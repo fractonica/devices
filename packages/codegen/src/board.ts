@@ -419,6 +419,30 @@ const ONE_PER_FIRMWARE: Readonly<Record<string, string>> = { ledc_buzzer: 'it ow
 /** The rates fr.audio_in and fr.audio_out take (design audio-a1 D1; fr::hal::kAudioRates). */
 export const AUDIO_RATES: readonly number[] = [8000, 16000, 22050, 32000, 44100, 48000];
 
+/**
+ * LEDC slots (design haptic-h1 D5). The drivers that take fixed LEDC timers and channels in their code, mirrored here
+ * so codegen sees a clash before the bench does: given the instance, its rank among this driver's instances that take
+ * a slot (port order), and the board's resources.ledc_channels. A driver with a `from: ledc_channel` field instead
+ * takes the channel bindLedc hands it; haptic_ledc's timers go by pwm_hz (LEDC_HAPTIC_TIMERS, in that order).
+ */
+type LedcSlots = { timers: number[]; channels: number[] };
+const LEDC_SLOTS: Readonly<Record<string, (inst: ResolvedInstance, nth: number, max: number) => LedcSlots | null>> = {
+  // drv8833_stepper.cpp: timer 0, channels 0-3 (the four bridge inputs).
+  drv8833_stepper: () => ({ timers: [0], channels: [0, 1, 2, 3] }),
+  // ledc_buzzer.cpp: timer 2, channel LEDC_CHANNEL_MAX - 2.
+  ledc_buzzer: (_i, _n, max) => ({ timers: [2], channels: [max - 2] }),
+  // st7789_spi.cpp: a panel with a backlight takes timer 3 and a channel from the top down.
+  st7789_spi: (i, nth, max) => (Number(i.driverConfig.find((f) => f.name === 'backlight')?.value ?? -1) >= 0 ? { timers: [3], channels: [max - 1 - nth] } : null),
+  // dvp_camera.cpp: XCLK on timer 0, channel 0.
+  dvp_camera: () => ({ timers: [0], channels: [0] }),
+  // fixture_gpio.cpp: a drive: pwm line takes timer 0 and a channel from 0 up.
+  [FIXTURE_GPIO_DRIVER]: (i, nth) => (i.capConfig.find((c) => c.entry.name === 'drive')?.value === 'pwm' ? { timers: [0], channels: [nth] } : null),
+};
+const LEDC_FROM = 'ledc_channel';
+/** haptic_ledc.cpp's timers, one per distinct pwm_hz, taken in this order. */
+const LEDC_HAPTIC_TIMERS = [1, 2];
+const LEDC_HAPTIC_DRIVER = 'haptic_ledc';
+
 /** An I2S controller (design audio-a1 D6): the board's `resources.i2s`, drawn by drivers that declare `i2s` in theirs. */
 const I2S_RESOURCE = 'i2s';
 /** A driver field that names another instance (type instance) to share its I2S controller with (design audio-a1 D6). */
@@ -704,8 +728,12 @@ const RawDriverField = z.strictObject({
   type: z.enum(['gpio', GPIO_MASK, I2S_PORT, INSTANCE_REF, 'enum', ...DRIVER_SCALARS] as const),
   values: z.array(z.string().regex(/^[A-Za-z_][A-Za-z0-9_]*$/, 'enum values must be C++ identifiers')).optional(),
   // board.<key>: that field of the bound board entry. bind: the pin of a bare `gpio.<n>` bind (design
-  // m2-c1-hil D5: the fixture drivers). bind.<key>: that pin of a multi-pin bind (design audio-a1 D7).
-  from: z.string().regex(/^(board\.[a-z_][a-z0-9_]*|bind|bind\.[a-z][a-z0-9_]*)$/, 'expected board.<key>, bind or bind.<key>').optional(),
+  // m2-c1-hil D5: the fixture drivers). bind.<key>: that pin of a multi-pin bind (design audio-a1 D7). ledc_channel:
+  // the LEDC channel codegen hands the instance (design haptic-h1 D5: bindLedc), a u8 the profile cannot set.
+  from: z
+    .string()
+    .regex(/^(board\.[a-z_][a-z0-9_]*|bind|bind\.[a-z][a-z0-9_]*|ledc_channel)$/, 'expected board.<key>, bind, bind.<key> or ledc_channel')
+    .optional(),
   /**
    * A gpio that may be absent (design m2-c5-display D7: a panel without a reset line): a null or missing board value
    * is -1 in the Config, and no pin is claimed. resources.gpio still counts the field.
@@ -1206,6 +1234,9 @@ function loadDriverInto(sourceDir: string, id: string, issues: Issues): DriverMa
     }
     if (f.from?.startsWith('bind.') && (d.binds !== PIN_SECTION || f.type !== 'gpio')) {
       bad(['config', name, 'from'], `from: ${f.from} is a pin of a multi-pin bind: it needs binds: ${PIN_SECTION} and type: gpio`);
+    }
+    if (f.from === LEDC_FROM && (f.type !== 'u8' || f.default !== undefined)) {
+      bad(['config', name, 'from'], `from: ${LEDC_FROM} is a u8 with no default: codegen hands the channel`);
     }
     if ((f.type === I2S_PORT || f.type === INSTANCE_REF) && f.from !== undefined) {
       bad(['config', name, 'from'], `a ${f.type} field comes from the profile, not from ${f.from}`);
@@ -1848,6 +1879,14 @@ function resolveInstances(sourceDir: string, inp: Inputs, model: Model, issues: 
     const outPins: number[] = [];
     const busPins: number[] = [];
     for (const [fname, field] of Object.entries(driverFields)) {
+      // `from: ledc_channel` (design haptic-h1 D5): bindLedc hands it once every instance is known.
+      if (field.from === LEDC_FROM) {
+        if (settings[fname] !== undefined) {
+          bad([...at, 'config', fname], `'${fname}' is the LEDC channel codegen hands ${driver.id}, and cannot be set`);
+        }
+        driverConfig.push({ name: fname, field, value: -1 });
+        continue;
+      }
       // `from: bind` is the pin of the gpio.<n> bind, which the profile cannot override (design m2-c1-hil D5).
       if (field.from === 'bind') {
         if (settings[fname] !== undefined) {
@@ -2317,6 +2356,72 @@ function peerOf(i: ResolvedInstance, insts: readonly ResolvedInstance[]): Resolv
   }
   const name = String(i.capConfig.find((c) => c.entry.name === peer.config)?.value ?? '');
   return insts.find((x) => x.name === name && x.cap.name === peer.cap);
+}
+
+/**
+ * LEDC slots (design haptic-h1 D5): the fixed slots of LEDC_SLOTS may not overlap, and each `from: ledc_channel` field
+ * (haptic_ledc's `channel`) gets, in port order, the first channel nobody holds, counting up from the board's
+ * ledc_channels / 2 and then down from below it (where haptic_ledc counted at runtime before, so c6w-scale keeps 3
+ * and 4). haptic_ledc's distinct pwm_hz take LEDC_HAPTIC_TIMERS in order: none of those may be a fixed driver's.
+ */
+function bindLedc(profile: string, board: RawBoard, insts: ResolvedInstance[], issues: Issues): void {
+  const pf = profileFile(profile);
+  const max = board.resources?.ledc_channels ?? 0;
+  const channelOwner = new Map<number, string>();
+  const timerOwner = new Map<number, string>();
+  const rank = new Map<string, number>();
+  for (const i of insts) {
+    const slots = LEDC_SLOTS[i.driver.id];
+    if (!slots) {
+      continue;
+    }
+    const nth = rank.get(i.driver.id) ?? 0;
+    const s = slots(i, nth, max);
+    if (!s) {
+      continue;
+    }
+    rank.set(i.driver.id, nth + 1);
+    for (const ch of s.channels) {
+      const owner = channelOwner.get(ch);
+      if (ch < 0 || ch >= max) {
+        issues.add(pf, ['caps', i.name, 'driver'], `${i.driver.id} takes LEDC channel ${ch}, which ${board.id} does not have (resources.ledc_channels: ${max})`);
+      } else if (owner !== undefined) {
+        issues.add(pf, ['caps', i.name, 'driver'], `LEDC channel ${ch} is ${owner}'s, and ${i.driver.id} takes it too for '${i.name}'`);
+      } else {
+        channelOwner.set(ch, `'${i.name}' (${i.driver.id})`);
+      }
+    }
+    for (const t of s.timers) {
+      if (!timerOwner.has(t)) {
+        timerOwner.set(t, `'${i.name}' (${i.driver.id})`);
+      }
+    }
+  }
+  const order = [...Array(max).keys()].filter((c) => c >= Math.floor(max / 2)).concat([...Array(Math.floor(max / 2)).keys()].reverse());
+  const hz = new Set<number>();
+  for (const i of insts) {
+    for (const f of i.driverConfig.filter((x) => x.field.from === LEDC_FROM)) {
+      const ch = order.find((c) => !channelOwner.has(c));
+      if (ch === undefined) {
+        issues.add(pf, ['caps', i.name, 'driver'], `no LEDC channel left for '${i.name}' (${i.driver.id}): ${[...channelOwner.entries()].sort((a, b) => a[0] - b[0]).map(([c, o]) => `${c} ${o}`).join(', ')}`);
+        continue;
+      }
+      f.value = ch;
+      channelOwner.set(ch, `'${i.name}' (${i.driver.id})`);
+    }
+    if (i.driver.id === LEDC_HAPTIC_DRIVER) {
+      const freq = Number(i.driverConfig.find((x) => x.name === 'pwm_hz')?.value ?? 0);
+      if (!hz.has(freq)) {
+        hz.add(freq);
+        const timer = LEDC_HAPTIC_TIMERS[hz.size - 1];
+        if (timer === undefined) {
+          issues.add(pf, ['caps', i.name, 'config', 'pwm_hz'], `${LEDC_HAPTIC_DRIVER} runs ${LEDC_HAPTIC_TIMERS.length} PWM frequencies at most (timers ${LEDC_HAPTIC_TIMERS.join(', ')}); '${i.name}' would be the ${hz.size}th: give it one the others use`);
+        } else if (timerOwner.has(timer)) {
+          issues.add(pf, ['caps', i.name, 'config', 'pwm_hz'], `'${i.name}' at ${freq} Hz would take LEDC timer ${timer}, which is ${timerOwner.get(timer)}'s: give it the pwm_hz of the other ${LEDC_HAPTIC_DRIVER} instances`);
+        }
+      }
+    }
+  }
 }
 
 /**
@@ -2790,6 +2895,7 @@ export function generateFirmware(opts: FirmwareOptions): FirmwareResult {
   bindTouch(opts.profile, insts, issues);
   bindPeers(opts.profile, insts, issues);
   bindI2s(opts.profile, inp!.board, insts, issues);
+  bindLedc(opts.profile, inp!.board, insts, issues);
   issues.throwIfAny();
 
   const driverIds = driverIdsOf(insts);

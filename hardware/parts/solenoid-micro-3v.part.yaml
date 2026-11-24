@@ -1,0 +1,18 @@
+schema: fractonica/part@1
+id: solenoid-micro-3v
+name: Micro push-pull solenoid, sold as 3 V
+category: actuator
+summary: Small push-pull solenoid with a return spring, 5.7 Ω coil, 4 mm stroke; nothing printed on it.
+specs:
+  coil: 5.7 Ω (measured)
+  stroke: 4 mm, spring return
+  rated: 3 V continuous (as sold)
+  current: 0.53 A at 3 V, 0.66 A from a full LIC through its ESR
+inferred: [rated]
+pins:
+  - { name: "+", desc: "to the supply (OUT+ of the LIC's charger)" }
+  - { name: "−", desc: "to the AO3400's drain" }
+notes:
+  - "Behind a logic-level MOSFET (AO3400A) with a Schottky flyback (1N5819), stripe to +: its strength is PWM (fr.haptic level), and a 1N4007 is too slow for that."
+  - "Kick, then hold (fr.haptic kind solenoid): never hold it at full power. At 3 V it takes 1.6 W continuously; the duty budget (30 % of any 10 s) and max_on_ms (1 s) keep a 4.2 V supply inside that on average."
+  - "Design haptic-h1: on stepper-c3 as `kick`, rated_mv 4200 (level 71 ≈ 3 V)."

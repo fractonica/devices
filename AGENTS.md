@@ -129,7 +129,7 @@ The dashboard (`packages/dashboard`, stage 4) is drawn in the site's Astrolabe l
 - **The device page** is four sub-pages in one frame (`pages/device/frame.tsx`: INSTRUMENTS · ACTIVITY · FACTS ·
   ENGINEERING) plus one page per instrument (`page-lens.tsx`, `/devices/$id/$instance`). An instrument is drawn by its
   capability's panel from the registry `pages/device/panels.ts` (`Lens`, `Headline`, `Quick?`, `covers?`):
-  `panels/camera/*`, `panels/led.tsx`, `panels/display.tsx`, `panels/stepper.tsx`, `panels/buzzer.tsx`, else `panels/generic.tsx`. A new purpose-built panel goes
+  `panels/camera/*`, `panels/led.tsx`, `panels/display.tsx`, `panels/stepper.tsx`, `panels/buzzer.tsx`, `panels/haptic.tsx` (with `state/haptic.ts`), else `panels/generic.tsx`. A new purpose-built panel goes
   there; `CapPanelProps` is built only by `usePanelProps`. Words and units of a capability's members live in
   `state/cap-words.ts` (a test fails on a `_x10`/`_ms`/`_mb`/… member it does not cover); a command whose field only the
   hub can issue (`state/hub-issued.ts`) is never a form, it renders `HubRuns`. No button under `pages/device` says
@@ -143,7 +143,8 @@ node tools/host-test.mjs --fleet                                    # once: buil
 pnpm -C packages/dashboard build                                    # after each change (or `watch`)
 node --conditions=@fractonica/source tools/dash-dev.ts --url-file /tmp/hub.url   # a scratch hub + fleet; Ctrl-C ends it
 #   add --camera for a fake ESP32-CAM (cam-esp32: live frames, a card; --no-card empties the slot; SIGUSR2 takes it offline and back)
-#   add --stepper for a fake stepper board (stepper-c3: c3s-stepper's motor moving in time and its buzzer playing in time, done events; SIGUSR1 raises a driver fault)
+#   add --stepper for a fake stepper board (stepper-c3: c3s-stepper's motor moving in time and its buzzer playing in time, done events; SIGUSR1 raises a driver fault;
+#     its haptics too: the LIC `cap`, the solenoid `kick` and the vibration motor `buzz` (tools/fake-haptic.ts); SIGUSR2 drains the LIC to 3.0 V)
 node tools/dash-shoot.mjs --url "$(cat /tmp/hub.url)" --out <dir> /=hub /devices=devices   # PNGs at 1440 and 390
 ```
 

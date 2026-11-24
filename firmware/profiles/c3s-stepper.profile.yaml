@@ -2,6 +2,7 @@ profile: c3s-stepper
 board: esp32c3-supermini
 app: node
 net: { link_profile: default }
+test_pin: none   # design haptic-h1 D7: GPIO0, the board's T-LAT pin, switches the vibration motor; pin_pulse answers unsupported
 # Design stepper-s1 D13: a 10 mm micro stepper on a DRV8833 module (hardware/wiring/stepper-c3). The module as built
 # has the TB6612-style pinout: STBY is the DRV8833's nSLEEP, and nFAULT is not brought out, so there is no fault bind.
 # The config is the bench motor as measured: a 20.5 ohm coil (20 here: too low is the safe side), VM 5.2 V from USB,
@@ -9,6 +10,11 @@ net: { link_profile: default }
 # ten turns out and back twice with no lost step; never set supply_mv below the real VM, or the cap lets more through.
 # Design buzzer-b1 D8: a passive buzzer module (KY-006 style: S, +, -; no transistor) with S on GPIO4 (a magnetic coil
 # under 100 ohm through a 100 ohm resistor) and - on GND; LEDC timer 2 and channel 4, beside the motor's timer 0 and 0-3.
+# Design haptic-h1 D6-D9: a LIC-H-0825 lithium-ion capacitor (90 F) on a protected TP4056 module fed from 5V, sensed on
+# GPIO3 through 1 MOhm / 1 MOhm + 100 nF (no status pins: none left), feeds a micro solenoid (5.7 ohm, 4 mm stroke) on an
+# AO3400 at GPIO1 (LEDC channel 5, handed by codegen) and the cylinder vibration motor on an AO3400 at GPIO0 (a
+# sigma-delta channel: the LEDC channels are all taken). Each gate: 100 ohm in series, 10 kOhm to GND; a Schottky flyback
+# across each load. rated_mv 4200: level 100 is everything the LIC gives (level 71 is about 3 V).
 caps:
   boot:   { cap: fr.button,  driver: button_gpio, bind: buttons.boot }
   status: { cap: fr.led,     driver: led_gpio,    bind: leds.status }
@@ -16,3 +22,6 @@ caps:
             bind: { ain1: gpio.6, ain2: gpio.5, bin1: gpio.10, bin2: gpio.20, sleep: gpio.7 },
             config: { steps_per_rev: 20, step_mode: micro8, coil_ohm: 20, run_ma: 150, hold_pct: 30, supply_mv: 5200 } }
   buzzer: { cap: fr.buzzer,  driver: ledc_buzzer, bind: gpio.4 }
+  cap:    { cap: fr.battery, driver: tp4056,      bind: { sense: gpio.3 }, config: { chemistry: lic, full_mv: 4200, report_hz: 10 } }
+  kick:   { cap: fr.haptic,  driver: haptic_ledc, bind: { out: gpio.1 }, config: { kind: solenoid, rated_mv: 4200, supply: cap } }
+  buzz:   { cap: fr.haptic,  driver: haptic_sdm,  bind: { out: gpio.0 }, config: { kind: erm, rated_mv: 3000, supply: cap } }

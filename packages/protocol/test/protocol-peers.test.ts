@@ -17,8 +17,11 @@ import {
   OPS,
   PEER_LINK_PORT,
   PEER_OPS,
+  type OpDef,
   REGISTRY_HASH,
   REGISTRY_INPUTS_HASH,
+  registryHashOf,
+  registryInputsHashOf,
   SealedKeySchema,
 } from '../src/index.ts';
 
@@ -28,7 +31,7 @@ const sealed = { alg: 'x25519-hkdf-sha256-aes256gcm', epk: 'AA==', salt: 'AA==',
 
 describe("the hubs' link ops", () => {
   it('adds three ops at the end, on `fr net admit`, `fr hub name` and `fr hub peers`, and moves REGISTRY_HASH', () => {
-    expect(OPS).toHaveLength(131);
+    expect(OPS.filter((o) => o.name !== 'haptic_tap')).toHaveLength(131); // HAPTIC-1 adds haptic_tap (protocol-haptic-h1.test.ts)
     expect(OPS.slice(-3).map((o) => o.name)).toEqual(['network_admit', 'hub_name_set', 'hub_peers']);
     expect(PEER_OPS.map((o) => o.name)).toEqual(OPS.slice(-3).map((o) => o.name));
     expect(findOp('network_admit')).toMatchObject({ kind: 'command', tier: 'mutate', cli: { path: ['net', 'admit'] } });
@@ -39,8 +42,10 @@ describe("the hubs' link ops", () => {
     }
     // Step 2.1's hash is the hash of the names and inputs to this day: step 2.2 changed no input and added no op. It
     // moved REGISTRY_HASH by what joined it, where each op runs (protocol-targets.test.ts).
-    expect(REGISTRY_INPUTS_HASH).toBe('7113df84c91b');
-    expect(REGISTRY_HASH).toBe('8910d0ce4075');
+    const beforeHaptic = OPS.filter((o) => o.name !== 'haptic_tap') as readonly OpDef[];
+    expect(registryInputsHashOf(beforeHaptic)).toBe('7113df84c91b');
+    expect(registryHashOf(beforeHaptic)).toBe('8910d0ce4075');
+    expect(REGISTRY_HASH).not.toBe('8910d0ce4075'); // HAPTIC-1's haptic_tap moved it (protocol-haptic-h1.test.ts)
     expect(REGISTRY_INPUTS_HASH).not.toBe('b6d669a67036'); // one network, several hubs (protocol-multi-hub.test.ts)
     expect(PEER_LINK_PORT).toBe(7423);
     expect(EPOCH_SLOTS).toBe(4);

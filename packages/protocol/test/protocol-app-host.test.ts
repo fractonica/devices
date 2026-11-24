@@ -12,12 +12,12 @@ const hashOf = (ops: readonly { name: string; input: z.ZodType }[]) =>
     .digest('hex')
     .slice(0, 12);
 /** The port policy ops came after (protocol-ports.test.ts). */
-const beforePorts = OPS.filter((o) => !/^port_(lend|ignore|claim)$|^time_|^hub_doctor_fix$|^device_enroll$|^device_(hubs_set|hubs_get|share)$|^network_join$|^network_admit$|^hub_(name_set|peers)$/.test(o.name));
+const beforePorts = OPS.filter((o) => !/^port_(lend|ignore|claim)$|^time_|^hub_doctor_fix$|^device_enroll$|^device_(hubs_set|hubs_get|share)$|^network_join$|^network_admit$|^hub_(name_set|peers)$|^haptic_tap$/.test(o.name));
 
 describe('app ops (design uno-q-services)', () => {
   it('adds ten ops at the end (nine app_ and device_adopt), on their CLI paths, and moves REGISTRY_HASH', () => {
     expect(beforePorts).toHaveLength(115);
-    expect(OPS.filter((o) => !/^device_(hubs_set|hubs_get|share)$|^network_join$|^network_admit$|^hub_(name_set|peers)$/.test(o.name)).slice(-14, -4).map((o) => o.name)).toEqual(APP_HOST_OPS.map((o) => o.name)); // the four time ops follow, then the multi-hub ones (protocol-multi-hub.test.ts)
+    expect(OPS.filter((o) => !/^device_(hubs_set|hubs_get|share)$|^network_join$|^network_admit$|^hub_(name_set|peers)$|^haptic_tap$/.test(o.name)).slice(-14, -4).map((o) => o.name)).toEqual(APP_HOST_OPS.map((o) => o.name)); // the four time ops follow, then the multi-hub ones (protocol-multi-hub.test.ts)
     const want: Record<string, [string[], string, string]> = {
       app_upload: [['app', 'upload'], 'command', 'mutate'],
       app_deploy: [['app', 'install'], 'job', 'mutate'],

@@ -1,6 +1,6 @@
 // Human rendering of the power ops (design power-p1 D11): `fr battery status` as one line per cell place, `fr battery
 // calibrate|reset|load`, `fr cell list|show|add|update|install|uninstall`, `fr cell test` (a cell job) as one summary line
-// after the job's head, `fr haptic pulse|play|stop`. render.ts dispatches here.
+// after the job's head, `fr haptic pulse|play|stop|tap`. render.ts dispatches here.
 
 type Row = Record<string, unknown>;
 
@@ -143,6 +143,19 @@ export function renderHapticStop(r: Row): string {
   return `${who(r)}: stopped`;
 }
 
+/** `stepper-c3 kick: tapping 15 ms at 70 % every 125 ms (8 a second), until stopped; accent every 4th at 100 %`. */
+export function renderHapticTap(r: Row): string {
+  const period = isNum(r.period_ms) ? r.period_ms : 0;
+  const rate = period > 0 ? 1000 / period : 0;
+  const perSecond = rate >= 1 ? `${Number(rate.toFixed(rate >= 10 ? 1 : 2))} a second` : `one every ${Number((period / 1000).toFixed(2))} s`;
+  const count = r.count === 0 ? 'until stopped' : r.count === 1 ? 'once' : `${String(r.count)} times`;
+  const accent = isNum(r.accent) && r.accent > 0 ? `; accent every ${r.accent === 1 ? 'tap' : ordinal(r.accent)} at ${String(r.accent_level)} %` : '';
+  const verb = r.count === 1 ? 'tap' : 'tapping';
+  return `${who(r)}: ${verb} ${String(r.ms)} ms at ${String(r.level)} %${r.count === 1 ? '' : ` every ${String(period)} ms (${perSecond})`}, ${count}${accent}`;
+}
+
+const ordinal = (n: number) => `${n}${n % 100 >= 11 && n % 100 <= 13 ? 'th' : n % 10 === 2 ? 'nd' : n % 10 === 3 ? 'rd' : n % 10 === 1 ? 'st' : 'th'}`;
+
 /** The power renderer of an op's data, or null for another op. */
 export function powerRenderer(op: string): ((r: Row) => string) | null {
   switch (op) {
@@ -171,6 +184,8 @@ export function powerRenderer(op: string): ((r: Row) => string) | null {
       return renderHapticPlay;
     case 'haptic_stop':
       return renderHapticStop;
+    case 'haptic_tap':
+      return renderHapticTap;
     default:
       return null;
   }

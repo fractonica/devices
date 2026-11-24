@@ -137,7 +137,7 @@ describe('capability_list (D13, D14)', () => {
     expect(out.caps).toEqual(CATALOG.capabilities);
   });
 
-  it("gives a device's instances from its firmware's manifest, with version, driver and traits (null without)", async () => {
+  it("gives a device's instances from its firmware's manifest, with version, driver, traits (null without) and config (when set)", async () => {
     const fw = 'ab'.repeat(32);
     const r = openRig({ devices: [device('a0b1c2d3e4f5', 'pad-c6', { fw_id: fw }), device('a0b1c2d3e4f6', 'pad-x', { fw_id: 'ee'.repeat(32) })] });
     addArtifact(r, {
@@ -158,7 +158,7 @@ describe('capability_list (D13, D14)', () => {
       fw_id: fw,
       instances: [
         { name: 'boot', port: 1, cap: 'fr.button', cap_id: 1, v: '1.0', traits: { long_press: true, multi_press_max: 2 }, driver: 'button_gpio' },
-        { name: 'status', port: 2, cap: 'fr.led', cap_id: 2, v: '1.0', traits: null, driver: 'led_ws2812' },
+        { name: 'status', port: 2, cap: 'fr.led', cap_id: 2, v: '1.0', traits: null, driver: 'led_ws2812', config: { max_brightness: 64 } },
       ],
     });
     // Firmware the hub did not build: nothing known yet.

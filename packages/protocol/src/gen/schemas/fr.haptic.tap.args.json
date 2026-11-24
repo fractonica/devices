@@ -1,0 +1,73 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:fractonica:schema:fr.haptic.tap.args",
+  "title": "fr.haptic.tap arguments",
+  "description": "1.1. A train of `count` taps (0 = until stop), one every `period_ms`, each on for `ms` at `level` %; with `accent` N > 0 the first tap and every Nth after it are at `accent_level` instead. A tap while a train runs changes it in place: the next tap comes period_ms after the last one started (at once if that has passed), the count starts again, the accent counts on; no done. Anything else running is replaced. A change is not a start: never BUSY. BUSY as pulse; INVALID_ARGS for ms 0, ms >= period_ms, ms above max_on_ms, or a train whose worst 10 s could spend the cooldown budget: ceil(10000 / period_ms) x (ms + 1) >= cooldown_pct x 100 (when cooldown_pct < 100); a train started on an unspent budget is then never cut for it.",
+  "type": "object",
+  "properties": {
+    "period_ms": {
+      "anyOf": [
+        {
+          "const": 0
+        },
+        {
+          "type": "integer",
+          "minimum": 20,
+          "maximum": 60000
+        }
+      ],
+      "description": "(ms; 20..60000)"
+    },
+    "ms": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 65535,
+      "description": "(ms)"
+    },
+    "level": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 100,
+      "description": "(1..100)",
+      "default": 100
+    },
+    "count": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 10000,
+      "description": "taps; 0 = until stop (0..10000)",
+      "default": 1
+    },
+    "accent": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 32,
+      "description": "every Nth tap from the first at accent_level; 0 = none (0..32)",
+      "default": 0
+    },
+    "accent_level": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 100,
+      "description": "(1..100)",
+      "default": 100
+    }
+  },
+  "additionalProperties": false,
+  "examples": [
+    {
+      "period_ms": 125,
+      "ms": 15,
+      "level": 70,
+      "count": 0
+    },
+    {
+      "period_ms": 500,
+      "ms": 20,
+      "level": 50,
+      "count": 0,
+      "accent": 4,
+      "accent_level": 100
+    }
+  ]
+}
