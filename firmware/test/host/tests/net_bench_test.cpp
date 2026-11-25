@@ -303,6 +303,29 @@ TEST(net_bench_broadcast_paced_with_echoes_from_any_node)
     CHECK_EQ(p.b.net.bench_report().rx[0].received, 20u);
 }
 
+TEST(net_bench_report_lists_the_most_recently_heard_first)
+{
+    // Three senders, one after another, to a fourth node: its slots fill a, c, b; the report reads b, c, a.
+    frt::FakeCore core;
+    frt::AirMedium medium(core, {.seed = 7});
+    frt::SimNode a(core, medium, 0x21, 1);
+    frt::SimNode b(core, medium, 0x22, 2);
+    frt::SimNode c(core, medium, 0x23, 3);
+    frt::SimNode r(core, medium, 0x24, 4);
+    core.run_ready();
+    for (frt::SimNode *s : {&a, &c, &b}) {
+        REQUIRE(s->net.bench_tx(r.radio.mac, 10, 40, 0, false).has_value());
+        core.advance_ms(200);
+    }
+    const fr::net::BenchReport rep = r.net.bench_report();
+    REQUIRE_EQ(rep.rx_count, 3u);
+    CHECK(rep.rx[0].mac == b.radio.mac);
+    CHECK(rep.rx[1].mac == c.radio.mac);
+    CHECK(rep.rx[2].mac == a.radio.mac);
+    CHECK(rep.rx[0].age_ms < rep.rx[1].age_ms && rep.rx[1].age_ms < rep.rx[2].age_ms);
+    CHECK_EQ(rep.rx[2].received, 10u);
+}
+
 TEST(net_bench_limits)
 {
     BenchPair p;

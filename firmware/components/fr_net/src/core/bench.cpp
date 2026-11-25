@@ -74,14 +74,16 @@ BenchReport Net::bench_report() const
     if (bench_.count != 0) {
         r.tx.elapsed_ms = static_cast<uint32_t>(((bench_.running ? now : bench_end_) - bench_t0_) / 1000);
     }
+    // Every slot sorted: the used ones first, the most recently heard of them first. The whole array, not its used part:
+    // GCC 15 at -O2 cannot bound that part's length and fails on std::sort's paths for long ranges (-Warray-bounds).
     std::array<const BenchSource *, limits::kBenchSources> order{};
-    for (const BenchSource &b : bench_src_) {
-        if (b.used) {
-            order[r.rx_count++] = &b;
-        }
+    for (size_t i = 0; i < order.size(); ++i) {
+        order[i] = &bench_src_[i];
+        r.rx_count += bench_src_[i].used ? 1 : 0;
     }
-    std::sort(order.begin(), order.begin() + static_cast<std::ptrdiff_t>(r.rx_count),
-              [](const BenchSource *a, const BenchSource *b) { return a->heard > b->heard; });
+    std::sort(order.begin(), order.end(), [](const BenchSource *a, const BenchSource *b) {
+        return a->used != b->used ? a->used : a->heard > b->heard;
+    });
     for (size_t i = 0; i < r.rx_count; ++i) {
         const BenchSource &b = *order[i];
         BenchRx &o = r.rx[i];
