@@ -237,7 +237,7 @@ function Overview({ detail, fetchedAt }: { detail: DeviceDetail; fetchedAt: numb
         <Glance detail={detail} fetchedAt={fetchedAt} />
       </div>
       <div className="dev-ov-rows">
-        <FaceMirror instances={instances} deviceId={detail.device_id} />
+        <FaceMirror instances={instances} deviceId={detail.device_id} detail={detail} />
         {error && !opMissing(error) ? <ErrorLine error={error} what="The capability list" /> : null}
         {pending ? (
           <Pending what="its instruments" />

@@ -31,7 +31,7 @@ static void part_moment(fui_card_t *card)
         frc_format_pentad(&pentad, FRC_PENTAD_FULL, 1, card->text, FUI_TEXT_MAX) > 0) {
         fui_i_card_line(card, FUI_STYLE_SOL, card->text, FUI_LINE_LIVE);
     }
-    fui_i_card_space(card, p->lay->info.mono ? 0 : 4);
+    fui_i_card_space(card, p->lay->tiny ? 0 : 4);
     if (frc_date_at(ui->cat, ui->t, &date) == FRC_OK) {
         /* The stamp is the date's nine terms (frc_format_date_term). Wider
          * than the face's widest row, it breaks where the notation does:
@@ -44,7 +44,8 @@ static void part_moment(fui_card_t *card)
         fui_i_add_date_terms(&s, &date, FRC_UNIT_ALPHA, FRC_UNIT_DELTA);
         units = s.len + 1;
         fui_i_str_add(&s, " ");
-        fui_i_add_date_terms(&s, &date, FRC_UNIT_NUCLIDE, FRC_UNIT_BLINK);
+        /* (with a step, down to its unit: finer terms would be held at 0) */
+        fui_i_add_date_terms(&s, &date, FRC_UNIT_NUCLIDE, fui_i_finest_unit(ui));
         if (fui_text_width(&style, card->text, (size_t)-1) > p->lay->info.width - 8) {
             card->text[units - 1] = '\0'; /* the space before "ε#5" */
             fui_i_card_line(card, FUI_STYLE_READING, card->text, FUI_LINE_LIVE);
@@ -54,10 +55,12 @@ static void part_moment(fui_card_t *card)
         }
     }
     if (ui->mode == FUI_MODE_EARTH) {
-        fui_i_card_space(card, p->lay->info.mono ? 0 : 4);
+        int seconds = fui_i_civil_seconds(ui);
+
+        fui_i_card_space(card, p->lay->tiny ? 0 : 4);
         fui_i_str_init(&s, card->text, FUI_TEXT_MAX);
-        fui_i_add_civil(&s, ui->t, ui->utc_offset_s, FUI_CIVIL_FULL);
-        fui_i_card_line(card, FUI_STYLE_EARTH, card->text, FUI_LINE_LIVE | FUI_LINE_SECONDS);
+        fui_i_add_civil(&s, ui->t, ui->utc_offset_s, seconds ? FUI_CIVIL_FULL : FUI_CIVIL_FULL_MINUTE);
+        fui_i_card_line(card, FUI_STYLE_EARTH, card->text, FUI_LINE_LIVE | (seconds ? FUI_LINE_SECONDS : 0u));
     }
 }
 
@@ -71,6 +74,9 @@ static void part_majors(fui_card_t *card)
     if (frc_date_at(ui->cat, ui->t, &date) != FRC_OK) {
         return;
     }
+    /* The paper face holds both parts on one page: a blank between them.
+     * (The colour faces keep their spacing: their pictures are golden.) */
+    fui_i_card_space(card, card->p->lay->info.mono && !card->p->lay->tiny ? 8 : 0);
     for (level = 0; frc_level_kind(level) == FRC_KIND_MAJOR; level++) {
         frc_cycle_t cycle;
         char quarter[24];

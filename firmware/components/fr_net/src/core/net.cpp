@@ -32,6 +32,7 @@
 
 #include "fr/envelope.hpp"
 #include "fr/hash.hpp"
+#include "fr/wall_clock.hpp"
 #include "fr/wire.hpp"
 #include "messages.hpp"  // generated fr::proto system messages
 #include "net_util.hpp"
@@ -609,6 +610,7 @@ void Net::on_welcome(LinkKind from, std::span<const uint8_t> body)
     // the hub run the BCAST window already follows only raises its floor (design c5 §8): a broadcast
     // above bcast_base can arrive over the air or the other session ahead of this WELCOME, and moving the
     // window back would deliver it a second time when the hub's own copy follows.
+    fr::wall_clock().hub_sample(rx_at_, static_cast<int64_t>(w->hub_time_us));  // design face-f1 D1
     const bool same_run = !other_hub && state_.hub_epoch != 0 && w->hub_epoch == state_.hub_epoch;
     state_.hub_epoch = w->hub_epoch;
     ucast_.reset(w->ucast_floor);
@@ -975,6 +977,8 @@ void Net::on_sync_req(LinkKind from, std::span<const uint8_t> body)
     // t2 when the request reached its link task (design c6 D23: the core queue is not part of the link's
     // delay), t3 now; the answer takes the link the request came on, since the hub measures that link's
     // round trip (05 §5.12.4).
+    // Design face-f1 D1: t1 is the hub's Unix µs when it sent this; the node's wall clock keeps the least-delayed one.
+    fr::wall_clock().hub_sample(rx_at_, static_cast<int64_t>(req->t1));
     const fr::proto::TimeSyncRes res{.t1 = req->t1,
                                      .t2 = static_cast<uint64_t>(rx_at_),
                                      .t3 = static_cast<uint64_t>(core_.now())};

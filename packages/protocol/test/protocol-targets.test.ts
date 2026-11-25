@@ -28,13 +28,14 @@ describe('where an op runs (target)', () => {
     );
     expect(names((o) => o.target === 'device')).toEqual(
       words(`audio_level audio_monitor audio_play audio_record battery_calibrate battery_load battery_reset_calibration battery_status binding_clear binding_set
-        camera_sd_delete camera_sd_fetch camera_sd_list camera_set camera_snap camera_status camera_stream capability_list clock_aging clock_drift clock_read clock_set
-        clock_sync csi_status csi_stream device_adopt device_get device_hubs_get device_hubs_set device_update haptic_play haptic_pulse haptic_stop haptic_tap latency_probe
+        camera_sd_delete camera_sd_fetch camera_sd_list camera_set camera_snap camera_status camera_stream capability_list rtc_aging rtc_drift rtc_read rtc_set
+        rtc_sync csi_status csi_stream device_adopt device_get device_hubs_get device_hubs_set device_update display_html display_image display_refresh display_text
+        haptic_play haptic_pulse haptic_stop haptic_tap latency_probe
         scale_calibrate scale_read scale_reset_calibration scale_status scale_tare scale_watch storage_bench storage_get storage_info storage_ls storage_mkdir
         storage_put storage_rm`),
     );
     // Everything else acts on the hub that is asked.
-    expect(names((o) => o.target === 'hub')).toHaveLength(ops.length - 2 - 11 - 13 - 48);
+    expect(names((o) => o.target === 'hub')).toHaveLength(ops.length - 2 - 11 - 13 - 52);
     for (const name of ['hub_status', 'build_start', 'artifact_list', 'network_join', 'hub_peers', 'job_get', 'job_wait', 'job_logs', 'job_cancel', 'ota_status', 'binding_list', 'time_now', 'cell_test', 'app_deploy']) {
       expect(ops.find((o) => o.name === name)!.target, name).toBe('hub');
     }
@@ -86,13 +87,13 @@ describe('where an op runs (target)', () => {
     expect(opBoardFields(ops.find((o) => o.name === 'message_send')!)).toEqual([{ field: 'to', dotted: false }]);
     expect(opBoardFields(ops.find((o) => o.name === 'device_get')!)).toEqual([{ field: 'device', dotted: false }]);
     expect(names((o) => !!o.files?.out)).toEqual(words('audio_record camera_sd_fetch camera_snap camera_stream csi_stream display_snapshot scale_watch storage_get'));
-    expect(names((o) => !!o.files?.in)).toEqual(['audio_play', 'storage_put']);
+    expect(names((o) => !!o.files?.in)).toEqual(['audio_play', 'display_image', 'storage_put']);
   });
 
   it('what may be tried again after a lost link: the read ops and the ops marked idempotent', () => {
     expect(ops.filter((o) => o.tier === 'read').every(opRepeatable)).toBe(true);
     expect(names((o) => o.tier === 'mutate' && opRepeatable(o))).toEqual(
-      words('camera_sd_delete clock_set device_hubs_set device_share device_update haptic_stop hub_name_set network_admit network_set port_claim port_ignore wiring_reset'),
+      words('camera_sd_delete rtc_set device_hubs_set device_share device_update haptic_stop hub_name_set network_admit network_set port_claim port_ignore wiring_reset'),
     );
   });
 

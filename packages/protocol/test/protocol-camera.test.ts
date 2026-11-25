@@ -31,6 +31,7 @@ import {
   STREAM_KINDS,
 } from '../src/index.ts';
 import { CAMERA_CAP, CAMERA_CONFIG_DEFAULTS, CameraStreamEndReason, CATALOG_HASH, ChipId } from '@fractonica/protocol/gen';
+import { beforeRtc } from './before-rtc.ts';
 
 const hashOf = (ops: readonly { name: string; input: z.ZodType }[]) =>
   createHash('sha256')
@@ -42,7 +43,7 @@ const CAMERA_OP_NAMES = ['camera_snap', 'camera_stream', 'camera_status', 'camer
 
 describe('CAM-1 ops (design camera-c1 D11)', () => {
   it('adds the seven camera ops and moves REGISTRY_HASH once for every op change (and the selector texts)', () => {
-    expect(OPS.filter((o) => !/^(scale|battery|cell|haptic|wiring|part|storage|clock|app|time)_|^device_adopt$|^port_(lend|ignore|claim)$|^hub_doctor_fix$|^device_enroll$|^device_(hubs_set|hubs_get|share)$|^network_join$|^network_admit$|^hub_(name_set|peers)$/.test(o.name))).toHaveLength(62); // POWER-1 adds fourteen (protocol-power.test.ts) // SCALE-1 adds six (protocol-scale.test.ts)
+    expect(beforeRtc(OPS).filter((o) => !/^(scale|battery|cell|haptic|wiring|part|storage|clock|app|time)_|^device_adopt$|^port_(lend|ignore|claim)$|^hub_doctor_fix$|^device_enroll$|^device_(hubs_set|hubs_get|share)$|^network_join$|^network_admit$|^hub_(name_set|peers)$|^display_(image|html|text|refresh)$/.test(o.name))).toHaveLength(62); // POWER-1 adds fourteen (protocol-power.test.ts) // SCALE-1 adds six (protocol-scale.test.ts)
     expect(findOp('camera_snap')).toMatchObject({ kind: 'job', tier: 'mutate', cli: { path: ['camera', 'snap'], positional: ['device'] } });
     expect(findOp('camera_stream')).toMatchObject({ kind: 'job', tier: 'mutate', cli: { path: ['camera', 'stream'], positional: ['device'] } });
     expect(findOp('camera_status')).toMatchObject({ kind: 'query', tier: 'read', cli: { path: ['camera', 'status'], positional: ['device'] } });
@@ -56,7 +57,7 @@ describe('CAM-1 ops (design camera-c1 D11)', () => {
     }
     expect(hashOf(OPS)).toBe(REGISTRY_INPUTS_HASH);
     // CAM-1's own hash, with SCALE-1's ops left out (protocol-scale.test.ts pins the current one).
-    expect(hashOf(OPS.filter((o) => !/^(scale|battery|cell|haptic|wiring|part|storage|clock|app|time)_|^device_adopt$|^port_(lend|ignore|claim)$|^hub_doctor_fix$|^device_enroll$|^device_(hubs_set|hubs_get|share)$|^network_join$|^network_admit$|^hub_(name_set|peers)$/.test(o.name)))).toBe('b62397012231'); // the fix round's camera_stream `out` text; '45d33d0f924f' was stream C's
+    expect(hashOf(beforeRtc(OPS).filter((o) => !/^(scale|battery|cell|haptic|wiring|part|storage|clock|app|time)_|^device_adopt$|^port_(lend|ignore|claim)$|^hub_doctor_fix$|^device_enroll$|^device_(hubs_set|hubs_get|share)$|^network_join$|^network_admit$|^hub_(name_set|peers)$|^display_(image|html|text|refresh)$/.test(o.name)))).toBe('b62397012231'); // the fix round's camera_stream `out` text; '45d33d0f924f' was stream C's
     expect(REGISTRY_HASH).not.toBe('6dcd17ef8882'); // CSI-1's
     expect(JOB_KINDS).toContain('camera');
     // The selector texts name the new target and the bridge ports (D1, D3).
@@ -194,8 +195,12 @@ describe('CAM-1 capability and chip (design camera-c1 D1, D7)', () => {
     // max_brightness range [1, 255], fr.clock set's example dropped) made it 0x95782421. STEPPER-1 (fr.stepper 0x0012)
     // made it 0x9a291431; its review fix (the doc: nFAULT reports no under-voltage) made it 0x616bf0f2. fr.node 1.1
     // (design multi-hub-m1: the Hub type, hubs_set and hubs_get) made it 0x2efa5e5e. BUZZER-1 (fr.buzzer 0x0013) made
-    // it 0xf3b9dd7e. HAPTIC-1 (fr.haptic 1.1: tap, done) made it 0xecb03fd1.
-    expect(CATALOG_HASH).toBe(0xecb03fd1);
+    // it 0xf3b9dd7e. HAPTIC-1 (fr.haptic 1.1: tap, done) made it 0xecb03fd1. EPAPER-1 (fr.display 1.3: the epaper trait,
+    // bitmap, refresh, hold, refreshed, the e-paper config and properties) made it 0xadfc0500. FACE-1 (fr.face 0x0014,
+    // fr.clock renamed fr.rtc) made it 0xd7e86b68; its three keys and sounds (left, right, buzzer, chime, clicks) made
+    // it 0xc76ae4a2, and power save waking on any of its keys (the doc) 0x4ba4b62a.
+    expect(CATALOG_HASH).toBe(0x4ba4b62a);
+    expect(CATALOG_HASH).not.toBe(0xadfc0500); // EPAPER-1's
     expect(CATALOG_HASH).not.toBe(0x2efa5e5e); // fr.node 1.1's
     expect(CATALOG_HASH).not.toBe(0x616bf0f2); // STEPPER-1's
     expect(CATALOG_HASH).not.toBe(0x9a291431); // STEPPER-1 as first built

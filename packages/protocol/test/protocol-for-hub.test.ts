@@ -7,6 +7,7 @@ import { describe, expect, it } from 'vitest';
 import { z } from 'zod';
 
 import { EnrolledSchema, findOp, hubApiUrl, OP_NAMES, OPS, ProvisionResultSchema, REGISTRY_CHIPS, REGISTRY_HASH } from '../src/index.ts';
+import { beforeRtc } from './before-rtc.ts';
 
 /**
  * The ops as they were here, before one network had several hubs (design multi-hub-m1; protocol-multi-hub.test.ts):
@@ -14,7 +15,7 @@ import { EnrolledSchema, findOp, hubApiUrl, OP_NAMES, OPS, ProvisionResultSchema
  * for_hub as it read.
  */
 const label = z.string().regex(/^[A-Za-z0-9][A-Za-z0-9._-]{0,62}$/, 'expected a name of letters, digits, ".", "_" and "-"');
-const forHub = OPS.filter((o) => !/^device_(hubs_set|hubs_get|share)$|^network_join$|^network_admit$|^hub_(name_set|peers)$|^haptic_tap$/.test(o.name)).map((o) => [
+const forHub = beforeRtc(OPS).filter((o) => !/^device_(hubs_set|hubs_get|share)$|^network_join$|^network_admit$|^hub_(name_set|peers)$|^haptic_tap$|^display_(image|html|text|refresh)$/.test(o.name)).map((o) => [
   o.name,
   z.toJSONSchema(
     o.name === 'device_enroll'

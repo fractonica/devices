@@ -6,9 +6,10 @@ import { describe, expect, it } from 'vitest';
 import { z } from 'zod';
 
 import { findOp, OPS, REGISTRY_HASH } from '../src/index.ts';
+import { beforeRtc } from './before-rtc.ts';
 
 /** The ops as they were here: before a board for another hub (device_enroll, device_provision for_hub; protocol-for-hub.test.ts). */
-const health = OPS.filter((o) => o.name !== 'device_enroll' && !/^device_(hubs_set|hubs_get|share)$|^network_join$|^network_admit$|^hub_(name_set|peers)$|^haptic_tap$/.test(o.name)).map((o) => [o.name, z.toJSONSchema(o.name === 'device_provision' ? (o.input as z.ZodObject).omit({ for_hub: true }) : o.input)]);
+const health = beforeRtc(OPS).filter((o) => o.name !== 'device_enroll' && !/^device_(hubs_set|hubs_get|share)$|^network_join$|^network_admit$|^hub_(name_set|peers)$|^haptic_tap$|^display_(image|html|text|refresh)$/.test(o.name)).map((o) => [o.name, z.toJSONSchema(o.name === 'device_provision' ? (o.input as z.ZodObject).omit({ for_hub: true }) : o.input)]);
 
 describe('hub health ops', () => {
   it('gives hub_doctor a max_age_s and adds hub_doctor_fix as a mutating command on `fr hub doctor-fix`', () => {

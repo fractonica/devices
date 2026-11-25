@@ -1,4 +1,4 @@
-// Human rendering of `fr storage` and `fr clock` (design lcd-clock-c1 D9): the card's line, a directory listing, the
+// Human rendering of `fr storage` and `fr rtc` (design lcd-clock-c1 D9): the card's line, a directory listing, the
 // transfer and bench summaries after the job's head, the clock's reading, sync and drift.
 
 import { describe, expect, it } from 'vitest';
@@ -43,15 +43,15 @@ describe('fr storage and clock output', () => {
 
   it('prints the clock: read, sync, set, aging and drift', () => {
     const read = { ...who, instance: 'clock', unix: 1793887200, iso: '2026-11-05T14:00:00Z', valid: true, osf: false, temp_c: 24.5, aging: 0, offset_ms: 0, error_ms: -3.2, uncertainty_ms: 1.4, injected: false };
-    expect(renderResult('clock_read', ok(read)).out).toBe('lcd-c6 clock: 2026-11-05T14:00:00Z, valid, -3.2 ms against the Mac (±1.4 ms), 24.50 °C');
-    expect(renderResult('clock_read', ok({ ...read, valid: false, osf: true, error_ms: null })).out).toContain('NOT valid (it lost power: run fr clock sync), offset unknown');
-    expect(renderResult('clock_sync', ok({ ...who, instance: 'clock', unix: 1, iso: '2026-11-05T14:00:01Z', at_us: 5, lead_ms: 820, uncertainty_ms: 1.4, by: 'sync' })).out).toBe(
+    expect(renderResult('rtc_read', ok(read)).out).toBe('lcd-c6 clock: 2026-11-05T14:00:00Z, valid, -3.2 ms against the Mac (±1.4 ms), 24.50 °C');
+    expect(renderResult('rtc_read', ok({ ...read, valid: false, osf: true, error_ms: null })).out).toContain('NOT valid (it lost power: run fr rtc sync), offset unknown');
+    expect(renderResult('rtc_sync', ok({ ...who, instance: 'clock', unix: 1, iso: '2026-11-05T14:00:01Z', at_us: 5, lead_ms: 820, uncertainty_ms: 1.4, by: 'sync' })).out).toBe(
       'lcd-c6 clock set to 2026-11-05T14:00:01Z at its second boundary (aimed 820 ms ahead, link clock ±1.4 ms)',
     );
-    expect(renderResult('clock_set', ok({ ...who, instance: 'clock', unix: 1, iso: '2026-11-05T14:00:00Z', at_us: 0, lead_ms: 0, uncertainty_ms: null, by: 'command' })).out).toBe('lcd-c6 clock set to 2026-11-05T14:00:00Z');
-    expect(renderResult('clock_aging', ok({ ...who, instance: 'clock', offset: 12 })).out).toBe('lcd-c6 clock aging offset 12 (about 1.2 ppm slower)');
+    expect(renderResult('rtc_set', ok({ ...who, instance: 'clock', unix: 1, iso: '2026-11-05T14:00:00Z', at_us: 0, lead_ms: 0, uncertainty_ms: null, by: 'command' })).out).toBe('lcd-c6 clock set to 2026-11-05T14:00:00Z');
+    expect(renderResult('rtc_aging', ok({ ...who, instance: 'clock', offset: 12 })).out).toBe('lcd-c6 clock aging offset 12 (about 1.2 ppm slower)');
     const drift = { ...who, instance: 'clock', minutes: 60, samples: 361, span_s: 3600, ppm: 2.5, s_per_day: 0.216, first_ms: 12, last_ms: 3, residual_ms: 0.8, aging: 0, aging_suggest: 25, reason: 'done' };
-    expect(renderResult('clock_drift', ok(asJob('clock', drift))).out).toContain('lcd-c6 clock: 2.50 ppm fast (0.216 s a day), 361 samples over 3600 s, residual 0.8 ms, fr clock aging lcd-c6 25 would cancel it');
-    expect(renderResult('clock_drift', ok(asJob('clock', { ...drift, ppm: null, samples: 1, span_s: 0 }))).out).toContain('too few to fit a drift');
+    expect(renderResult('rtc_drift', ok(asJob('clock', drift))).out).toContain('lcd-c6 clock: 2.50 ppm fast (0.216 s a day), 361 samples over 3600 s, residual 0.8 ms, fr rtc aging lcd-c6 25 would cancel it');
+    expect(renderResult('rtc_drift', ok(asJob('clock', { ...drift, ppm: null, samples: 1, span_s: 0 }))).out).toContain('too few to fit a drift');
   });
 });

@@ -1,0 +1,11 @@
+schema: fractonica/part@1
+id: push-button
+name: Push button (momentary, normally open)
+category: misc
+summary: A tactile push button, closed only while pressed; wired between a GPIO and GND, with the GPIO's pull-up.
+values: ["6x6 mm tactile", "12x12 mm tactile"]
+pins:
+  - { name: a, desc: "one side (on a 4-leg tactile switch, the two legs on one side are joined)" }
+  - { name: b, desc: the other side }
+notes:
+  - "A 4-leg tactile switch has two pairs of legs joined inside: use two diagonal legs, so the pair always switches."

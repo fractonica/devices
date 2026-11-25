@@ -16,6 +16,7 @@
 #include "fr/cap/capability.hpp"
 #include "fr/display/backend.hpp"
 #include "fr/hal/display.hpp"
+#include "fr/hal/epaper.hpp"
 #include "fr/hal/touch.hpp"
 #include "fr/services/display_service.hpp"
 #include "fr/services/touch_service.hpp"
@@ -37,6 +38,44 @@ struct Geometry {
     // Trait round (design scale-round-c1 D5): the glass shows only the inscribed circle. The framebuffer and its CRC
     // are the whole rectangle, as on the board; only the PNG and the window grey the corners.
     bool round = false;
+    // Trait epaper (design epaper-e1 D12): fr_core's EpaperBackend over an instant host controller; the frame (what the
+    // board's snapshot reads) is the one drawn.
+    bool epaper = false;
+};
+
+/**
+ * An e-paper controller for the desktop (design epaper-e1 D12): it takes every write and finishes every step 1 ms later
+ * on the virtual clock, so EpaperBackend's refreshes run their course; the picture is the backend's frame.
+ */
+class HostEpaper final : public fr::hal::Epaper
+{
+public:
+    HostEpaper(uint16_t native_w, uint16_t native_h) : native_w_(native_w), native_h_(native_h) {}
+
+    fr::Status init(fr::Core &core, fr::hal::Rotation rotation) override;
+    uint16_t native_width() const override { return native_w_; }
+    uint16_t native_height() const override { return native_h_; }
+    fr::hal::Rotation rotation() const override { return rotation_; }
+    fr::hal::Selftest selftest() override { return {true, "desktop e-paper"}; }
+    void on_idle(IdleSink sink) override { idle_ = sink; }
+    bool answered() const override { return answered_; }
+    fr::Status hold_reset(bool) override { return {}; }
+    fr::Status configure() override { return {}; }
+    fr::Status write_begin(Plane, uint16_t, uint16_t, uint16_t, uint16_t) override { return {}; }
+    fr::Status write(std::span<const uint8_t>) override { return {}; }
+    fr::Status start(Op op) override;
+    fr::Status sleep() override { return {}; }
+    bool busy() const override { return busy_; }
+
+private:
+    uint16_t native_w_;
+    uint16_t native_h_;
+    fr::hal::Rotation rotation_ = fr::hal::Rotation::r0;
+    fr::Core *core_ = nullptr;
+    fr::Timer *timer_ = nullptr;
+    IdleSink idle_;
+    bool busy_ = false;
+    bool answered_ = false;
 };
 
 /** A hal::Display that keeps what it is sent: the glass, in the snapshot layout of fr/display/backend.hpp. */
@@ -148,6 +187,8 @@ private:
     Geometry geo_;
     HostCore core_;
     HostPanel panel_;
+    std::unique_ptr<HostEpaper> epd_;  // an e-paper panel (geo_.epaper): the service's panel instead of panel_
+    std::vector<uint8_t> frame_buf_, shown_buf_, frozen_buf_;
     HostTouch touch_src_;
     std::unique_ptr<fr::display::Backend> backend_;
     fr::ui::LvglBackend *lvgl_ = nullptr;

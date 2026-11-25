@@ -24,6 +24,10 @@ static void add_civil_form(fui_str_t *s, const frc_civil_t *civil, int32_t utc_o
  *   FUI_CIVIL_NOW    "⊕ 2026-10-08 14:00:00"              now, on a row of the NOW face:
  *                    the ISO date, as the row has no room for the weekday and
  *                    the month's name (the zone is said on the SUN and STAMP cards)
+ *   FUI_CIVIL_FULL_MINUTE  "⊕ THU 8 OCT 2026 · 14:00 UTC+2"  FULL on a face that steps
+ *                    coarser than the Flavon (fui_i_civil_seconds): a seconds field
+ *                    held for minutes would be a frozen number
+ *   FUI_CIVIL_MINUTE "⊕ 14:00"                            likewise for TIME
  */
 void fui_i_add_civil(fui_str_t *s, frc_time_t t, int32_t utc_offset_s, fui_civil_form_t form)
 {
@@ -39,6 +43,9 @@ void fui_i_add_civil(fui_str_t *s, frc_time_t t, int32_t utc_offset_s, fui_civil
     switch (form) {
     case FUI_CIVIL_TIME:
         add_civil_form(s, &civil, utc_offset_s, FRC_CIVIL_TIME);
+        break;
+    case FUI_CIVIL_MINUTE:
+        add_civil_form(s, &civil, utc_offset_s, FRC_CIVIL_MINUTE);
         break;
     case FUI_CIVIL_DAY:
         add_civil_form(s, &civil, utc_offset_s, FRC_CIVIL_DAY_MONTH_YEAR);
@@ -57,7 +64,7 @@ void fui_i_add_civil(fui_str_t *s, frc_time_t t, int32_t utc_offset_s, fui_civil
         fui_i_str_keep(s, start);
         fui_i_str_add(s, FUI_S_DOT);
         start = s->len;
-        add_civil_form(s, &civil, utc_offset_s, FRC_CIVIL_TIME);
+        add_civil_form(s, &civil, utc_offset_s, form == FUI_CIVIL_FULL_MINUTE ? FRC_CIVIL_MINUTE : FRC_CIVIL_TIME);
         fui_i_str_add(s, " ");
         add_civil_form(s, &civil, utc_offset_s, FRC_CIVIL_OFFSET);
         fui_i_str_keep(s, start);
@@ -117,7 +124,28 @@ void fui_i_span_until(fui_painter_t *p, frc_time_t boundary)
     fui_i_line_until(p, frc_span_next_change(p->ui->cat, p->ui->t, boundary, 0));
 }
 
-/* "End in 6ι 43λ": the next threshold of a level as a span from now. */
+/* The finest unit a reading shows (fui_i.h): with a step, the finest unit
+ * whose level is not finer than the step's (frc_unit_level). */
+frc_unit_t fui_i_finest_unit(const fui_ui_t *ui)
+{
+    int unit = FRC_UNIT_BLINK;
+
+    if (ui->step == FUI_STEP_NONE) {
+        return FRC_UNIT_BLINK;
+    }
+    while (unit > FRC_UNIT_ALPHA && frc_unit_level((frc_unit_t)unit) > ui->step) {
+        unit--;
+    }
+    return (frc_unit_t)unit;
+}
+
+int fui_i_civil_seconds(const fui_ui_t *ui)
+{
+    return ui->step == FUI_STEP_NONE || ui->step >= FUI_STEP_FLAVON;
+}
+
+/* "End in 6ι 43λ": the next threshold of a level as a span from now (with a
+ * step: from the instant shown, no part finer than the step's unit). */
 void fui_i_add_countdown(fui_str_t *s, const fui_ui_t *ui, uint8_t level, fui_painter_t *p)
 {
     frc_threshold_t next;
@@ -130,8 +158,9 @@ void fui_i_add_countdown(fui_str_t *s, const fui_ui_t *ui, uint8_t level, fui_pa
         }
         return;
     }
-    fui_i_add_quarter_in(s, (frc_quarter_t)next.name, &span);
+    fui_i_add_quarter_in(s, (frc_quarter_t)next.name, &span, fui_i_finest_unit(ui));
     if (p) {
+        /* (the uncut text's instants: a superset of the cut text's) */
         fui_i_span_until(p, next.time);
     }
 }
@@ -144,13 +173,21 @@ void fui_i_add_span(fui_str_t *s, const frc_span_t *span)
     fui_i_str_keep(s, start);
 }
 
+void fui_i_add_span_to(fui_str_t *s, const frc_span_t *span, frc_unit_t finest)
+{
+    size_t start = s->len;
+
+    FUI_I_CORE(s, fui_shim_format_span_to(span, 0, finest, at_, room_));
+    fui_i_str_keep(s, start);
+}
+
 /* "Valley in 29ι 7λ": the row may end after the quarter's name, never inside
  * "in 29ι 7λ" (an orphan "7λ" would read as a value of its own). */
-void fui_i_add_quarter_in(fui_str_t *s, frc_quarter_t quarter, const frc_span_t *span)
+void fui_i_add_quarter_in(fui_str_t *s, frc_quarter_t quarter, const frc_span_t *span, frc_unit_t finest)
 {
     FUI_I_CORE(s, frc_format_quarter(quarter, 0, at_, room_));
     fui_i_str_add(s, " in" FUI_S_NBSP);
-    fui_i_add_span(s, span);
+    fui_i_add_span_to(s, span, finest);
 }
 
 /* The finest major level: the last one the core calls FRC_KIND_MAJOR (Delta).
@@ -224,7 +261,7 @@ const char *fui_mode_name(fui_mode_t mode)
 
 const char *fui_face_name(fui_face_t face)
 {
-    static const char *const names[FUI_FACE_COUNT] = { "round240", "rect240", "rect240x320", "mono" };
+    static const char *const names[FUI_FACE_COUNT] = { "round240", "rect240", "rect240x320", "mono", "mono400x300" };
 
     return (unsigned)face < FUI_FACE_COUNT ? names[face] : "?";
 }

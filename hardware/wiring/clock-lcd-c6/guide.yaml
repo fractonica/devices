@@ -48,4 +48,4 @@ sections:
       - id: rtc-i2c
         text: "DS3231 SDA to GPIO18 and SCL to GPIO19. Leave 32K and SQW unconnected."
         pins: [gpio.18, gpio.19]
-        check: "After flashing: fr clock read lcd-c6 shows a time and a temperature."
+        check: "After flashing: fr rtc read lcd-c6 shows a time and a temperature."

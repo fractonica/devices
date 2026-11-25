@@ -81,7 +81,7 @@ Checked at the merge, on the owner's Mac (a record of that day: `web/bench` has 
   preview-then-deploy OTA), Live, Bench (the old `web/bench` app, folded in) and Settings. PURE / EARTH as on the
   site: pure mode shows only Fractonica units.
 - Not done yet (stages 5 and 6 of the plan): the clock on the framework (with pushing time to
-  devices, devices reporting their core version, and `fr clock` becoming `fr rtc`), a setup command with prebuilt
+  devices, devices reporting their core version, and `fr rtc` becoming `fr rtc`), a setup command with prebuilt
   firmware images (a first board still needs ESP-IDF 6.1 and a build), CI.
 
 ## Security

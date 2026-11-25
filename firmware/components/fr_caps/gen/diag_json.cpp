@@ -25,9 +25,10 @@
 #include "battery.hpp"
 #include "haptic.hpp"
 #include "storage.hpp"
-#include "clock.hpp"
+#include "rtc.hpp"
 #include "stepper.hpp"
 #include "buzzer.hpp"
+#include "face.hpp"
 #include "node.hpp"
 #include "ota.hpp"
 #include "diag.hpp"
@@ -50,9 +51,10 @@ cJSON *to_json(const ScaleTraits &v);
 cJSON *to_json(const BatteryTraits &v);
 cJSON *to_json(const HapticTraits &v);
 cJSON *to_json(const StorageTraits &v);
-cJSON *to_json(const ClockTraits &v);
+cJSON *to_json(const RtcTraits &v);
 cJSON *to_json(const StepperTraits &v);
 cJSON *to_json(const BuzzerTraits &v);
+cJSON *to_json(const FaceTraits &v);
 #if FR_TEST_HOOKS
 cJSON *to_json(const ButtonInjectArgs &v);
 cJSON *to_json(const ButtonDown &v);
@@ -74,7 +76,12 @@ cJSON *to_json(const DisplayUiSetArgs &v);
 cJSON *to_json(const DisplaySnapshotResult &v);
 cJSON *to_json(const DisplaySnapshotReadArgs &v);
 cJSON *to_json(const DisplaySnapshotReadResult &v);
+cJSON *to_json(const DisplayBitmapArgs &v);
+cJSON *to_json(const DisplayRefreshArgs &v);
+cJSON *to_json(const DisplayRefreshResult &v);
+cJSON *to_json(const DisplayHoldArgs &v);
 cJSON *to_json(const DisplayUi &v);
+cJSON *to_json(const DisplayRefreshed &v);
 cJSON *to_json(const AudioOutToneArgs &v);
 cJSON *to_json(const AudioOutPlayArgs &v);
 cJSON *to_json(const AudioOutSetVolumeArgs &v);
@@ -151,12 +158,12 @@ cJSON *to_json(const StorageRenameArgs &v);
 cJSON *to_json(const StorageRemountResult &v);
 cJSON *to_json(const StorageMounted &v);
 cJSON *to_json(const StorageUnmounted &v);
-cJSON *to_json(const ClockReadResult &v);
-cJSON *to_json(const ClockSetArgs &v);
-cJSON *to_json(const ClockSetAgingArgs &v);
-cJSON *to_json(const ClockInjectArgs &v);
-cJSON *to_json(const ClockLostPower &v);
-cJSON *to_json(const ClockSet &v);
+cJSON *to_json(const RtcReadResult &v);
+cJSON *to_json(const RtcSetArgs &v);
+cJSON *to_json(const RtcSetAgingArgs &v);
+cJSON *to_json(const RtcInjectArgs &v);
+cJSON *to_json(const RtcLostPower &v);
+cJSON *to_json(const RtcSet &v);
 cJSON *to_json(const StepperMoveToArgs &v);
 cJSON *to_json(const StepperMoveByArgs &v);
 cJSON *to_json(const StepperJogArgs &v);
@@ -169,6 +176,8 @@ cJSON *to_json(const BuzzerBeepArgs &v);
 cJSON *to_json(const BuzzerMelodyArgs &v);
 cJSON *to_json(const BuzzerSetVolumeArgs &v);
 cJSON *to_json(const BuzzerDone &v);
+cJSON *to_json(const FaceInputArgs &v);
+cJSON *to_json(const FaceSetArgs &v);
 cJSON *to_json(const NodeHub &v);
 cJSON *to_json(const NodeIdentifyArgs &v);
 cJSON *to_json(const NodeDescribeResult &v);
@@ -502,6 +511,7 @@ cJSON *to_json(const DisplayTraits &v)
     ok = ok && add(o, "ui", json_bool(v.ui));
     ok = ok && add(o, "touch", json_bool(v.touch));
     ok = ok && add(o, "round", json_bool(v.round));
+    ok = ok && add(o, "epaper", json_bool(v.epaper));
     return finish(o, ok);
 }
 
@@ -596,7 +606,7 @@ cJSON *to_json(const StorageTraits &v)
     return finish(o, ok);
 }
 
-cJSON *to_json(const ClockTraits &v)
+cJSON *to_json(const RtcTraits &v)
 {
     cJSON *o = cJSON_CreateObject();
     bool ok = o != nullptr;
@@ -621,6 +631,16 @@ cJSON *to_json(const BuzzerTraits &v)
     ok = ok && add(o, "volume", json_bool(v.volume));
     ok = ok && add(o, "min_hz", json_number(v.min_hz));
     ok = ok && add(o, "max_hz", json_number(v.max_hz));
+    return finish(o, ok);
+}
+
+cJSON *to_json(const FaceTraits &v)
+{
+    cJSON *o = cJSON_CreateObject();
+    bool ok = o != nullptr;
+    ok = ok && add(o, "width", json_number(v.width));
+    ok = ok && add(o, "height", json_number(v.height));
+    ok = ok && add(o, "can_sleep", json_bool(v.can_sleep));
     return finish(o, ok);
 }
 
@@ -828,6 +848,45 @@ cJSON *to_json(const DisplaySnapshotReadResult &v)
     return finish(o, ok);
 }
 
+cJSON *to_json(const DisplayBitmapArgs &v)
+{
+    cJSON *o = cJSON_CreateObject();
+    bool ok = o != nullptr;
+    ok = ok && add(o, "x", json_number(v.x));
+    ok = ok && add(o, "y", json_number(v.y));
+    ok = ok && add(o, "w", json_number(v.w));
+    ok = ok && add(o, "h", json_number(v.h));
+    ok = ok && add(o, "data", json_bytes(v.data));
+    ok = ok && add(o, "color", json_number(v.color));
+    ok = ok && add(o, "bg", json_number(v.bg));
+    return finish(o, ok);
+}
+
+cJSON *to_json(const DisplayRefreshArgs &v)
+{
+    cJSON *o = cJSON_CreateObject();
+    bool ok = o != nullptr;
+    ok = ok && add(o, "mode", json_enum(v.mode));
+    return finish(o, ok);
+}
+
+cJSON *to_json(const DisplayRefreshResult &v)
+{
+    cJSON *o = cJSON_CreateObject();
+    bool ok = o != nullptr;
+    ok = ok && add(o, "mode", json_enum(v.mode));
+    ok = ok && add(o, "changed", json_bool(v.changed));
+    return finish(o, ok);
+}
+
+cJSON *to_json(const DisplayHoldArgs &v)
+{
+    cJSON *o = cJSON_CreateObject();
+    bool ok = o != nullptr;
+    ok = ok && add(o, "ms", json_number(v.ms));
+    return finish(o, ok);
+}
+
 cJSON *to_json(const DisplayUi &v)
 {
     cJSON *o = cJSON_CreateObject();
@@ -835,6 +894,22 @@ cJSON *to_json(const DisplayUi &v)
     ok = ok && add(o, "id", json_string(v.id));
     ok = ok && add(o, "kind", json_enum(v.kind));
     ok = ok && add(o, "value", json_number(v.value));
+    return finish(o, ok);
+}
+
+cJSON *to_json(const DisplayRefreshed &v)
+{
+    cJSON *o = cJSON_CreateObject();
+    bool ok = o != nullptr;
+    ok = ok && add(o, "mode", json_enum(v.mode));
+    ok = ok && add(o, "ok", json_bool(v.ok));
+    ok = ok && add(o, "ms", json_number(v.ms));
+    ok = ok && add(o, "partials", json_number(v.partials));
+    ok = ok && add(o, "x", json_number(v.x));
+    ok = ok && add(o, "y", json_number(v.y));
+    ok = ok && add(o, "w", json_number(v.w));
+    ok = ok && add(o, "h", json_number(v.h));
+    ok = ok && add(o, "crc", json_number(v.crc));
     return finish(o, ok);
 }
 
@@ -1594,7 +1669,7 @@ cJSON *to_json(const StorageUnmounted &v)
     return finish(o, ok);
 }
 
-cJSON *to_json(const ClockReadResult &v)
+cJSON *to_json(const RtcReadResult &v)
 {
     cJSON *o = cJSON_CreateObject();
     bool ok = o != nullptr;
@@ -1609,7 +1684,7 @@ cJSON *to_json(const ClockReadResult &v)
     return finish(o, ok);
 }
 
-cJSON *to_json(const ClockSetArgs &v)
+cJSON *to_json(const RtcSetArgs &v)
 {
     cJSON *o = cJSON_CreateObject();
     bool ok = o != nullptr;
@@ -1619,7 +1694,7 @@ cJSON *to_json(const ClockSetArgs &v)
     return finish(o, ok);
 }
 
-cJSON *to_json(const ClockSetAgingArgs &v)
+cJSON *to_json(const RtcSetAgingArgs &v)
 {
     cJSON *o = cJSON_CreateObject();
     bool ok = o != nullptr;
@@ -1627,7 +1702,7 @@ cJSON *to_json(const ClockSetAgingArgs &v)
     return finish(o, ok);
 }
 
-cJSON *to_json(const ClockInjectArgs &v)
+cJSON *to_json(const RtcInjectArgs &v)
 {
     cJSON *o = cJSON_CreateObject();
     bool ok = o != nullptr;
@@ -1636,13 +1711,13 @@ cJSON *to_json(const ClockInjectArgs &v)
     return finish(o, ok);
 }
 
-cJSON *to_json(const ClockLostPower &)
+cJSON *to_json(const RtcLostPower &)
 {
     cJSON *o = cJSON_CreateObject();
     return o;
 }
 
-cJSON *to_json(const ClockSet &v)
+cJSON *to_json(const RtcSet &v)
 {
     cJSON *o = cJSON_CreateObject();
     bool ok = o != nullptr;
@@ -1822,6 +1897,45 @@ cJSON *to_json(const BuzzerDone &v)
     bool ok = o != nullptr;
     ok = ok && add(o, "sound", json_enum(v.sound));
     ok = ok && add(o, "reason", json_enum(v.reason));
+    return finish(o, ok);
+}
+
+cJSON *to_json(const FaceInputArgs &v)
+{
+    cJSON *o = cJSON_CreateObject();
+    bool ok = o != nullptr;
+    ok = ok && add(o, "event", json_enum(v.event));
+    return finish(o, ok);
+}
+
+cJSON *to_json(const FaceSetArgs &v)
+{
+    cJSON *o = cJSON_CreateObject();
+    bool ok = o != nullptr;
+    if (v.has_mode) {
+        ok = ok && add(o, "mode", json_enum(v.mode));
+    }
+    if (v.has_focus) {
+        ok = ok && add(o, "focus", json_number(v.focus));
+    }
+    if (v.has_screen) {
+        ok = ok && add(o, "screen", json_enum(v.screen));
+    }
+    if (v.has_step) {
+        ok = ok && add(o, "step", json_enum(v.step));
+    }
+    if (v.has_utc_offset_min) {
+        ok = ok && add(o, "utc_offset_min", json_number(v.utc_offset_min));
+    }
+    if (v.has_power_save) {
+        ok = ok && add(o, "power_save", json_bool(v.power_save));
+    }
+    if (v.has_chime) {
+        ok = ok && add(o, "chime", json_enum(v.chime));
+    }
+    if (v.has_clicks) {
+        ok = ok && add(o, "clicks", json_bool(v.clicks));
+    }
     return finish(o, ok);
 }
 
@@ -2361,6 +2475,76 @@ Status args_display_snapshot_read(const cJSON *obj, fr::wire::Writer &w)
             ok = from_json_uint(it, 0xFFFFFFFF, v.offset);
         } else if (key == "len") {
             ok = from_json_uint(it, 0xFFFF, v.len);
+        } else {
+            ok = false;  // unknown key
+        }
+    }
+    if (!ok || !valid(v)) {
+        return std::unexpected(Err::invalid_args);
+    }
+    encode(v, w);
+    return encoded(w);
+}
+
+Status args_display_bitmap(const cJSON *obj, fr::wire::Writer &w)
+{
+    DisplayBitmapArgs v{};
+    uint8_t data_buf[1200];
+    bool ok = true;
+    for (const cJSON *it = obj != nullptr ? obj->child : nullptr; ok && it != nullptr; it = it->next) {
+        const std::string_view key = it->string != nullptr ? it->string : "";
+        if (key == "x") {
+            ok = from_json_sint(it, -0x8000, 0x7FFF, v.x);
+        } else if (key == "y") {
+            ok = from_json_sint(it, -0x8000, 0x7FFF, v.y);
+        } else if (key == "w") {
+            ok = from_json_uint(it, 0xFFFF, v.w);
+        } else if (key == "h") {
+            ok = from_json_uint(it, 0xFFFF, v.h);
+        } else if (key == "data") {
+            ok = from_json_bytes(it, data_buf, v.data);
+        } else if (key == "color") {
+            ok = from_json_uint(it, 0xFFFFFFFF, v.color);
+        } else if (key == "bg") {
+            ok = from_json_uint(it, 0xFFFFFFFF, v.bg);
+        } else {
+            ok = false;  // unknown key
+        }
+    }
+    if (!ok || !valid(v)) {
+        return std::unexpected(Err::invalid_args);
+    }
+    encode(v, w);
+    return encoded(w);
+}
+
+Status args_display_refresh(const cJSON *obj, fr::wire::Writer &w)
+{
+    DisplayRefreshArgs v{};
+    bool ok = true;
+    for (const cJSON *it = obj != nullptr ? obj->child : nullptr; ok && it != nullptr; it = it->next) {
+        const std::string_view key = it->string != nullptr ? it->string : "";
+        if (key == "mode") {
+            ok = from_json_enum(it, v.mode);
+        } else {
+            ok = false;  // unknown key
+        }
+    }
+    if (!ok || !valid(v)) {
+        return std::unexpected(Err::invalid_args);
+    }
+    encode(v, w);
+    return encoded(w);
+}
+
+Status args_display_hold(const cJSON *obj, fr::wire::Writer &w)
+{
+    DisplayHoldArgs v{};
+    bool ok = true;
+    for (const cJSON *it = obj != nullptr ? obj->child : nullptr; ok && it != nullptr; it = it->next) {
+        const std::string_view key = it->string != nullptr ? it->string : "";
+        if (key == "ms") {
+            ok = from_json_uint(it, 0xFFFF, v.ms);
         } else {
             ok = false;  // unknown key
         }
@@ -3325,7 +3509,7 @@ Status args_storage_remount(const cJSON *obj)
     return {};
 }
 
-Status args_clock_read(const cJSON *obj)
+Status args_rtc_read(const cJSON *obj)
 {
     if (obj != nullptr && obj->child != nullptr) {
         return std::unexpected(Err::invalid_args);
@@ -3333,9 +3517,9 @@ Status args_clock_read(const cJSON *obj)
     return {};
 }
 
-Status args_clock_set(const cJSON *obj, fr::wire::Writer &w)
+Status args_rtc_set(const cJSON *obj, fr::wire::Writer &w)
 {
-    ClockSetArgs v{};
+    RtcSetArgs v{};
     bool ok = true;
     for (const cJSON *it = obj != nullptr ? obj->child : nullptr; ok && it != nullptr; it = it->next) {
         const std::string_view key = it->string != nullptr ? it->string : "";
@@ -3356,9 +3540,9 @@ Status args_clock_set(const cJSON *obj, fr::wire::Writer &w)
     return encoded(w);
 }
 
-Status args_clock_set_aging(const cJSON *obj, fr::wire::Writer &w)
+Status args_rtc_set_aging(const cJSON *obj, fr::wire::Writer &w)
 {
-    ClockSetAgingArgs v{};
+    RtcSetAgingArgs v{};
     bool ok = true;
     for (const cJSON *it = obj != nullptr ? obj->child : nullptr; ok && it != nullptr; it = it->next) {
         const std::string_view key = it->string != nullptr ? it->string : "";
@@ -3375,9 +3559,9 @@ Status args_clock_set_aging(const cJSON *obj, fr::wire::Writer &w)
     return encoded(w);
 }
 
-Status args_clock_inject(const cJSON *obj, fr::wire::Writer &w)
+Status args_rtc_inject(const cJSON *obj, fr::wire::Writer &w)
 {
-    ClockInjectArgs v{};
+    RtcInjectArgs v{};
     bool ok = true;
     for (const cJSON *it = obj != nullptr ? obj->child : nullptr; ok && it != nullptr; it = it->next) {
         const std::string_view key = it->string != nullptr ? it->string : "";
@@ -3692,6 +3876,74 @@ Status args_buzzer_set_volume(const cJSON *obj, fr::wire::Writer &w)
         const std::string_view key = it->string != nullptr ? it->string : "";
         if (key == "volume") {
             ok = from_json_uint(it, 0xFF, v.volume);
+        } else {
+            ok = false;  // unknown key
+        }
+    }
+    if (!ok || !valid(v)) {
+        return std::unexpected(Err::invalid_args);
+    }
+    encode(v, w);
+    return encoded(w);
+}
+
+Status args_face_show(const cJSON *obj)
+{
+    if (obj != nullptr && obj->child != nullptr) {
+        return std::unexpected(Err::invalid_args);
+    }
+    return {};
+}
+
+Status args_face_input(const cJSON *obj, fr::wire::Writer &w)
+{
+    FaceInputArgs v{};
+    bool ok = true;
+    for (const cJSON *it = obj != nullptr ? obj->child : nullptr; ok && it != nullptr; it = it->next) {
+        const std::string_view key = it->string != nullptr ? it->string : "";
+        if (key == "event") {
+            ok = from_json_enum(it, v.event);
+        } else {
+            ok = false;  // unknown key
+        }
+    }
+    if (!ok || !valid(v)) {
+        return std::unexpected(Err::invalid_args);
+    }
+    encode(v, w);
+    return encoded(w);
+}
+
+Status args_face_set(const cJSON *obj, fr::wire::Writer &w)
+{
+    FaceSetArgs v{};
+    bool ok = true;
+    for (const cJSON *it = obj != nullptr ? obj->child : nullptr; ok && it != nullptr; it = it->next) {
+        const std::string_view key = it->string != nullptr ? it->string : "";
+        if (key == "mode") {
+            v.has_mode = true;
+            ok = from_json_enum(it, v.mode);
+        } else if (key == "focus") {
+            v.has_focus = true;
+            ok = from_json_uint(it, 0xFF, v.focus);
+        } else if (key == "screen") {
+            v.has_screen = true;
+            ok = from_json_enum(it, v.screen);
+        } else if (key == "step") {
+            v.has_step = true;
+            ok = from_json_enum(it, v.step);
+        } else if (key == "utc_offset_min") {
+            v.has_utc_offset_min = true;
+            ok = from_json_sint(it, -0x8000, 0x7FFF, v.utc_offset_min);
+        } else if (key == "power_save") {
+            v.has_power_save = true;
+            ok = from_json_bool(it, v.power_save);
+        } else if (key == "chime") {
+            v.has_chime = true;
+            ok = from_json_enum(it, v.chime);
+        } else if (key == "clicks") {
+            v.has_clicks = true;
+            ok = from_json_bool(it, v.clicks);
         } else {
             ok = false;  // unknown key
         }
@@ -4080,6 +4332,12 @@ cJSON *display_to_json(uint8_t cls, uint8_t id, std::span<const uint8_t> body)
             return json_empty(body);
         case Display::kCmdSnapshotRead:
             return json_of(decode_display_snapshot_read_args(body));
+        case Display::kCmdBitmap:
+            return json_of(decode_display_bitmap_args(body));
+        case Display::kCmdRefresh:
+            return json_of(decode_display_refresh_args(body));
+        case Display::kCmdHold:
+            return json_of(decode_display_hold_args(body));
         }
         break;
     case fr::wire::kClsResult:
@@ -4100,12 +4358,20 @@ cJSON *display_to_json(uint8_t cls, uint8_t id, std::span<const uint8_t> body)
             return json_of(decode_display_snapshot_result(body));
         case Display::kCmdSnapshotRead:
             return json_of(decode_display_snapshot_read_result(body));
+        case Display::kCmdBitmap:
+            return json_empty(body);
+        case Display::kCmdRefresh:
+            return json_of(decode_display_refresh_result(body));
+        case Display::kCmdHold:
+            return json_empty(body);
         }
         break;
     case fr::wire::kClsEvent:
         switch (id) {
         case Display::kEventUi:
             return json_of(decode_display_ui(body));
+        case Display::kEventRefreshed:
+            return json_of(decode_display_refreshed(body));
         }
         break;
     case fr::wire::kClsState:
@@ -4117,6 +4383,30 @@ cJSON *display_to_json(uint8_t cls, uint8_t id, std::span<const uint8_t> body)
             }
             cJSON *o = cJSON_CreateObject();
             return finish(o, o != nullptr && add(o, "brightness", json_number(*v)));
+        }
+        case Display::kPropPartials: {
+            const auto v = decode_display_partials_state(body);
+            if (!v) {
+                return nullptr;
+            }
+            cJSON *o = cJSON_CreateObject();
+            return finish(o, o != nullptr && add(o, "partials", json_number(*v)));
+        }
+        case Display::kPropShownCrc: {
+            const auto v = decode_display_shown_crc_state(body);
+            if (!v) {
+                return nullptr;
+            }
+            cJSON *o = cJSON_CreateObject();
+            return finish(o, o != nullptr && add(o, "shown_crc", json_number(*v)));
+        }
+        case Display::kPropRefreshMs: {
+            const auto v = decode_display_refresh_ms_state(body);
+            if (!v) {
+                return nullptr;
+            }
+            cJSON *o = cJSON_CreateObject();
+            return finish(o, o != nullptr && add(o, "refresh_ms", json_number(*v)));
         }
         }
         break;
@@ -4952,69 +5242,69 @@ cJSON *storage_to_json(uint8_t cls, uint8_t id, std::span<const uint8_t> body)
     return nullptr;
 }
 
-cJSON *clock_to_json(uint8_t cls, uint8_t id, std::span<const uint8_t> body)
+cJSON *rtc_to_json(uint8_t cls, uint8_t id, std::span<const uint8_t> body)
 {
     switch (cls) {
     case fr::wire::kClsCmd:
         switch (id) {
-        case Clock::kCmdRead:
+        case Rtc::kCmdRead:
             return json_empty(body);
-        case Clock::kCmdSet:
-            return json_of(decode_clock_set_args(body));
-        case Clock::kCmdSetAging:
-            return json_of(decode_clock_set_aging_args(body));
-        case Clock::kCmdInject:
-            return json_of(decode_clock_inject_args(body));
+        case Rtc::kCmdSet:
+            return json_of(decode_rtc_set_args(body));
+        case Rtc::kCmdSetAging:
+            return json_of(decode_rtc_set_aging_args(body));
+        case Rtc::kCmdInject:
+            return json_of(decode_rtc_inject_args(body));
         }
         break;
     case fr::wire::kClsResult:
         switch (id) {
-        case Clock::kCmdRead:
-            return json_of(decode_clock_read_result(body));
-        case Clock::kCmdSet:
+        case Rtc::kCmdRead:
+            return json_of(decode_rtc_read_result(body));
+        case Rtc::kCmdSet:
             return json_empty(body);
-        case Clock::kCmdSetAging:
+        case Rtc::kCmdSetAging:
             return json_empty(body);
-        case Clock::kCmdInject:
+        case Rtc::kCmdInject:
             return json_empty(body);
         }
         break;
     case fr::wire::kClsEvent:
         switch (id) {
-        case Clock::kEventLostPower:
-            return json_of(decode_clock_lost_power(body));
-        case Clock::kEventSet:
-            return json_of(decode_clock_set(body));
+        case Rtc::kEventLostPower:
+            return json_of(decode_rtc_lost_power(body));
+        case Rtc::kEventSet:
+            return json_of(decode_rtc_set(body));
         }
         break;
     case fr::wire::kClsState:
         switch (id) {
-        case Clock::kPropUnix: {
-            const auto v = decode_clock_unix_state(body);
+        case Rtc::kPropUnix: {
+            const auto v = decode_rtc_unix_state(body);
             if (!v) {
                 return nullptr;
             }
             cJSON *o = cJSON_CreateObject();
             return finish(o, o != nullptr && add(o, "unix", json_number(*v)));
         }
-        case Clock::kPropValid: {
-            const auto v = decode_clock_valid_state(body);
+        case Rtc::kPropValid: {
+            const auto v = decode_rtc_valid_state(body);
             if (!v) {
                 return nullptr;
             }
             cJSON *o = cJSON_CreateObject();
             return finish(o, o != nullptr && add(o, "valid", json_bool(*v)));
         }
-        case Clock::kPropTempC10: {
-            const auto v = decode_clock_temp_c10_state(body);
+        case Rtc::kPropTempC10: {
+            const auto v = decode_rtc_temp_c10_state(body);
             if (!v) {
                 return nullptr;
             }
             cJSON *o = cJSON_CreateObject();
             return finish(o, o != nullptr && add(o, "temp_c10", json_number(*v)));
         }
-        case Clock::kPropOffsetMs: {
-            const auto v = decode_clock_offset_ms_state(body);
+        case Rtc::kPropOffsetMs: {
+            const auto v = decode_rtc_offset_ms_state(body);
             if (!v) {
                 return nullptr;
             }
@@ -5325,6 +5615,127 @@ cJSON *buzzer_to_json(uint8_t cls, uint8_t id, std::span<const uint8_t> body)
     return nullptr;
 }
 
+cJSON *face_to_json(uint8_t cls, uint8_t id, std::span<const uint8_t> body)
+{
+    switch (cls) {
+    case fr::wire::kClsCmd:
+        switch (id) {
+        case Face::kCmdShow:
+            return json_empty(body);
+        case Face::kCmdInput:
+            return json_of(decode_face_input_args(body));
+        case Face::kCmdSet:
+            return json_of(decode_face_set_args(body));
+        }
+        break;
+    case fr::wire::kClsResult:
+        switch (id) {
+        case Face::kCmdShow:
+            return json_empty(body);
+        case Face::kCmdInput:
+            return json_empty(body);
+        case Face::kCmdSet:
+            return json_empty(body);
+        }
+        break;
+    case fr::wire::kClsState:
+        switch (id) {
+        case Face::kPropMode: {
+            const auto v = decode_face_mode_state(body);
+            if (!v || !(is_known(*v))) {
+                return nullptr;
+            }
+            cJSON *o = cJSON_CreateObject();
+            return finish(o, o != nullptr && add(o, "mode", json_enum(*v)));
+        }
+        case Face::kPropScreen: {
+            const auto v = decode_face_screen_state(body);
+            if (!v || !(is_known(*v))) {
+                return nullptr;
+            }
+            cJSON *o = cJSON_CreateObject();
+            return finish(o, o != nullptr && add(o, "screen", json_enum(*v)));
+        }
+        case Face::kPropFocus: {
+            const auto v = decode_face_focus_state(body);
+            if (!v) {
+                return nullptr;
+            }
+            cJSON *o = cJSON_CreateObject();
+            return finish(o, o != nullptr && add(o, "focus", json_number(*v)));
+        }
+        case Face::kPropStep: {
+            const auto v = decode_face_step_state(body);
+            if (!v || !(is_known(*v))) {
+                return nullptr;
+            }
+            cJSON *o = cJSON_CreateObject();
+            return finish(o, o != nullptr && add(o, "step", json_enum(*v)));
+        }
+        case Face::kPropUtcOffsetMin: {
+            const auto v = decode_face_utc_offset_min_state(body);
+            if (!v) {
+                return nullptr;
+            }
+            cJSON *o = cJSON_CreateObject();
+            return finish(o, o != nullptr && add(o, "utc_offset_min", json_number(*v)));
+        }
+        case Face::kPropShown: {
+            const auto v = decode_face_shown_state(body);
+            if (!v) {
+                return nullptr;
+            }
+            cJSON *o = cJSON_CreateObject();
+            return finish(o, o != nullptr && add(o, "shown", json_bool(*v)));
+        }
+        case Face::kPropTimeValid: {
+            const auto v = decode_face_time_valid_state(body);
+            if (!v) {
+                return nullptr;
+            }
+            cJSON *o = cJSON_CreateObject();
+            return finish(o, o != nullptr && add(o, "time_valid", json_bool(*v)));
+        }
+        case Face::kPropTimeSource: {
+            const auto v = decode_face_time_source_state(body);
+            if (!v || !(is_known(*v))) {
+                return nullptr;
+            }
+            cJSON *o = cJSON_CreateObject();
+            return finish(o, o != nullptr && add(o, "time_source", json_enum(*v)));
+        }
+        case Face::kPropPowerSave: {
+            const auto v = decode_face_power_save_state(body);
+            if (!v) {
+                return nullptr;
+            }
+            cJSON *o = cJSON_CreateObject();
+            return finish(o, o != nullptr && add(o, "power_save", json_bool(*v)));
+        }
+        case Face::kPropChime: {
+            const auto v = decode_face_chime_state(body);
+            if (!v || !(is_known(*v))) {
+                return nullptr;
+            }
+            cJSON *o = cJSON_CreateObject();
+            return finish(o, o != nullptr && add(o, "chime", json_enum(*v)));
+        }
+        case Face::kPropClicks: {
+            const auto v = decode_face_clicks_state(body);
+            if (!v) {
+                return nullptr;
+            }
+            cJSON *o = cJSON_CreateObject();
+            return finish(o, o != nullptr && add(o, "clicks", json_bool(*v)));
+        }
+        }
+        break;
+    default:
+        break;
+    }
+    return nullptr;
+}
+
 cJSON *node_to_json(uint8_t cls, uint8_t id, std::span<const uint8_t> body)
 {
     switch (cls) {
@@ -5470,12 +5881,14 @@ cJSON *traits_to_json(uint16_t cap_id, std::span<const uint8_t> traits)
         return json_of(decode_haptic_traits(traits));
     case Storage::kId:
         return json_of(decode_storage_traits(traits));
-    case Clock::kId:
-        return json_of(decode_clock_traits(traits));
+    case Rtc::kId:
+        return json_of(decode_rtc_traits(traits));
     case Stepper::kId:
         return json_of(decode_stepper_traits(traits));
     case Buzzer::kId:
         return json_of(decode_buzzer_traits(traits));
+    case Face::kId:
+        return json_of(decode_face_traits(traits));
     case Node::kId:
         return json_empty(traits);
     case Ota::kId:
@@ -5563,6 +5976,15 @@ Status encode_args_json(uint16_t cap_id, const char *cmd, const cJSON *args, uin
         } else if (name == "snapshot_read") {
             id = Display::kCmdSnapshotRead;
             s = args_display_snapshot_read(obj, w);
+        } else if (name == "bitmap") {
+            id = Display::kCmdBitmap;
+            s = args_display_bitmap(obj, w);
+        } else if (name == "refresh") {
+            id = Display::kCmdRefresh;
+            s = args_display_refresh(obj, w);
+        } else if (name == "hold") {
+            id = Display::kCmdHold;
+            s = args_display_hold(obj, w);
         }
         break;
     case AudioOut::kId:
@@ -5760,19 +6182,19 @@ Status encode_args_json(uint16_t cap_id, const char *cmd, const cJSON *args, uin
             s = args_storage_remount(obj);
         }
         break;
-    case Clock::kId:
+    case Rtc::kId:
         if (name == "read") {
-            id = Clock::kCmdRead;
-            s = args_clock_read(obj);
+            id = Rtc::kCmdRead;
+            s = args_rtc_read(obj);
         } else if (name == "set") {
-            id = Clock::kCmdSet;
-            s = args_clock_set(obj, w);
+            id = Rtc::kCmdSet;
+            s = args_rtc_set(obj, w);
         } else if (name == "set_aging") {
-            id = Clock::kCmdSetAging;
-            s = args_clock_set_aging(obj, w);
+            id = Rtc::kCmdSetAging;
+            s = args_rtc_set_aging(obj, w);
         } else if (name == "inject") {
-            id = Clock::kCmdInject;
-            s = args_clock_inject(obj, w);
+            id = Rtc::kCmdInject;
+            s = args_rtc_inject(obj, w);
         }
         break;
     case Stepper::kId:
@@ -5827,6 +6249,18 @@ Status encode_args_json(uint16_t cap_id, const char *cmd, const cJSON *args, uin
         } else if (name == "set_volume") {
             id = Buzzer::kCmdSetVolume;
             s = args_buzzer_set_volume(obj, w);
+        }
+        break;
+    case Face::kId:
+        if (name == "show") {
+            id = Face::kCmdShow;
+            s = args_face_show(obj);
+        } else if (name == "input") {
+            id = Face::kCmdInput;
+            s = args_face_input(obj, w);
+        } else if (name == "set") {
+            id = Face::kCmdSet;
+            s = args_face_set(obj, w);
         }
         break;
     case Node::kId:
@@ -5918,12 +6352,14 @@ cJSON *decode_to_json(uint16_t cap_id, uint8_t cls, uint8_t member_id, std::span
         return haptic_to_json(cls, member_id, body);
     case Storage::kId:
         return storage_to_json(cls, member_id, body);
-    case Clock::kId:
-        return clock_to_json(cls, member_id, body);
+    case Rtc::kId:
+        return rtc_to_json(cls, member_id, body);
     case Stepper::kId:
         return stepper_to_json(cls, member_id, body);
     case Buzzer::kId:
         return buzzer_to_json(cls, member_id, body);
+    case Face::kId:
+        return face_to_json(cls, member_id, body);
     case Node::kId:
         return node_to_json(cls, member_id, body);
     case Ota::kId:

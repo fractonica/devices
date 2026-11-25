@@ -21,7 +21,7 @@ export function useLive<T>(select: (s: LiveState) => T): T {
 }
 
 /** Ops that take long by design (the doctor's checks, a picture of a panel): no timeout (api/rest.ts). */
-const LONG_OPS: ReadonlySet<string> = new Set(['hub_doctor', 'hub_doctor_fix', 'display_snapshot', 'display_render', 'diag_exec', 'test_run', 'latency_probe', 'ota_deploy', 'build_start', 'wiring_reload']);
+const LONG_OPS: ReadonlySet<string> = new Set(['hub_doctor', 'hub_doctor_fix', 'display_snapshot', 'display_render', 'display_image', 'display_html', 'display_text', 'display_refresh', 'diag_exec', 'test_run', 'latency_probe', 'ota_deploy', 'build_start', 'wiring_reload']);
 
 export interface OpQueryOptions {
   /** No retry of a failed call (the hub's status, whose failure is the notice). */

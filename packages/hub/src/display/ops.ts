@@ -23,6 +23,7 @@ import type { Device, Handler, HubContext, OpInput } from '../context.ts';
 import { allRefused, type CommandOutcome, selectDevices, sendCommandTo } from '../router/ops.ts';
 import { framebufferBytes, framebufferToPng, pngToFramebuffer } from './png.ts';
 import { checkScript, ensureRenderer, resolvePanel, runRenderer } from './render.ts';
+import { SHOW_HANDLERS } from './show.ts';
 
 /** snapshot_read's largest chunk (fr.display: len 1..1024). */
 export const SNAPSHOT_CHUNK = 1024;
@@ -287,6 +288,8 @@ function reencodeRender(file: string, r: { crc: number; width: number; height: n
 }
 
 export const DISPLAY_HANDLERS: Record<DisplayOpName, Handler> = {
+  // Design epaper-e1 D9: pictures, pages and text on 1-bit panels, and the e-paper refresh (show.ts).
+  ...(SHOW_HANDLERS as unknown as Record<keyof typeof SHOW_HANDLERS, Handler>),
   display_snapshot: async (input: OpInput<'display_snapshot'>, hub) => {
     if (input.out !== undefined) {
       checkOut(input.out);

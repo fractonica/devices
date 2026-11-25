@@ -6,6 +6,7 @@
 
 export * from './constants.ts';
 export * from './cursor.ts';
+export * from './epaper.ts';
 export * from './glob.ts';
 export * from './haptic.ts';
 export * from './names.ts';

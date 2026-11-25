@@ -1,0 +1,27 @@
+# Driver manifest (design epaper-e1 D5; spec 07 §7.8). `fr gen firmware` validates profiles against it and fills
+# fr::drv::Ssd1683Spi::Config from the instance's multi-pin bind, `bind: { sclk: gpio.<n>, mosi: gpio.<n>, cs: gpio.<n>,
+# dc: gpio.<n>, rst: gpio.<n>, busy: gpio.<n> }` (each in the board's pins.free): a module wired to free pins.
+schema: fractonica/driver@1
+id: ssd1683_spi
+summary: SSD1683 black-and-white e-paper (the Waveshare 4.2" V2, 400 x 300) on 4-line SPI - partial, fast and full refreshes, BUSY on an interrupt; drawn by the e-paper backend.
+implements: hal.Epaper                  # a hal.Display with an e-paper controller's steps (fr/hal/epaper.hpp)
+class: fr::drv::Ssd1683Spi              # header: include/fr/drv/ssd1683_spi.hpp
+targets: [esp32c3, esp32c6, esp32s3]
+binds: gpio                             # bare pins: bind { sclk, mosi, cs, dc, rst, busy } (no board section)
+accepts_kinds: [gpio]
+config:                                 # same order as Ssd1683Spi::Config
+  sclk:    { type: gpio, from: bind.sclk, shared_bus: true, output: true, doc: "the module's CLK" }
+  mosi:    { type: gpio, from: bind.mosi, shared_bus: true, output: true, doc: "the module's DIN" }
+  cs:      { type: gpio, from: bind.cs, output: true, doc: "the module's CS" }
+  dc:      { type: gpio, from: bind.dc, output: true, doc: "the module's DC: low a command, high its data (4-line SPI: BS at 0)" }
+  rst:     { type: gpio, from: bind.rst, output: true, doc: "the module's RST, low = reset; on Waveshare's module it also switches the panel's power, so pulses stay short (2 ms)" }
+  busy:    { type: gpio, from: bind.busy, doc: "the module's BUSY, high while the controller works; an input with the internal pull-down" }
+  width:   { type: u16, default: 400, range: [8, 400], doc: "native pixels (a multiple of 8: the controller addresses bytes)" }
+  height:  { type: u16, default: 300, range: [1, 300], doc: "native pixels" }
+  spi_mhz: { type: u8, default: 10, range: [1, 20], doc: "the SSD1683 writes at up to 20 MHz; 10 is safe on loose wires (inferred)" }
+  fast_ms: { type: u16, default: 1500, range: [1000, 1500], doc: "the fast refresh: 1500 picks the controller's 110 °C waveform (1.5 s), under 1250 its 90 °C one (1 s)" }
+# fr.display traits its service reports (design epaper-e1 D2): 1 bit per pixel through fr_core's EpaperBackend.
+traits: { color: mono1, ui: false, epaper: true }
+# gpio counts every pin field; input_slot: BUSY's edges reach the core task through one.
+resources: { gpio: 6, spi_host: 1, input_slot: 1 }
+dependencies: {}

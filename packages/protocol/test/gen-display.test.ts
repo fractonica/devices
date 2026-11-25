@@ -108,10 +108,11 @@ describe('ui_load as JSON (command_send, design m2-c5-display D5)', () => {
 
 describe('bulk commands and the catalog (design m2-c5-display D1, D4)', () => {
   it('marks ui_load, snapshot and snapshot_read bulk in CAPS and the catalog, and nothing else', () => {
-    expect(DISPLAY_CAP.commands.filter((c) => c.bulk).map((c) => c.name)).toEqual(['ui_load', 'snapshot', 'snapshot_read']);
+    // fr.display 1.3 (design epaper-e1 D2) adds bitmap, BULK too.
+    expect(DISPLAY_CAP.commands.filter((c) => c.bulk).map((c) => c.name)).toEqual(['ui_load', 'snapshot', 'snapshot_read', 'bitmap']);
     expect(findCap('fr.led')!.commands.some((c) => c.bulk)).toBe(false);
     const cat = CATALOG.capabilities.find((c) => c.name === 'fr.display')!;
-    expect(cat.commands.filter((c) => c.bulk).map((c) => c.name)).toEqual(['ui_load', 'snapshot', 'snapshot_read']);
+    expect(cat.commands.filter((c) => c.bulk).map((c) => c.name)).toEqual(['ui_load', 'snapshot', 'snapshot_read', 'bitmap']);
     expect(Object.keys(cat.messages ?? {})).toEqual(['UiWidget', 'UiLayout']);
   });
 

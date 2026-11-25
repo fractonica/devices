@@ -1736,7 +1736,7 @@ function capSource(cap: Capability): string {
         c.line(`case ${k}: {`).indent();
         if (cmd.fields.length > 0) {
           c.line(`const auto a = decode_${cap.shortName}_${cmd.name}_args(args);`);
-          // Qualified (design lcd-clock-c1): a capability with a property named `valid` (fr.clock) hides the free
+          // Qualified (design lcd-clock-c1): a capability with a property named `valid` (fr.rtc) hides the free
           // function inside its class.
           c.open('if (!a || !fr::cap::valid(*a))', () => c.line('return std::unexpected(Err::invalid_args);'));
         } else {

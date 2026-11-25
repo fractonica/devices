@@ -13,7 +13,9 @@ set(FRACTONICA_UI_SOURCES
     src/fui_canvas.c
     src/fui_disc.c
     src/fui_face_mono.c
+    src/fui_face_mono400.c
     src/fui_font.c
+    src/fui_font_line.c
     src/fui_font_small.c
     src/fui_font_text.c
     src/fui_glyph.c
@@ -26,6 +28,7 @@ set(FRACTONICA_UI_SOURCES
     src/fui_screen_now.c
     src/fui_screen_stamp.c
     src/fui_screen_sun.c
+    src/fui_shim.c
     src/fui_stroke.c
     src/fui_theme.c
     src/fui_trig.c

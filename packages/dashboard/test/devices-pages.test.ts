@@ -346,13 +346,31 @@ describe('every sub-page', () => {
   });
 });
 
-describe('the face mirror seam', () => {
-  it('renders nothing without an fr.face instance, and its place with one', async () => {
+describe('the face block (design face-f1 D10)', () => {
+  it('renders nothing without an fr.face instance, and the face in words with its presses with one', async () => {
     const face = await import('../src/pages/device/face.tsx');
     const inst = (cap: string) => ({ name: cap.slice(3), port: 1, cap, cap_id: 1, v: '', traits: null });
     expect(renderToString(createElement(face.FaceMirror, { instances: [inst('fr.led')], deviceId: 'd' }))).toBe('');
-    const html = renderToString(createElement(face.FaceMirror, { instances: [inst('fr.face')], deviceId: 'd' }));
+    const router = { properties: { 'face.shown': false, 'face.time_valid': true, 'face.time_source': 'hub', 'face.step': 'preon', 'face.power_save': false } };
+    const html = render(createElement(face.FaceMirror, { instances: [inst('fr.face')], deviceId: 'd', detail: { presence: 'online', router } as never }));
     expect(html).toContain('data-face="d"');
-    expect(html).toContain('THE FACE MIRROR IS COMING');
+    expect(html).toContain('yielded: a picture from the hub is on the panel');
+    expect(html).toContain('knows the time, from the hub');
+    expect(html).toContain('every Preon');
+    for (const a of ['face-show', 'face-prev', 'face-next', 'face-select', 'face-long']) {
+      expect(html).toContain(`data-action="${a}"`);
+    }
+    expect(html).not.toContain('data-face-sound');  // no buzzer on this device
+    expect(face.faceWords({ power_save: true }).save).toMatch(/off the network/);
+  });
+
+  it('says what the face sounds like on a device with a buzzer (D19)', async () => {
+    const face = await import('../src/pages/device/face.tsx');
+    const inst = (cap: string) => ({ name: cap.slice(3), port: 1, cap, cap_id: 1, v: '', traits: null });
+    const router = { properties: { 'face.chime': 'preon', 'face.clicks': true } };
+    const html = render(createElement(face.FaceMirror, { instances: [inst('fr.face'), inst('fr.buzzer')], deviceId: 'd', detail: { presence: 'online', router } as never }));
+    expect(html).toContain('chimes each Preon and longer; keys click');
+    expect(face.faceWords({ chime: 'off', clicks: false }, true).sound).toBe('chimes never; keys silent');
+    expect(face.faceWords({ chime: 'helion' }, false).sound).toBeNull();
   });
 });

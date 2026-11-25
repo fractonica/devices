@@ -24,11 +24,11 @@ const NAMES = [
   'storage_rm',
   'storage_mkdir',
   'storage_bench',
-  'clock_read',
-  'clock_sync',
-  'clock_set',
-  'clock_aging',
-  'clock_drift',
+  'rtc_read',
+  'rtc_sync',
+  'rtc_set',
+  'rtc_aging',
+  'rtc_drift',
 ];
 
 describe('LCD-1 / CLOCK-1 ops (design lcd-clock-c1 D9)', () => {
@@ -44,11 +44,11 @@ describe('LCD-1 / CLOCK-1 ops (design lcd-clock-c1 D9)', () => {
       storage_rm: [['storage', 'rm'], ['device', 'path'], 'command', 'mutate'],
       storage_mkdir: [['storage', 'mkdir'], ['device', 'path'], 'command', 'mutate'],
       storage_bench: [['storage', 'bench'], ['device'], 'job', 'mutate'],
-      clock_read: [['clock', 'read'], ['device'], 'query', 'read'],
-      clock_sync: [['clock', 'sync'], ['device'], 'command', 'mutate'],
-      clock_set: [['clock', 'set'], ['device', 'iso'], 'command', 'mutate'],
-      clock_aging: [['clock', 'aging'], ['device', 'offset'], 'command', 'mutate'],
-      clock_drift: [['clock', 'drift'], ['device', 'minutes'], 'job', 'mutate'],
+      rtc_read: [['rtc', 'read'], ['device'], 'query', 'read'],
+      rtc_sync: [['rtc', 'sync'], ['device'], 'command', 'mutate'],
+      rtc_set: [['rtc', 'set'], ['device', 'iso'], 'command', 'mutate'],
+      rtc_aging: [['rtc', 'aging'], ['device', 'offset'], 'command', 'mutate'],
+      rtc_drift: [['rtc', 'drift'], ['device', 'minutes'], 'job', 'mutate'],
     };
     for (const [name, [path, positional, kind, tier]] of Object.entries(paths)) {
       const op = findOp(name)!;
@@ -79,20 +79,20 @@ describe('LCD-1 / CLOCK-1 ops (design lcd-clock-c1 D9)', () => {
   });
 
   it('checks the clock inputs: the aging register and the drift', () => {
-    const aging = findOp('clock_aging')!.input;
+    const aging = findOp('rtc_aging')!.input;
     expect(aging.safeParse({ device: 'lcd-c6', offset: -128 }).success).toBe(true);
     expect(aging.safeParse({ device: 'lcd-c6', offset: 127 }).success).toBe(true);
     expect(aging.safeParse({ device: 'lcd-c6', offset: 128 }).success).toBe(false);
     expect(aging.safeParse({ device: 'lcd-c6', offset: 1.5 }).success).toBe(false);
-    const drift = findOp('clock_drift')!.input;
+    const drift = findOp('rtc_drift')!.input;
     expect(drift.parse({ device: 'lcd-c6', minutes: 30 })).toMatchObject({ interval_s: 10 });
     expect(drift.safeParse({ device: 'lcd-c6', minutes: 0.5 }).success).toBe(false);
     expect(drift.safeParse({ device: 'lcd-c6', minutes: 1441 }).success).toBe(false);
   });
 
-  it('has fr.storage 0x000F and fr.clock 0x0010 in the catalog', () => {
+  it('has fr.storage 0x000F and fr.rtc 0x0010 in the catalog', () => {
     const storage = CATALOG.capabilities.find((c) => c.name === 'fr.storage');
-    const clock = CATALOG.capabilities.find((c) => c.name === 'fr.clock');
+    const clock = CATALOG.capabilities.find((c) => c.name === 'fr.rtc');
     expect(storage?.id).toBe(0x000f);
     expect(clock?.id).toBe(0x0010);
   });

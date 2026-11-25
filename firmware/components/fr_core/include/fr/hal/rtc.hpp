@@ -1,5 +1,5 @@
 // L1 real-time clock contract (design lcd-clock-c1 D7, D8): a battery-backed clock counting whole seconds (the DS3231).
-// ClockService (fr.clock) polls it, catches each seconds rollover and keeps the reports; the driver (ds3231_i2c) owns the
+// RtcService (fr.rtc) polls it, catches each seconds rollover and keeps the reports; the driver (ds3231_i2c) owns the
 // bus and the register layout.
 //
 // Threading: init() at board init; every other call on the core task. Each call is one short I2C transaction (about
@@ -41,13 +41,23 @@ public:
     virtual std::expected<int16_t, Err> temp_c10() = 0;
     virtual std::expected<int8_t, Err> aging() = 0;
     virtual Status set_aging(int8_t offset) = 0;
-    /** The node's own wall clock (settimeofday) to `unix` (ClockService's seed_system_time); a host fake records it. */
-    virtual void set_system_time(uint32_t unix) = 0;
+    /**
+     * Design face-f1 D14: the chip's alarm at `unix` (whole seconds), pulling its alarm pin low when it fires, until
+     * clear_alarm() (or the next init) clears the flag. A chip or a wiring without the pin answers unsupported.
+     */
+    virtual Status set_alarm(uint32_t unix)
+    {
+        (void)unix;
+        return std::unexpected(Err::unsupported);
+    }
+    virtual Status clear_alarm() { return std::unexpected(Err::unsupported); }
+    /** The GPIO the alarm pin is wired to (open drain, low when it fires), or -1. */
+    virtual int alarm_pin() const { return -1; }
     virtual bool has_temperature() const { return true; }
     /** 1000: the chip counts whole seconds. */
     virtual uint16_t resolution_ms() const { return 1000; }
     virtual Selftest selftest() = 0;
-    /** Failed transactions so far (the driver's own count; ClockService's selftest reports it with its own). */
+    /** Failed transactions so far (the driver's own count; RtcService's selftest reports it with its own). */
     virtual uint32_t bus_errors() const { return 0; }
     /** A line for the node's log (the service is IDF-free; the driver logs it as a warning). */
     virtual void note(const char *what) { (void)what; }

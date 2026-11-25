@@ -4,7 +4,7 @@
  * console lines. It answers "how often does the UI task wake, and what does
  * it send to the panel?" without a board.
  *
- *   fractonica-fwsim [--face round240|rect240|rect240x320|mono]
+ *   fractonica-fwsim [--face round240|rect240|rect240x320|mono|mono400x300]
  *                    [--t <unix seconds>|none]     start-up clock (default: SPEC vector A)
  *                    [--mode pure|earth] [--focus 0..13] [--utc-offset <minutes>]
  *                    [--band <rows>]               band rendering (0: the whole frame)
@@ -260,7 +260,7 @@ int main(int argc, char **argv)
     }
     if (out) {
         int w, h;
-        uint8_t *rgb = sim_frame_rgb(&port.panel, info->mono ? 4 : 2, &w, &h);
+        uint8_t *rgb = sim_frame_rgb(&port.panel, config.face == FUI_FACE_MONO128 ? 4 : 2, &w, &h);
 
         if (!rgb || sim_png_write(out, rgb, w, h) != 0) {
             fprintf(stderr, "cannot write %s\n", out);

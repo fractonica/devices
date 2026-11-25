@@ -1,4 +1,4 @@
-// Clock op handlers (packages/protocol/src/ops/clock.ts; design lcd-clock-c1 D8, D9, fr.clock D7), spread into HANDLERS
+// Clock op handlers (packages/protocol/src/ops/clock.ts; design lcd-clock-c1 D8, D9, fr.rtc D7), spread into HANDLERS
 // (packages/hub/src/ops.ts).
 //
 // Time scales: the board's esp_timer µs since boot (node µs); the hub's µs (ring.ts nowUs: the wall clock at process
@@ -7,18 +7,18 @@
 // by the Mac crystal's error (~20 ppm) over the hub's uptime, so every conversion goes through `wallOffsetUs`, the wall
 // clock minus the hub µs now.
 //
-// - clock_read: fr.clock read; error_ms = (hub time of the board's last rollover + wallOffsetUs) − unix × 1e6, in ms:
+// - rtc_read: fr.rtc read; error_ms = (hub time of the board's last rollover + wallOffsetUs) − unix × 1e6, in ms:
 //   when the RTC's current second began against the Mac's (negative: the RTC is ahead). The board's `unix` is the second
-//   that began at `rollover_us` (fr.clock read's contract).
-// - clock_sync: the next whole wall second S at least CLOCK_SYNC_LEAD_MS ahead; at_us = the node time of wall S × 1e6
+//   that began at `rollover_us` (fr.rtc read's contract).
+// - rtc_sync: the next whole wall second S at least CLOCK_SYNC_LEAD_MS ahead; at_us = the node time of wall S × 1e6
 //   (syncTarget); set {unix: S, at_us, by: sync}.
-// - clock_set: set {unix, at_us: 0, by: command} from an ISO time with a zone.
+// - rtc_set: set {unix, at_us: 0, by: command} from an ISO time with a zone.
 // - Both wait for the board's `<clock>.set` event (it fires only when the write succeeded; the board answers the command
 //   at once and writes at the target), up to the lead plus CLOCK_SET_CONFIRM_MS (a late timer re-aims at a later
 //   second, unix + k: the event's unix is the one written), else a read whose rollover_us ≥ at_us and unix ≥ the one
-//   asked; neither is FAILED (the write did not land: an I2C error). They share the clock's lock with clock_drift.
-// - clock_aging: set_aging.
-// - clock_drift (job): read every interval_s for `minutes`, error_ms per sample on the hub's clock, a least-squares line
+//   asked; neither is FAILED (the write did not land: an I2C error). They share the clock's lock with rtc_drift.
+// - rtc_aging: set_aging.
+// - rtc_drift (job): read every interval_s for `minutes`, error_ms per sample on the hub's clock, a least-squares line
 //   (fitDrift): ppm = −slope (a fast RTC's second begins ever earlier), the aging step that cancels it (positive slows,
 //   about 0.1 ppm a step).
 
@@ -41,13 +41,13 @@ import { type ClockView, routerProbe } from '../router/index.ts';
 import { type CommandOutcome, sendCommandTo } from '../router/ops.ts';
 import { capInstance, num } from '../storage/instance.ts';
 
-export const CLOCK_CAP = 'fr.clock';
+export const CLOCK_CAP = 'fr.rtc';
 /** A command's RESULT: set waits up to 2 s on the board before it writes. */
 export const CLOCK_CMD_TIMEOUT_MS = 5000;
 /** How long past the target a set waits for the board's `set` event (3 re-aims of a second each, and the link). */
 export const CLOCK_SET_CONFIRM_MS = 4500;
 
-/** Test hook: ms per second of clock_drift's interval (1000; tests shorten it). */
+/** Test hook: ms per second of rtc_drift's interval (1000; tests shorten it). */
 let msPerS = 1000;
 export function setClockTiming(ms: number | null): void {
   msPerS = ms ?? 1000;
@@ -75,7 +75,7 @@ export function parseIsoUnix(iso: string): number | null {
 }
 
 /**
- * clock_sync's aim: the next whole wall second S at least `leadMs` ahead of `wallNowUs`, and the node µs it begins at:
+ * rtc_sync's aim: the next whole wall second S at least `leadMs` ahead of `wallNowUs`, and the node µs it begins at:
  * wall S × 1e6 is hub µs S × 1e6 − (wallNowUs − hubNowUs), which `toNode` maps to the node's clock.
  */
 export function syncTarget(wallNowUs: number, hubNowUs: number, toNode: (hubUs: number) => number, leadMs = CLOCK_SYNC_LEAD_MS): { unix: number; at_us: number; lead_ms: number } {
@@ -176,7 +176,7 @@ function syncedClock(hub: HubContext, dev: Device): ClockView | null {
   return c && c.synced() ? c : null;
 }
 
-/** A read's fields as clock_read's answer (error_ms through the link's clock when it is synced). */
+/** A read's fields as rtc_read's answer (error_ms through the link's clock when it is synced). */
 function readOf(hub: HubContext, dev: Device, inst: PortCap, f: Record<string, unknown>): ClockRead {
   const unix = num(f.unix) ?? 0;
   const rollover = num(f.rollover_us) ?? 0;
@@ -236,7 +236,7 @@ async function setClock(hub: HubContext, dev: Device, inst: PortCap, unix: numbe
     } else {
       throw new FrError('DELIVERY_FAILED', `${dev.alias} ${inst.name} set ${isoOf(unix)}: the board took the command but did not confirm the write (an I2C error on the clock's bus?)`, {
         details: { unix, at_us: at, read: f },
-        hint: 'fr clock read shows the time now; check the DS3231 wiring and the node log (fr logs <device> --grep ds3231)',
+        hint: 'fr rtc read shows the time now; check the DS3231 wiring and the node log (fr logs <device> --grep ds3231)',
       });
     }
   }
@@ -254,26 +254,26 @@ async function setClock(hub: HubContext, dev: Device, inst: PortCap, unix: numbe
   };
 }
 
-/** clock_sync, clock_set and clock_drift on one clock run one at a time (a set is a step in a drift fit). */
+/** rtc_sync, rtc_set and rtc_drift on one clock run one at a time (a set is a step in a drift fit). */
 const drifting = new Set<string>();
 const clockKey = (dev: Device, inst: PortCap) => `clock:${dev.device_id}:${inst.name}`;
 
 async function locked<T>(hub: HubContext, dev: Device, inst: PortCap, fn: () => Promise<T>): Promise<T> {
   void hub;
   if (drifting.has(clockKey(dev, inst))) {
-    throw new FrError('DEVICE_BUSY', `${dev.alias} ${inst.name}: a clock_drift job is measuring this clock; a set would step its fit. Cancel it or wait for it to end.`);
+    throw new FrError('DEVICE_BUSY', `${dev.alias} ${inst.name}: a rtc_drift job is measuring this clock; a set would step its fit. Cancel it or wait for it to end.`);
   }
   return fn();
 }
 
 export const CLOCK_HANDLERS: Record<ClockOpName, Handler> = {
-  clock_read: async (input: OpInput<'clock_read'>, hub) => {
+  rtc_read: async (input: OpInput<'rtc_read'>, hub) => {
     const dev = onlineDevice(hub, input.device);
     const inst = capInstance(hub, dev, input.instance, CLOCK_CAP);
     return readOf(hub, dev, inst, await command(hub, dev, inst, 'read', {}));
   },
 
-  clock_sync: async (input: OpInput<'clock_sync'>, hub) => {
+  rtc_sync: async (input: OpInput<'rtc_sync'>, hub) => {
     const dev = onlineDevice(hub, input.device);
     const inst = capInstance(hub, dev, input.instance, CLOCK_CAP);
     const c = syncedClock(hub, dev);
@@ -288,7 +288,7 @@ export const CLOCK_HANDLERS: Record<ClockOpName, Handler> = {
     });
   },
 
-  clock_set: async (input: OpInput<'clock_set'>, hub) => {
+  rtc_set: async (input: OpInput<'rtc_set'>, hub) => {
     const unix = parseIsoUnix(input.iso);
     if (unix === null || unix < 946684800 || unix > 4102444799) {
       throw new FrError('INVALID_ARGS', `iso ${input.iso} is not an ISO 8601 time with a zone between 2000 and 2099 (e.g. 2026-11-05T14:00:00Z): the DS3231 counts 2000-2099`);
@@ -298,14 +298,14 @@ export const CLOCK_HANDLERS: Record<ClockOpName, Handler> = {
     return locked(hub, dev, inst, () => setClock(hub, dev, inst, unix, 0, 'command', 0));
   },
 
-  clock_aging: async (input: OpInput<'clock_aging'>, hub) => {
+  rtc_aging: async (input: OpInput<'rtc_aging'>, hub) => {
     const dev = onlineDevice(hub, input.device);
     const inst = capInstance(hub, dev, input.instance, CLOCK_CAP);
     await command(hub, dev, inst, 'set_aging', { offset: input.offset }, `set_aging ${input.offset}`);
     return { device: dev.device_id, alias: dev.alias, instance: inst.name, offset: input.offset };
   },
 
-  clock_drift: (input: OpInput<'clock_drift'>, hub) => {
+  rtc_drift: (input: OpInput<'rtc_drift'>, hub) => {
     const dev = onlineDevice(hub, input.device);
     const inst = capInstance(hub, dev, input.instance, CLOCK_CAP);
     const job = hub.jobs.start('clock', [dev.device_id], [`clock:${dev.device_id}:${inst.name}`], async (ctx): Promise<ClockDrift> => {
@@ -314,8 +314,8 @@ export const CLOCK_HANDLERS: Record<ClockOpName, Handler> = {
       let t0: number | null = null;
       const total = input.minutes * 60 * msPerS;
       const start = performance.now();
-      // A set during the run steps the error: the fit keeps the samples before it and ends there. clock_sync and
-      // clock_set refuse while this runs (locked); a set from elsewhere (command_send) still ends the fit.
+      // A set during the run steps the error: the fit keeps the samples before it and ends there. rtc_sync and
+      // rtc_set refuse while this runs (locked); a set from elsewhere (command_send) still ends the fit.
       drifting.add(clockKey(dev, inst));
       let stepped = false;
       const offSet = hub.events.subscribe((e: HubEvent) => {

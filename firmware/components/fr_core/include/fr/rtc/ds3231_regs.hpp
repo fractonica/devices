@@ -22,6 +22,11 @@ inline constexpr uint8_t kRegTempMsb = 0x11;
  * leaves a broken-off transaction's stray data on a register writes cannot change (design lcd-clock-c1 D8, as built). */
 inline constexpr uint8_t kRegTempLsb = 0x12;
 inline constexpr uint8_t kStatusOsf = 0x80;
+/** Alarm 1 (design face-f1 D14): 0x07-0x0A seconds, minutes, hours, date; A1M1-A1M4 (bit 7 of each) clear matches all
+ * four. The control register's A1IE (bit 0) with INTCN set pulls SQW low when the status flag A1F (bit 0) sets. */
+inline constexpr uint8_t kRegAlarm1 = 0x07;
+inline constexpr uint8_t kControlA1ie = 0x01;
+inline constexpr uint8_t kStatusA1f = 0x01;
 /** 2000-01-01T00:00:00Z and the first second the chip cannot hold (it keeps 2000-2099). */
 inline constexpr uint32_t kUnix2000 = 946'684'800;
 inline constexpr uint32_t kUnix2100 = 4'102'444'800;
@@ -90,6 +95,13 @@ constexpr std::array<uint8_t, 7> encode_time(uint32_t unix)
             to_bcd(static_cast<uint8_t>(c.day)),
             to_bcd(static_cast<uint8_t>(c.month)),
             to_bcd(static_cast<uint8_t>(c.year - 2000))};
+}
+
+/** Registers 0x07-0x0A for alarm 1 at `unix` (clamped to 2000-2099): date, hours, minutes and seconds all matched. */
+constexpr std::array<uint8_t, 4> encode_alarm1(uint32_t unix)
+{
+    const auto t = encode_time(unix);
+    return {t[0], t[1], t[2], t[4]};  // DY/DT clear: the date (t[4]), not the weekday
 }
 
 /** Days in `month` (1-12) of `year` (Gregorian). */

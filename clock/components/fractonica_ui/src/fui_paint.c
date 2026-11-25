@@ -14,17 +14,25 @@
 static const fui_layout_t LAYOUTS[FUI_FACE_COUNT] = {
     /* ROUND240: centre (120, 120), R = 56, g = 8, gM = 5.5; alpha's ring at r 116 */
     { { 240, 240, 0, 1 }, FUI_FX(120), FUI_FX(120), FUI_FX(56), FUI_FX(8), FUI_FX(5.5), FUI_FX(117),
-      FUI_U_PX(5), 240, -1, -1, -1, -1, 22, 216, 225, 120 },
+      FUI_U_PX(5), 240, -1, -1, -1, -1, 22, 216, 225, 120, 0, 0, 0, 112, FUI_U_PX(5) },
     /* RECT240: three 20 px rows (reading, countdown, Earth) leave 180 rows:
      * the instrument at 5/7 scale, alpha's ring at r 82.7, the alidade to 87.7 */
     { { 240, 240, 0, 0 }, FUI_FX(120), FUI_FX(90), FUI_FX(40), FUI_FX(5.7), FUI_FX(3.9), FUI_FX(83.5),
-      FUI_U_PX(4), 179, -1, 180, 200, 220, 6, 224, 232, 120 },
+      FUI_U_PX(4), 179, -1, 180, 200, 220, 6, 224, 232, 120, 0, 0, 0, 112, FUI_U_PX(5) },
     /* RECT240X320: the instrument at full size, then words, reading, countdown, Earth */
     { { 240, 320, 0, 0 }, FUI_FX(120), FUI_FX(122), FUI_FX(56), FUI_FX(8), FUI_FX(5.5), FUI_FX(117),
-      FUI_U_PX(5), 244, 245, 257, 278, 299, 10, 300, 310, 160 },
+      FUI_U_PX(5), 244, 245, 257, 278, 299, 10, 300, 310, 160, 0, 0, 0, 112, FUI_U_PX(5) },
     /* MONO128: carrier R = 19 at (31.5, 31.5) in the left 64 x 64 */
     { { 128, 64, 1, 0 }, FUI_FX(31.5), FUI_FX(31.5), FUI_FX(19), 0, 0, 0,
-      FUI_U_MONO, 64, -1, -1, -1, -1, 0, 60, 62, 32 }
+      FUI_U_MONO, 64, -1, -1, -1, -1, 0, 60, 62, 32, 1, 0, 0, 26, FUI_U_MONO },
+    /* MONO400X300 (e-paper): NOW is the wave alone, centred on the pixel
+     * centre (199.5, 149.5) and sized at each focus so that its ink reaches
+     * 146 px (126 in EARTH, whose civil time takes the bottom centre); R 70
+     * is only where the fitting starts (fui_ring.c). The readings stand in
+     * the corners (fui_face_mono400.c). Cards: the whole panel; the SUN
+     * card's ring at r 140 (5/4 of the colour cards' 112) round the centre. */
+    { { 400, 300, 1, 0 }, FUI_FX(199.5), FUI_FX(149.5), FUI_FX(70), FUI_FX(10), FUI_FX(6.875), FUI_FX(146.25),
+      2u * FUI_U_MONO, 300, -1, -1, -1, -1, 10, 282, 291, 150, 0, 146, 126, 140, 2u * FUI_U_MONO }
 };
 
 const fui_layout_t *fui_i_layout(uint8_t face)
@@ -44,7 +52,8 @@ const fui_face_info_t *fui_face_info(fui_face_t face)
 fui_text_style_t fui_i_style(const fui_painter_t *p, fui_style_id_t id)
 {
     const fui_theme_t *t = p->theme;
-    int mono = p->lay->info.mono;
+    /* the 128 x 64 face's sizes; the paper face takes the colour faces' */
+    int mono = p->lay->tiny;
     fui_text_style_t s;
 
     /* Written-out text: the 5 x 7 font, at 2 px per dot on colour (fui_i.h). */
@@ -102,7 +111,7 @@ fui_text_style_t fui_i_style(const fui_painter_t *p, fui_style_id_t id)
     default: /* FUI_STYLE_MARK */
         s.scale = 1;
         s.ink = t->ash;
-        if (mono) {
+        if (p->lay->info.mono) {
             s.font = &fui_font_small; /* its Earth sign is 5 x 5 */
         }
         break;
@@ -172,6 +181,21 @@ int fui_i_text(fui_painter_t *p, const fui_text_style_t *style, int x, int y, fu
     return width;
 }
 
+void fui_i_mark(fui_painter_t *p, int y0, int y1, const void *what, size_t bytes)
+{
+    if (p->lines < FUI_MAX_LINES) {
+        int16_t place[2];
+
+        p->hash[p->lines] = fui_i_hash(FUI_I_HASH_SEED, what, bytes);
+        place[0] = (int16_t)y0;
+        place[1] = (int16_t)(y1 - y0);
+        p->layout_hash = fui_i_hash(p->layout_hash, place, sizeof place);
+        p->top[p->lines] = (int16_t)y0;
+        p->bottom[p->lines] = (int16_t)y1;
+        p->lines++;
+    }
+}
+
 void fui_i_line_until(fui_painter_t *p, frc_time_t t)
 {
     if (t == FRC_TIME_NONE || t <= p->ui->t) {
@@ -194,7 +218,8 @@ void fui_i_card_init(fui_card_t *card, fui_painter_t *p, char *text)
     card->top = lay->card_top;
     card->bottom = lay->card_bottom;
     card->marks_y = lay->card_marks_y;
-    card->gap = (int16_t)(lay->info.mono ? 0 : 1);
+    /* blank rows between text rows: none on 128 x 64, 3 on paper (room) */
+    card->gap = (int16_t)(lay->tiny ? 0 : lay->info.mono ? 3 : 1);
     card->head = 0;
     /* The round face shows the inscribed circle only, less a 2 px rim. */
     card->clip_cy = (int16_t)(lay->info.height / 2);
@@ -217,7 +242,7 @@ static int card_room(const fui_card_t *card, int y, int h)
         }
         return 2 * (int)fui_isqrt((uint32_t)(card->clip_r * card->clip_r - far * far)) - 4;
     }
-    return lay->info.width - (lay->info.mono ? 0 : 8);
+    return lay->info.width - (lay->tiny ? 0 : 8);
 }
 
 static const char *skip_spaces(const char *text)
@@ -384,7 +409,7 @@ void fui_i_card_space(fui_card_t *card, int rows)
 static void page_beads(const fui_card_t *card, int pages)
 {
     const fui_painter_t *p = card->p;
-    int mono = p->lay->info.mono, pitch = mono ? 5 : 9, shown = p->ui->page, i;
+    int mono = p->lay->tiny, pitch = mono ? 5 : 9, shown = p->ui->page, i;
     int x = p->lay->info.width / 2 - ((pages - 1) * pitch) / 2;
 
     for (i = 0; i < pages; i++, x += pitch) {

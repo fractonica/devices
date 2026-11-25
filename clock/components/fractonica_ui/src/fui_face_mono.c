@@ -128,6 +128,9 @@ static void count_row(fui_painter_t *p)
     }
     for (unit = 1; unit < FRC_UNIT_BLINK && frc_unit_level((frc_unit_t)unit) <= ui->focus; unit++) {
     }
+    if (unit > (int)fui_i_finest_unit(ui)) {
+        unit = (int)fui_i_finest_unit(ui); /* a step: the two terms ending at its unit */
+    }
     fui_i_str_init(&s, text, sizeof text);
     fui_i_add_date_terms(&s, &date, (frc_unit_t)(unit - 1), (frc_unit_t)unit);
     label_row(p, text, s.len);

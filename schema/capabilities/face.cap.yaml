@@ -1,0 +1,88 @@
+capability: fr.face
+id: 0x0014
+version: "1.0"
+summary: The Fractonica clock face, drawn by the node on one of its fr.display panels; optionally a power-save mode that sleeps between redraws on an RTC's time.
+doc: |
+  Design face-f1 D2-D17. The node draws the clock itself (the clock library over the core); only an instant crosses
+  the wire. The face is bound to an fr.display instance (config `display`), and optionally to an fr.button (`button`,
+  its one button: click next, double click select, a hold of 0.6-5 s long, a hold of 5 s power save on or off) and an
+  fr.rtc (`rtc`). It moves on `step`: it shows the instant at the start of the running cycle of that level and wakes
+  at its end, and its reading goes no finer. At boot the face has the screen; a hub client drawing on the panel takes
+  it (`shown` false) until `show`, or a press of the face's button. The time comes from the node's wall clock: the
+  hub's (WELCOME, BEACON, TIME), an RTC's below it; the face waits `wait_time_s` after boot before it says the time is
+  not set. mode, focus, step, utc_offset_min and power_save are kept in NVS across reboots.
+  Power save (D13-D18, needs `button`, one of its keys on a wake pin, and an `rtc` whose alarm pin is a wake pin): the node sets the RTC
+  from the wall clock, leaves the network (no Wi-Fi, ESP-NOW or hub link from then on) and deep-sleeps between
+  redraws, woken by the RTC's alarm at each step or by the button; holding the button 5 s leaves it. `set
+  {power_save: true}` is the last command the hub gets answered: the node restarts into power save after the answer.
+  Three keys (D18): with `left` or `right` bound (fr.button instances), a press of left is prev and of right next (at
+  the press), and the centre `button` turns the screen: a release before 0.6 s select, 0.6-5 s long, a 5 s hold power
+  save. Sounds (D19, on an fr.buzzer, config `buzzer`): a click at every key press (`clicks`), and a chime when the face
+  moves onto a cycle that begins a period of `chime` or longer: one note for a Preon, two for a theta, three for a
+  Helion, four for anything longer. chime and clicks are kept in NVS too.
+types:
+  Mode:   { enum: { pure: 0, earth: 1 } }
+  Screen: { enum: { now: 0, scales: 1, lens: 2, sun: 3, stamp: 4 } }
+  Input:  { enum: { next: 0, prev: 1, select: 2, long: 3 } }
+  Step:   { enum: { helion: 0, theta: 1, preon: 2, kappa: 3, flavon: 4 } }   # the level the face moves on: 6 + the value
+  TimeSource: { enum: { none: 0, carried: 1, rtc: 2, hub: 3 } }
+  Chime:  { enum: { off: 0, helion: 1, theta: 2, preon: 3 } }   # the shortest period that chimes: level 5 + the value
+traits:
+  width:     { id: 1, type: u16, doc: "the face's size in pixels (the bound panel's)" }
+  height:    { id: 2, type: u16 }
+  can_sleep: { id: 3, type: bool, doc: "power save is possible: a button and an RTC alarm on wake pins" }
+config:
+  display:        { type: string, max: 16, doc: "the fr.display instance the face draws on (codegen checks it names one)" }
+  button:         { type: string, max: 16, doc: "the fr.button instance that drives it; empty = none" }
+  rtc:            { type: string, max: 16, doc: "the fr.rtc instance power save keeps time by; empty = none" }
+  left:           { type: string, max: 16, doc: "the fr.button instance that is prev (D18); empty = none" }
+  right:          { type: string, max: 16, doc: "the fr.button instance that is next (D18); empty = none" }
+  buzzer:         { type: string, max: 16, doc: "the fr.buzzer instance the face clicks and chimes on (D19); empty = silent" }
+  mode:           { type: Mode, default: pure }
+  focus:          { type: u8, default: 6, range: [0, 13], doc: "the level the instrument focuses (6: the Helion)" }
+  step:           { type: Step, default: preon }
+  utc_offset_min: { type: i16, default: 0, range: [-720, 840], unit: min, doc: "EARTH mode's fixed offset from UTC" }
+  wait_time_s:    { type: u16, default: 30, range: [0, 600], unit: s, doc: "how long after boot the face waits for the time before it says it is not set" }
+  awake_s:        { type: u16, default: 30, range: [5, 600], unit: s, doc: "power save: how long the node stays awake after the last press of the button" }
+  chime:          { type: Chime, default: preon, doc: "the shortest period whose start chimes (D19); off: none" }
+  clicks:         { type: bool, default: true, doc: "a click at every key press (D19)" }
+properties:
+  mode:           { id: 1, type: Mode }
+  screen:         { id: 2, type: Screen }
+  focus:          { id: 3, type: u8 }
+  step:           { id: 4, type: Step }
+  utc_offset_min: { id: 5, type: i16, unit: min }
+  shown:          { id: 6, type: bool, doc: "the face has the screen" }
+  time_valid:     { id: 7, type: bool, doc: "the node knows the time" }
+  time_source:    { id: 8, type: TimeSource }
+  power_save:     { id: 9, type: bool }
+  chime:          { id: 10, type: Chime }
+  clicks:         { id: 11, type: bool }
+commands:
+  show:
+    id: 1
+    delivery: reliable
+    idempotent: true
+    doc: "The face takes the screen back (a full redraw)."
+  input:
+    id: 2
+    delivery: reliable
+    doc: "What the face's button would do: next, prev, select or long (the clock's four events)."
+    fields:
+      event: { id: 1, type: Input }
+    examples: [ { event: next }, { event: select } ]
+  set:
+    id: 3
+    delivery: reliable
+    idempotent: true
+    doc: "Any of mode, focus, screen, step, utc_offset_min, chime, clicks, power_save; kept in NVS (screen as now). power_save true: INVALID_ARGS without can_sleep, FAILED while neither the wall clock nor the RTC knows the time; answered, then the node restarts into power save."
+    fields:
+      mode:           { id: 1, type: Mode, optional: true }
+      focus:          { id: 2, type: u8, optional: true, range: [0, 13] }
+      screen:         { id: 3, type: Screen, optional: true }
+      step:           { id: 4, type: Step, optional: true }
+      utc_offset_min: { id: 5, type: i16, optional: true, range: [-720, 840], unit: min }
+      power_save:     { id: 6, type: bool, optional: true }
+      chime:          { id: 7, type: Chime, optional: true }
+      clicks:         { id: 8, type: bool, optional: true }
+    examples: [ { mode: earth }, { step: flavon }, { focus: 8, step: preon }, { chime: helion }, { clicks: false } ]

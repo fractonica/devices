@@ -6,7 +6,7 @@
 import type { CallOptions, CapMeta, CmdResult, Sent } from '../types.ts';
 
 /** FNV-1a 32 of the canonical catalog JSON (the hub's CATALOG_HASH): what an app's hello says it was built against. */
-export const CATALOG_HASH = 0xecb03fd1;
+export const CATALOG_HASH = 0x4ba4b62a;
 
 // ---- fr.button ----
 
@@ -130,6 +130,8 @@ export type DisplayUiAlign = 'left' | 'center' | 'right';
 
 export type DisplayUiEventKind = 'clicked' | 'pressed' | 'released' | 'value_changed';
 
+export type DisplayRefreshMode = 'auto' | 'partial' | 'fast' | 'full';
+
 /** fr.display.clear arguments (all optional: the device applies the defaults). */
 export interface DisplayClearArgs {
   /** (0xRRGGBB) */
@@ -196,6 +198,41 @@ export interface DisplayUiSetArgs {
   fields?: number;
 }
 
+/** fr.display.bitmap arguments (all optional: the device applies the defaults). */
+export interface DisplayBitmapArgs {
+  /** (px) */
+  x?: number;
+  /** (px) */
+  y?: number;
+  /** (px) */
+  w?: number;
+  /** (px) */
+  h?: number;
+  /** (hex, <= 1200 bytes) */
+  data?: string;
+  /** (0xRRGGBB; default 16777215) */
+  color?: number;
+  /** (0xRRGGBB) */
+  bg?: number;
+}
+
+/** fr.display.refresh arguments (all optional: the device applies the defaults). */
+export interface DisplayRefreshArgs {
+  mode?: DisplayRefreshMode;
+}
+
+/** fr.display.refresh RESULT fields. */
+export interface DisplayRefreshResult {
+  mode: DisplayRefreshMode | number;
+  changed: boolean;
+}
+
+/** fr.display.hold arguments (all optional: the device applies the defaults). */
+export interface DisplayHoldArgs {
+  /** (ms; 0..10000) */
+  ms?: number;
+}
+
 /** fr.display commands, as methods of an instance. */
 export interface DisplayClient {
   /** Drops every primitive and any layout, and fills the panel with `color`. Reliable: resolves on the RESULT ok, rejects with CommandError otherwise. */
@@ -210,6 +247,12 @@ export interface DisplayClient {
   uiLoad(args?: DisplayUiLoadArgs, opts?: CallOptions): Promise<CmdResult<DisplayUiLoadResult>>;
   /** Updates widget `id`: `fields` says which of the others are set (1 text, 2 value, 4 color, 8 visible). NOT_FOUND for an unknown id; UNSUPPORTED where trait ui is false. Reliable: resolves on the RESULT ok, rejects with CommandError otherwise. */
   uiSet(args?: DisplayUiSetArgs, opts?: CallOptions): Promise<CmdResult>;
+  /** A rectangle of 1-bit pixels at (x, y): rows of ceil(w / 8) bytes, MSB first (the snapshot layout); a 1 takes `color`, a 0 `bg`, so with the defaults the bits are the frame's own (1 light). Clipped to the screen; INVALID_ARGS when data is not exactly ceil(w / 8) x h bytes. Mono panels (e-paper, the C3 OLED); UNSUPPORTED on LVGL panels. BULK: TCP or serial, never over a gateway. Reliable: resolves on the RESULT ok, rejects with CommandError otherwise. */
+  bitmap(args?: DisplayBitmapArgs, opts?: CallOptions): Promise<CmdResult>;
+  /** E-paper: refresh now in `mode` (auto: partial, or full when the glass is not known, or the `clean` mode when the ghost budget is spent; an explicit partial runs past the budget; fast and full redraw the whole screen even with nothing new). RESULT: the mode that will run and whether the frame differs from the glass; `refreshed` follows (none when nothing changed and the mode is auto or partial). One refresh may wait while another runs; it takes the strongest mode asked. UNSUPPORTED where trait epaper is false. Reliable: resolves on the RESULT ok, rejects with CommandError otherwise. */
+  refresh(args?: DisplayRefreshArgs, opts?: CallOptions): Promise<CmdResult<DisplayRefreshResult>>;
+  /** E-paper: no automatic refresh for `ms` or until `refresh`; 0 releases. A client drawing many pieces holds, draws, then refreshes once; if it stops half-way the hold runs out. UNSUPPORTED where trait epaper is false. Reliable: resolves on the RESULT ok, rejects with CommandError otherwise. */
+  hold(args?: DisplayHoldArgs, opts?: CallOptions): Promise<CmdResult>;
 }
 
 /** fr.display.ui event fields (normal; with trait ui). A widget was touched (or an injected touch hit it); `value` is the slider's or switch's new value. */
@@ -220,20 +263,48 @@ export interface DisplayUiFields {
   value: number;
 }
 
+/** fr.display.refreshed event fields (normal; with trait epaper). An e-paper refresh ended. x, y, w, h: the area that changed (the whole screen for fast and full); ok false when the panel did not finish in time (the next refresh is full); crc: what the glass shows now (shown_crc). */
+export interface DisplayRefreshedFields {
+  mode: DisplayRefreshMode | number;
+  ok: boolean;
+  /** (ms) */
+  ms: number;
+  partials: number;
+  /** (px) */
+  x: number;
+  /** (px) */
+  y: number;
+  /** (px) */
+  w: number;
+  /** (px) */
+  h: number;
+  crc: number;
+}
+
 /** fr.display events by wire name: `pad.on('<inst>.<event>', e => ...)`. */
 export interface DisplayEvents {
   ui: DisplayUiFields;
+  refreshed: DisplayRefreshedFields;
 }
 
 /** fr.display properties as the mirror holds them (`pad.<inst>.state`); a property a trait gates may be absent. */
 export interface DisplayState {
   /** the backlight level (255 on panels without backlight control) */
   brightness: number;
+  /** partial refreshes since the last fast or full one (trait epaper) */
+  partials?: number;
+  /** CRC-32 of what the glass shows, in the snapshot layout; 0: not known since boot (trait epaper) */
+  shownCrc?: number;
+  /** how long the last refresh took (ms) (trait epaper) */
+  refreshMs?: number;
 }
 
 /** fr.display property values by wire name: what a `<inst>.<prop>` event carries as `value`. */
 export interface DisplayProps {
   brightness: number;
+  partials: number;
+  shown_crc: number;
+  refresh_ms: number;
 }
 
 // ---- fr.audio_out ----
@@ -1195,12 +1266,12 @@ export interface StorageProps {
   busy: boolean;
 }
 
-// ---- fr.clock ----
+// ---- fr.rtc ----
 
-export type ClockSetBy = 'command' | 'sync';
+export type RtcSetBy = 'command' | 'sync';
 
-/** fr.clock.read RESULT fields. */
-export interface ClockReadResult {
+/** fr.rtc.read RESULT fields. */
+export interface RtcReadResult {
   unix: number;
   valid: boolean;
   /** the oscillator-stop flag */
@@ -1213,58 +1284,58 @@ export interface ClockReadResult {
   injected: boolean;
 }
 
-/** fr.clock.set arguments (all optional: the device applies the defaults). */
-export interface ClockSetArgs {
+/** fr.rtc.set arguments (all optional: the device applies the defaults). */
+export interface RtcSetArgs {
   unix?: number;
   /** (decimal string; default 0) */
   atUs?: number | string;
   /** (default command) */
-  by?: ClockSetBy;
+  by?: RtcSetBy;
 }
 
-/** fr.clock.set_aging arguments (all optional: the device applies the defaults). */
-export interface ClockSetAgingArgs {
+/** fr.rtc.set_aging arguments (all optional: the device applies the defaults). */
+export interface RtcSetAgingArgs {
   offset?: number;
 }
 
-/** fr.clock commands, as methods of an instance. */
-export interface ClockClient {
+/** fr.rtc commands, as methods of an instance. */
+export interface RtcClient {
   /** The latest reading (never waits for the bus). Reliable: resolves on the RESULT ok, rejects with CommandError otherwise. */
-  read(opts?: CallOptions): Promise<CmdResult<ClockReadResult>>;
+  read(opts?: CallOptions): Promise<CmdResult<RtcReadResult>>;
   /** Second `unix` (2000-2099) begins at node time `at_us` (0 = now): the node waits until then and writes the time in one burst, which restarts the chip's 1 Hz chain, and clears the oscillator-stop flag. INVALID_ARGS for a target more than 2 s ahead or 1 s behind, or a unix outside 2000-2099. It answers at once; the write follows, and `set` fires only when it succeeded (a hub waits for it). Reliable: resolves on the RESULT ok, rejects with CommandError otherwise. */
-  set(args?: ClockSetArgs, opts?: CallOptions): Promise<CmdResult>;
+  set(args?: RtcSetArgs, opts?: CallOptions): Promise<CmdResult>;
   /** The aging-offset register: positive slows the clock, about 0.1 ppm per step at 25 degC. Reliable: resolves on the RESULT ok, rejects with CommandError otherwise. */
-  setAging(args?: ClockSetAgingArgs, opts?: CallOptions): Promise<CmdResult>;
+  setAging(args?: RtcSetAgingArgs, opts?: CallOptions): Promise<CmdResult>;
 }
 
-/** fr.clock.lost_power event fields (normal). The oscillator-stop flag was set at boot, or the chip's time jumped with no set: the time is not trustworthy until set. */
-export interface ClockLostPowerFields {}
+/** fr.rtc.lost_power event fields (normal). The oscillator-stop flag was set at boot, or the chip's time jumped with no set: the time is not trustworthy until set. */
+export interface RtcLostPowerFields {}
 
-/** fr.clock.set event fields (normal). */
-export interface ClockSetFields {
+/** fr.rtc.set event fields (normal). */
+export interface RtcSetFields {
   unix: number;
-  by: ClockSetBy | number;
+  by: RtcSetBy | number;
 }
 
-/** fr.clock events by wire name: `pad.on('<inst>.<event>', e => ...)`. */
-export interface ClockEvents {
-  lost_power: ClockLostPowerFields;
-  set: ClockSetFields;
+/** fr.rtc events by wire name: `pad.on('<inst>.<event>', e => ...)`. */
+export interface RtcEvents {
+  lost_power: RtcLostPowerFields;
+  set: RtcSetFields;
 }
 
-/** fr.clock properties as the mirror holds them (`pad.<inst>.state`); a property a trait gates may be absent. */
-export interface ClockState {
+/** fr.rtc properties as the mirror holds them (`pad.<inst>.state`); a property a trait gates may be absent. */
+export interface RtcState {
   /** (s) */
   unix: number;
   valid: boolean;
   /** the chip's temperature, refreshed every 64 s (degC/10) */
   tempC10: number;
-  /** reported 0 by the node: the hub computes the offset from read's unix and rollover_us (clock_read) (ms) */
+  /** reported 0 by the node: the hub computes the offset from read's unix and rollover_us (rtc_read) (ms) */
   offsetMs: number;
 }
 
-/** fr.clock property values by wire name: what a `<inst>.<prop>` event carries as `value`. */
-export interface ClockProps {
+/** fr.rtc property values by wire name: what a `<inst>.<prop>` event carries as `value`. */
+export interface RtcProps {
   unix: number;
   valid: boolean;
   temp_c10: number;
@@ -1541,6 +1612,85 @@ export interface BuzzerProps {
   volume: number;
 }
 
+// ---- fr.face ----
+
+export type FaceMode = 'pure' | 'earth';
+
+export type FaceScreen = 'now' | 'scales' | 'lens' | 'sun' | 'stamp';
+
+export type FaceInput = 'next' | 'prev' | 'select' | 'long';
+
+export type FaceStep = 'helion' | 'theta' | 'preon' | 'kappa' | 'flavon';
+
+export type FaceTimeSource = 'none' | 'carried' | 'rtc' | 'hub';
+
+export type FaceChime = 'off' | 'helion' | 'theta' | 'preon';
+
+/** fr.face.input arguments (all optional: the device applies the defaults). */
+export interface FaceInputArgs {
+  event?: FaceInput;
+}
+
+/** fr.face.set arguments (all optional: the device applies the defaults). */
+export interface FaceSetArgs {
+  mode?: FaceMode;
+  /** (0..13) */
+  focus?: number;
+  screen?: FaceScreen;
+  step?: FaceStep;
+  /** (min; -720..840) */
+  utcOffsetMin?: number;
+  powerSave?: boolean;
+  chime?: FaceChime;
+  clicks?: boolean;
+}
+
+/** fr.face commands, as methods of an instance. */
+export interface FaceClient {
+  /** The face takes the screen back (a full redraw). Reliable: resolves on the RESULT ok, rejects with CommandError otherwise. */
+  show(opts?: CallOptions): Promise<CmdResult>;
+  /** What the face's button would do: next, prev, select or long (the clock's four events). Reliable: resolves on the RESULT ok, rejects with CommandError otherwise. */
+  input(args?: FaceInputArgs, opts?: CallOptions): Promise<CmdResult>;
+  /** Any of mode, focus, screen, step, utc_offset_min, chime, clicks, power_save; kept in NVS (screen as now). power_save true: INVALID_ARGS without can_sleep, FAILED while neither the wall clock nor the RTC knows the time; answered, then the node restarts into power save. Reliable: resolves on the RESULT ok, rejects with CommandError otherwise. */
+  set(args?: FaceSetArgs, opts?: CallOptions): Promise<CmdResult>;
+}
+
+/** fr.face events by wire name: `pad.on('<inst>.<event>', e => ...)`. */
+export interface FaceEvents {}
+
+/** fr.face properties as the mirror holds them (`pad.<inst>.state`); a property a trait gates may be absent. */
+export interface FaceState {
+  mode: FaceMode | number;
+  screen: FaceScreen | number;
+  focus: number;
+  step: FaceStep | number;
+  /** (min) */
+  utcOffsetMin: number;
+  /** the face has the screen */
+  shown: boolean;
+  /** the node knows the time */
+  timeValid: boolean;
+  timeSource: FaceTimeSource | number;
+  powerSave: boolean;
+  chime: FaceChime | number;
+  clicks: boolean;
+}
+
+/** fr.face property values by wire name: what a `<inst>.<prop>` event carries as `value`. */
+export interface FaceProps {
+  mode: FaceMode | number;
+  screen: FaceScreen | number;
+  focus: number;
+  step: FaceStep | number;
+  utc_offset_min: number;
+  shown: boolean;
+  time_valid: boolean;
+  time_source: FaceTimeSource | number;
+  power_save: boolean;
+  chime: FaceChime | number;
+  clicks: boolean;
+}
+
 // ---- fr.node ----
 
 /** fr.node.identify arguments (all optional: the device applies the defaults). */
@@ -1771,9 +1921,10 @@ export interface CapClients {
   'fr.battery': BatteryClient;
   'fr.haptic': HapticClient;
   'fr.storage': StorageClient;
-  'fr.clock': ClockClient;
+  'fr.rtc': RtcClient;
   'fr.stepper': StepperClient;
   'fr.buzzer': BuzzerClient;
+  'fr.face': FaceClient;
   'fr.node': NodeClient;
   'fr.ota': OtaClient;
   'fr.diag': DiagClient;
@@ -1795,9 +1946,10 @@ export interface CapEvents {
   'fr.battery': BatteryEvents;
   'fr.haptic': HapticEvents;
   'fr.storage': StorageEvents;
-  'fr.clock': ClockEvents;
+  'fr.rtc': RtcEvents;
   'fr.stepper': StepperEvents;
   'fr.buzzer': BuzzerEvents;
+  'fr.face': FaceEvents;
   'fr.node': NodeEvents;
   'fr.ota': OtaEvents;
   'fr.diag': DiagEvents;
@@ -1819,9 +1971,10 @@ export interface CapState {
   'fr.battery': BatteryState;
   'fr.haptic': HapticState;
   'fr.storage': StorageState;
-  'fr.clock': ClockState;
+  'fr.rtc': RtcState;
   'fr.stepper': StepperState;
   'fr.buzzer': BuzzerState;
+  'fr.face': FaceState;
   'fr.node': NodeState;
   'fr.ota': OtaState;
   'fr.diag': DiagState;
@@ -1843,9 +1996,10 @@ export interface CapProps {
   'fr.battery': BatteryProps;
   'fr.haptic': HapticProps;
   'fr.storage': StorageProps;
-  'fr.clock': ClockProps;
+  'fr.rtc': RtcProps;
   'fr.stepper': StepperProps;
   'fr.buzzer': BuzzerProps;
+  'fr.face': FaceProps;
   'fr.node': NodeProps;
   'fr.ota': OtaProps;
   'fr.diag': DiagProps;
@@ -1858,7 +2012,7 @@ export type CapName = keyof CapClients;
 export const CAP_META: Readonly<Record<string, CapMeta>> = {
   'fr.button': { commands: { inject: { method: 'inject', delivery: 'reliable', args: true, test: true } }, events: ['down', 'up', 'click', 'long_press'], props: ['pressed'] },
   'fr.led': { commands: { set: { method: 'set', delivery: 'fast', args: true }, toggle: { method: 'toggle', delivery: 'reliable' }, blink: { method: 'blink', delivery: 'reliable', args: true }, stop: { method: 'stop', delivery: 'reliable' } }, events: ['effect_done'], props: ['on', 'brightness', 'color'] },
-  'fr.display': { commands: { clear: { method: 'clear', delivery: 'reliable', args: true }, text: { method: 'text', delivery: 'reliable', args: true }, fill_rect: { method: 'fillRect', delivery: 'reliable', args: true }, set_brightness: { method: 'setBrightness', delivery: 'reliable', args: true }, ui_load: { method: 'uiLoad', delivery: 'reliable', args: true }, ui_set: { method: 'uiSet', delivery: 'reliable', args: true }, snapshot: { method: 'snapshot', delivery: 'reliable', test: true }, snapshot_read: { method: 'snapshotRead', delivery: 'reliable', args: true, test: true } }, events: ['ui'], props: ['brightness'] },
+  'fr.display': { commands: { clear: { method: 'clear', delivery: 'reliable', args: true }, text: { method: 'text', delivery: 'reliable', args: true }, fill_rect: { method: 'fillRect', delivery: 'reliable', args: true }, set_brightness: { method: 'setBrightness', delivery: 'reliable', args: true }, ui_load: { method: 'uiLoad', delivery: 'reliable', args: true }, ui_set: { method: 'uiSet', delivery: 'reliable', args: true }, snapshot: { method: 'snapshot', delivery: 'reliable', test: true }, snapshot_read: { method: 'snapshotRead', delivery: 'reliable', args: true, test: true }, bitmap: { method: 'bitmap', delivery: 'reliable', args: true }, refresh: { method: 'refresh', delivery: 'reliable', args: true }, hold: { method: 'hold', delivery: 'reliable', args: true } }, events: ['ui', 'refreshed'], props: ['brightness', 'partials', 'shown_crc', 'refresh_ms'] },
   'fr.audio_out': { commands: { tone: { method: 'tone', delivery: 'reliable', args: true }, play: { method: 'play', delivery: 'reliable', args: true }, stop: { method: 'stop', delivery: 'reliable' }, set_volume: { method: 'setVolume', delivery: 'reliable', args: true } }, events: ['play_done'], props: ['playing', 'volume'] },
   'fr.analog_in': { commands: { inject: { method: 'inject', delivery: 'reliable', args: true, test: true }, read: { method: 'read', delivery: 'reliable' } }, events: ['crossed'], props: ['value'] },
   'fr.audio_in': { commands: { stream_start: { method: 'streamStart', delivery: 'reliable', args: true }, stream_stop: { method: 'streamStop', delivery: 'reliable', args: true }, level_get: { method: 'levelGet', delivery: 'reliable' }, monitor_start: { method: 'monitorStart', delivery: 'reliable', args: true }, monitor_stop: { method: 'monitorStop', delivery: 'reliable' } }, events: ['stream_ended', 'monitor_ended'], props: ['level', 'streaming', 'monitoring'] },
@@ -1870,9 +2024,10 @@ export const CAP_META: Readonly<Record<string, CapMeta>> = {
   'fr.battery': { commands: { read: { method: 'read', delivery: 'reliable' }, calibrate: { method: 'calibrate', delivery: 'reliable', args: true }, reset_calibration: { method: 'resetCalibration', delivery: 'reliable' }, load: { method: 'load', delivery: 'reliable', args: true }, gate: { method: 'gate', delivery: 'reliable', args: true }, inject: { method: 'inject', delivery: 'reliable', args: true, test: true } }, events: ['charge', 'level_change', 'protect'], props: ['mv', 'percent', 'charger', 'level', 'load_on', 'gate_open'] },
   'fr.haptic': { commands: { pulse: { method: 'pulse', delivery: 'reliable', args: true }, play: { method: 'play', delivery: 'reliable', args: true }, stop: { method: 'stop', delivery: 'reliable' }, tap: { method: 'tap', delivery: 'reliable', args: true } }, events: ['cut', 'done'], props: ['active', 'supply_mv'] },
   'fr.storage': { commands: { info: { method: 'info', delivery: 'reliable' }, list: { method: 'list', delivery: 'reliable', args: true }, stat: { method: 'stat', delivery: 'reliable', args: true }, read: { method: 'read', delivery: 'reliable', args: true }, write: { method: 'write', delivery: 'reliable', args: true }, remove: { method: 'remove', delivery: 'reliable', args: true }, mkdir: { method: 'mkdir', delivery: 'reliable', args: true }, rename: { method: 'rename', delivery: 'reliable', args: true }, remount: { method: 'remount', delivery: 'reliable' } }, events: ['mounted', 'unmounted'], props: ['state', 'total_mb', 'free_mb', 'card_type', 'busy'] },
-  'fr.clock': { commands: { read: { method: 'read', delivery: 'reliable' }, set: { method: 'set', delivery: 'reliable', args: true }, set_aging: { method: 'setAging', delivery: 'reliable', args: true }, inject: { method: 'inject', delivery: 'reliable', args: true, test: true } }, events: ['lost_power', 'set'], props: ['unix', 'valid', 'temp_c10', 'offset_ms'] },
+  'fr.rtc': { commands: { read: { method: 'read', delivery: 'reliable' }, set: { method: 'set', delivery: 'reliable', args: true }, set_aging: { method: 'setAging', delivery: 'reliable', args: true }, inject: { method: 'inject', delivery: 'reliable', args: true, test: true } }, events: ['lost_power', 'set'], props: ['unix', 'valid', 'temp_c10', 'offset_ms'] },
   'fr.stepper': { commands: { move_to: { method: 'moveTo', delivery: 'reliable', args: true }, move_by: { method: 'moveBy', delivery: 'reliable', args: true }, jog: { method: 'jog', delivery: 'reliable', args: true }, stop: { method: 'stop', delivery: 'reliable' }, halt: { method: 'halt', delivery: 'reliable' }, hold: { method: 'hold', delivery: 'reliable' }, release: { method: 'release', delivery: 'reliable' }, zero: { method: 'zero', delivery: 'reliable', args: true }, configure: { method: 'configure', delivery: 'reliable', args: true }, reset_settings: { method: 'resetSettings', delivery: 'reliable' }, inject_fault: { method: 'injectFault', delivery: 'reliable', test: true } }, events: ['done', 'fault'], props: ['position', 'target', 'speed_hz', 'motion', 'position_known', 'step_mode', 'max_speed_hz', 'accel', 'start_hz', 'coil_ohm', 'run_ma', 'hold_pct', 'release_ms', 'supply_mv', 'invert', 'limits', 'limit_min', 'limit_max', 'run_duty_pct', 'steps_per_rev'] },
   'fr.buzzer': { commands: { tone: { method: 'tone', delivery: 'reliable', args: true }, beep: { method: 'beep', delivery: 'reliable', args: true }, melody: { method: 'melody', delivery: 'reliable', args: true }, stop: { method: 'stop', delivery: 'reliable' }, set_volume: { method: 'setVolume', delivery: 'reliable', args: true } }, events: ['done'], props: ['playing', 'volume'] },
+  'fr.face': { commands: { show: { method: 'show', delivery: 'reliable' }, input: { method: 'input', delivery: 'reliable', args: true }, set: { method: 'set', delivery: 'reliable', args: true } }, events: [], props: ['mode', 'screen', 'focus', 'step', 'utc_offset_min', 'shown', 'time_valid', 'time_source', 'power_save', 'chime', 'clicks'] },
   'fr.node': { commands: { identify: { method: 'identify', delivery: 'reliable', args: true }, describe: { method: 'describe', delivery: 'reliable' }, reboot: { method: 'reboot', delivery: 'reliable', args: true }, set_alias: { method: 'setAlias', delivery: 'reliable', args: true }, set_groups: { method: 'setGroups', delivery: 'reliable', args: true }, net_set: { method: 'netSet', delivery: 'reliable', args: true }, get_state: { method: 'getState', delivery: 'reliable' }, bind_set: { method: 'bindSet', delivery: 'reliable', args: true }, bind_clear: { method: 'bindClear', delivery: 'reliable', args: true }, bind_list: { method: 'bindList', delivery: 'reliable' }, hubs_set: { method: 'hubsSet', delivery: 'reliable', args: true }, hubs_get: { method: 'hubsGet', delivery: 'reliable' } }, events: ['boot', 'binding_fired'], props: [] },
   'fr.ota': { commands: {}, events: [], props: [] },
   'fr.diag': { commands: { exec: { method: 'exec', delivery: 'reliable', args: true } }, events: ['mark'], props: [] },

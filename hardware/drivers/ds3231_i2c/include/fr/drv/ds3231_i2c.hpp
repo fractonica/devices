@@ -24,6 +24,9 @@ namespace fr::drv {
  * logged. Only set() (0x00 + 7), set_aging() (0x10) and init's control/status fixes point at writable registers.
  * now() refuses registers that are not a valid time, and checks the control register against what init wrote.
  * Each transaction times out after 50 ms.
+ *
+ * The alarm (design face-f1 D14): set_alarm writes alarm 1 (0x07-0x0A), clears A1F and sets A1IE, so SQW goes low when
+ * the time matches (power save wakes the C6 on it); clear_alarm and init clear A1F (releasing SQW) and A1IE.
  */
 class Ds3231I2c final : public hal::Rtc
 {
@@ -32,6 +35,7 @@ public:
         uint8_t sda = 0;
         uint8_t scl = 0;
         uint16_t khz = 100;
+        int8_t sqw = -1;  // design face-f1 D14: the SQW/INT pin, -1 when not wired
     };
 
     explicit Ds3231I2c(const Config &cfg) : cfg_(cfg) {}
@@ -43,7 +47,9 @@ public:
     std::expected<int16_t, Err> temp_c10() override;
     std::expected<int8_t, Err> aging() override;
     Status set_aging(int8_t offset) override;
-    void set_system_time(uint32_t unix) override;
+    Status set_alarm(uint32_t unix) override;
+    Status clear_alarm() override;
+    int alarm_pin() const override { return cfg_.sqw; }
     hal::Selftest selftest() override;
     uint32_t bus_errors() const override { return errors_; }
     void note(const char *what) override;
@@ -60,6 +66,7 @@ private:
     uint32_t invalid_ = 0;
     bool wrap_ok_ = true;
     uint8_t last_bad_control_ = 0xFF;
+    uint8_t control_ = 0x04;  // what the control register should hold: init's, plus A1IE while an alarm is set
     char detail_[64] = {};
 };
 

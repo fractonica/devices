@@ -440,16 +440,16 @@ describe.skipIf(!HAS_BIN)("the hubs' link: an op runs where the board is (design
     expect(peerCalls(b).slice(beforeB)).toEqual([expect.objectContaining({ op: 'device_get', from: 'hub-c', mode: 'holder', ok: false, code: 'DEVICE_OFFLINE' })]);
     expect(peerCalls(a).slice(beforeA)).toEqual([expect.objectContaining({ op: 'device_get', from: 'hub-c', mode: 'holder', ok: true })]);
     // An op that is not idempotent is not tried again: the caller hears where the board is.
-    const sync = await call(c, 'clock_sync', { device: PAD.alias });
+    const sync = await call(c, 'rtc_sync', { device: PAD.alias });
     expect(sync.error).toMatchObject({ code: 'DEVICE_OFFLINE', details: { device_id: PAD.mac, moved: true, at: 'hub-a' } });
     expect(sync.error!.message).toContain(`${PAD.alias} has no session with hub hub-b: it is at hub hub-a now`);
     expect(sync.error!.message).toContain('not tried again');
     expect(sync.at).toBe('hub-b');
     // Hub B took two calls from hub C and made none; hub A took one, from hub C; the board ran nothing.
-    expect(peerCalls(b).slice(beforeB).map((l) => [l.op, l.from, l.ok])).toEqual([['device_get', 'hub-c', false], ['clock_sync', 'hub-c', false]]);
+    expect(peerCalls(b).slice(beforeB).map((l) => [l.op, l.from, l.ok])).toEqual([['device_get', 'hub-c', false], ['rtc_sync', 'hub-c', false]]);
     expect(peerCalls(a).slice(beforeA).map((l) => [l.op, l.from])).toEqual([['device_get', 'hub-c']]);
     expect(peerCalls(a).slice(beforeA).some((l) => l.from === 'hub-b')).toBe(false);
-    expect(peerCalls(a).some((l) => l.op === 'clock_sync')).toBe(false);
+    expect(peerCalls(a).some((l) => l.op === 'rtc_sync')).toBe(false);
     expect(pad.of('dispatch').length).toBe(padRan);
   }, 30_000);
 

@@ -22,9 +22,11 @@
  * The lines are a card (fui_i.h) inside the ring: its rows are chords of the
  * ring, and what does not fit turns the page.
  *
- * One-bit: page 1 is the figure, the ring (R = 26) in the left 64 x 64 with
- * the Pentad mark, the glyphs and the sync's number on the right, as the NOW
- * face is built; the lines follow from page 2, written out at full width.
+ * The 128 x 64 face: page 1 is the figure, the ring (R = 26) in the left
+ * 64 x 64 with the Pentad mark, the glyphs and the sync's number on the
+ * right, as the NOW face is built; the lines follow from page 2, written out
+ * at full width. The 400 x 300 paper face is built as the colour faces are,
+ * at 5/4 scale (the ring at r 140, lay->sun_r), in one-bit marks.
  * In the catalogue's first and last partial sync there is no sync reading
  * (frc_sync_at: FRC_ERR_RANGE): the ring stays engraved and only the Pentad
  * is said.
@@ -45,9 +47,9 @@ static void sun_ring(fui_painter_t *p, fui_fx_t cx, fui_fx_t cy, fui_fx_t r)
     s.wide = p->ui->pentad_starts;
     s.current = rd->sun_valid ? (int16_t)rd->sun_within : -1;
     s.fraction = rd->sun_slot_phase;
-    /* 19 slots share 163 px on the one-bit ring (R = 26): a 3 px gap would
+    /* 19 slots share 163 px on the tiny ring (R = 26): a 3 px gap would
      * leave a completed Helion 5 px and the first of each Pentad 2. */
-    s.gap = p->lay->info.mono ? FUI_FX(1.6) : FUI_FX(3);
+    s.gap = p->lay->tiny ? FUI_FX(1.6) : FUI_FX(3);
     s.width = FUI_FX(1.4);
     s.done = t->sol_dim;
     s.lit = t->sol;
@@ -70,9 +72,8 @@ static void sun_ring(fui_painter_t *p, fui_fx_t cx, fui_fx_t cy, fui_fx_t r)
         fui_fx_t y = cy + (fui_fx_t)(((int64_t)r * fui_sin(angle)) >> 14);
 
         if (p->lay->info.mono) {
-            /* the block that means "now" on the one-bit face */
-            fui_canvas_fill_rect(p->canvas, fui_i_px(x) - 2, fui_i_px(y) - 2, 5, 5, t->ground);
-            fui_canvas_fill_rect(p->canvas, fui_i_px(x) - 1, fui_i_px(y) - 1, 3, 3, t->sol);
+            /* the block that means "now" on the one-bit faces */
+            fui_i_now_block(p, x, y, p->lay->tiny ? 1 : 3, t->sol);
         } else {
             fui_fill_disc(p->canvas, x, y, FUI_FX(5), t->ground);
             fui_fill_disc(p->canvas, x, y, FUI_FX(3), t->sol);
@@ -129,7 +130,7 @@ static void part_sync(fui_card_t *card)
     }
     if (sync.next.time != FRC_TIME_NONE && frc_span_between(ui->cat, ui->t, sync.next.time, &span) == FRC_OK) {
         fui_i_str_init(&s, card->text, FUI_TEXT_MAX);
-        fui_i_add_quarter_in(&s, (frc_quarter_t)sync.next.name, &span);
+        fui_i_add_quarter_in(&s, (frc_quarter_t)sync.next.name, &span, fui_i_finest_unit(ui));
         fui_i_span_until(p, sync.next.time);
         fui_i_card_line(card, FUI_STYLE_READING, card->text, 0);
     }
@@ -145,8 +146,20 @@ static void part_civil(fui_card_t *card)
         return;
     }
     fui_i_str_init(&s, card->text, FUI_TEXT_MAX);
-    fui_i_add_civil(&s, ui->t, ui->utc_offset_s, FUI_CIVIL_FULL);
-    fui_i_card_line(card, FUI_STYLE_EARTH, card->text, FUI_LINE_SECONDS);
+    if (fui_i_civil_seconds(ui)) {
+        fui_i_add_civil(&s, ui->t, ui->utc_offset_s, FUI_CIVIL_FULL);
+        fui_i_card_line(card, FUI_STYLE_EARTH, card->text, FUI_LINE_SECONDS);
+    } else {
+        /* (a step coarser than the Flavon: the minute of its start) */
+        fui_i_add_civil(&s, ui->t, ui->utc_offset_s, FUI_CIVIL_FULL_MINUTE);
+        fui_i_card_line(card, FUI_STYLE_EARTH, card->text, 0);
+    }
+}
+
+/* A measure of the colour SUN card (r 112) on this face's (lay->sun_r). */
+static int sun_scaled(const fui_layout_t *lay, int at_r112)
+{
+    return at_r112 * lay->sun_r / 112;
 }
 
 void fui_i_screen_sun(fui_painter_t *p)
@@ -155,7 +168,7 @@ void fui_i_screen_sun(fui_painter_t *p)
     const fui_ui_t *ui = p->ui;
     const fui_layout_t *lay = p->lay;
     const fui_reading_t *rd = &ui->reading;
-    int mono = lay->info.mono, figure;
+    int mono = lay->tiny, figure;
     fui_text_style_t sol = fui_i_style(p, FUI_STYLE_SOL);
     char text[FUI_TEXT_MAX];
     frc_pentad_t pentad;
@@ -172,15 +185,15 @@ void fui_i_screen_sun(fui_painter_t *p)
         card.first_page = 1; /* the figure is a page of its own */
         fui_i_card_run(&card, PARTS, 3);
     } else {
-        /* Inside the ring (r = 112 on every colour face): rows are chords
-         * of a circle 7 px inside it. The head is the Pentad mark (20 rows)
-         * and the three glyphs (46 rows at u = 5). */
+        /* Inside the ring (r = 112 on every colour face, 140 on paper):
+         * rows are chords of a circle 7 px inside it. The head is the
+         * Pentad mark (20 rows) and the three glyphs (46 rows at u = 5). */
         card.clip_cy = lay->card_cy;
-        card.clip_r = 105;
-        card.top = (int16_t)(lay->card_cy - 88);
-        card.bottom = (int16_t)(lay->card_cy + 84);
-        card.marks_y = (int16_t)(lay->card_cy + 93);
-        card.head = 68;
+        card.clip_r = (int16_t)sun_scaled(lay, 105);
+        card.top = (int16_t)(lay->card_cy - sun_scaled(lay, 88));
+        card.bottom = (int16_t)(lay->card_cy + sun_scaled(lay, 84));
+        card.marks_y = (int16_t)(lay->card_cy + sun_scaled(lay, 93));
+        card.head = (int16_t)sun_scaled(lay, 68);
         fui_i_card_run(&card, PARTS + 1, 2);
     }
     figure = !mono || ui->page == 0;
@@ -190,7 +203,7 @@ void fui_i_screen_sun(fui_painter_t *p)
         if (mono) {
             sun_ring(p, FUI_FX(31.5), FUI_FX(31.5), FUI_FX(26));
         } else {
-            sun_ring(p, FUI_FX(lay->info.width / 2), FUI_FX(lay->card_cy), FUI_FX(112));
+            sun_ring(p, FUI_FX(lay->info.width / 2), FUI_FX(lay->card_cy), FUI_FX(lay->sun_r));
         }
     }
     if (!figure) {
@@ -222,12 +235,14 @@ void fui_i_screen_sun(fui_painter_t *p)
     } else {
         fui_i_text(p, &sol, lay->info.width / 2, card.head_y, FUI_ALIGN_CENTER, text, (size_t)-1, 0);
         if (p->canvas && rd->sun_valid) {
-            /* three 2-stroke glyphs, stems 6.4 u apart (DESIGN.md S6), each
-             * stem on a pixel centre; the stem top 12 rows under the mark */
-            fui_fx_t pitch = FUI_FX(32);
+            /* three 2-stroke glyphs, stems 6.4 u apart (DESIGN.md S6: 32 px
+             * at u = 5), each stem on a pixel centre; the stem top 12 rows
+             * under the mark (at u = 5) */
+            fui_fx_t pitch = (fui_fx_t)((((uint64_t)lay->sun_u * 64) / 10) >> 16) * FUI_FX_ONE;
 
             fui_odometer_draw(p->canvas, rd->sun_odometer, 3, 2, FUI_FX(lay->info.width / 2) - pitch + FUI_FX(0.5),
-                              FUI_FX(card.head_y + 33) + FUI_FX(0.5), pitch, FUI_U_PX(5), p->theme->sol);
+                              FUI_FX(card.head_y + sun_scaled(lay, 33)) + FUI_FX(0.5), pitch, lay->sun_u,
+                              p->theme->sol);
         }
     }
 }

@@ -70,8 +70,8 @@ static void port_flush(void *ctx, int x0, int y0, int x1, int y1, const void *pi
     /* The bus is busy while the window goes out; the flush returns after. */
     advance(p, p->mono_us + (uint64_t)(x1 - x0) * (uint64_t)(y1 - y0) * p->bus_ns_per_px / 1000u);
     if (info->mono) {
-        if (x0 != 0 || x1 != info->width || (y0 & 7) || (y1 & 7)) {
-            p->flush_errors++; /* the SSD1306 takes whole pages of whole rows */
+        if (x0 != 0 || x1 != info->width || (y0 & 7) || ((y1 & 7) && y1 != info->height)) {
+            p->flush_errors++; /* the SSD1306 takes whole pages of whole rows (the last may be short) */
             return;
         }
         for (y = y0; y < y1; y++) {

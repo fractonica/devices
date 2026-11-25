@@ -24,6 +24,16 @@
  *
  * All positions scale with the layout's radius, so the 240 x 240 square face
  * draws the same instrument at 5/7 size (R 40).
+ *
+ * ONE BIT (the 400 x 300 paper face, R 70: the round face at 5/4). The same
+ * instrument with DESIGN.md S11's four marks: solid = elapsed, dotted (1 on,
+ * 2 off) = to come, block = now, bead = count. Every token is ink; what the
+ * tokens say on colour is said so: the counter rings' slots and the hero's
+ * two levels are solid to now and dotted after it, the bezel's graduations
+ * likewise (a dotted tick for one to come), the next quarter tick is 2 px
+ * wide, the point of now is a block in a cleared frame. No glow, no alidade
+ * (a hairline in full ink would cross every ring), no dithering, no inverse
+ * video. The labels at the centre are written at 2 px per dot.
  */
 #include "fui_i.h"
 
@@ -121,6 +131,26 @@ static void radial_tick(fui_painter_t *p, fui_fx_t r0, fui_fx_t r1, uint32_t ang
     fui_draw_line(p->canvas, x0, y0, x1, y1, width, color);
 }
 
+/* One bit: a tick still to come, dotted as every "to come" is: a pixel at
+ * r0 and every 3 px out to r1. */
+static void radial_dots(fui_painter_t *p, fui_fx_t r0, fui_fx_t r1, uint32_t angle, fui_color_t color)
+{
+    fui_fx_t r, x, y;
+
+    for (r = r0; r <= r1; r += FUI_FX(3)) {
+        polar(p->lay, r, angle, &x, &y);
+        fui_canvas_pixel(p->canvas, fui_i_px(x), fui_i_px(y), color);
+    }
+}
+
+void fui_i_now_block(fui_painter_t *p, fui_fx_t x, fui_fx_t y, int half, fui_color_t ink)
+{
+    int px = fui_i_px(x), py = fui_i_px(y);
+
+    fui_canvas_fill_rect(p->canvas, px - half - 1, py - half - 1, 2 * half + 3, 2 * half + 3, p->theme->ground);
+    fui_canvas_fill_rect(p->canvas, px - half, py - half, 2 * half + 1, 2 * half + 1, ink);
+}
+
 /* The counter rings; returns the radius of the outermost one drawn (or the
  * hero's own reach when there is none), which is where the alidade ends. */
 static fui_fx_t counter_rings(fui_painter_t *p, fui_fx_t first)
@@ -204,16 +234,23 @@ static void beads(fui_painter_t *p)
     const fui_level_t *child = &ui->reading.level[ui->focus + 1];
     const fui_theme_t *t = p->theme;
     uint8_t n = frc_factor(ui->focus), j;
+    /* one bit: a little larger, so a hollow bead is a ring of pixels */
+    int mono = fui_canvas_is_mono(p->canvas);
+    fui_fx_t size = mono ? FUI_FX(2.5) : FUI_FX(1.8), hollow = mono ? FUI_FX(2) : FUI_FX(1.4);
 
     for (j = 0; j < n; j++) {
         fui_fx_t x, y;
 
         polar(p->lay, p->lay->radius, 0xC000u + (uint32_t)((j * FUI_TURN) / n), &x, &y);
+        if (mono) {
+            x = (x & ~0xFF) | 0x80; /* on a pixel centre: every bead the same shape */
+            y = (y & ~0xFF) | 0x80;
+        }
         if (child->valid && j <= child->local) {
-            fui_fill_disc(p->canvas, x, y, FUI_FX(1.8), t->bone);
+            fui_fill_disc(p->canvas, x, y, size, t->bone);
         } else {
-            fui_fill_disc(p->canvas, x, y, FUI_FX(1.8), t->ground);
-            fui_draw_ring(p->canvas, x, y, FUI_FX(1.4), FUI_FX(0.8), t->etch3);
+            fui_fill_disc(p->canvas, x, y, size, t->ground);
+            fui_draw_ring(p->canvas, x, y, hollow, FUI_FX(0.8), t->etch3);
         }
     }
 }
@@ -234,25 +271,31 @@ static void bezel(fui_painter_t *p, fui_fx_t r_in)
     int done = lit ? child->local * per + grand->local : -1;
     /* Under 3 px apart the short ticks would merge: keep the long ones only. */
     int fine = (int32_t)(((int64_t)r_in * 6434) >> 10) / count >= 3 * FUI_FX_ONE; /* 2 pi r / count */
-    int i;
+    int mono = fui_canvas_is_mono(p->canvas), i;
 
     fui_draw_ring(p->canvas, lay->cx, lay->cy, r_in, FUI_FX_ONE, t->etch2);
     for (i = 0; i < count; i++) {
         int is_long = i % per == 0;
         uint32_t angle = 0xC000u + (uint32_t)((i * FUI_TURN) / count);
+        /* one bit: the tick leaves a pixel's gap above the bezel circle, so
+         * a dotted one is not read as part of it */
+        fui_fx_t r0 = mono ? r_in + FUI_FX(2) : r_in, r1 = r_in + scaled(lay, is_long ? FUI_FX(4.6) : FUI_FX(2.4));
 
         if (!is_long && !fine) {
             continue;
         }
-        radial_tick(p, r_in, r_in + scaled(lay, is_long ? FUI_FX(4.6) : FUI_FX(2.4)), angle, FUI_FX(0.9),
-                    i <= done ? t->lumen_mid : t->etch3);
+        if (mono && i > done) {
+            radial_dots(p, r0, r1, angle, t->etch3);
+        } else {
+            radial_tick(p, r0, r1, angle, FUI_FX(0.9), i <= done ? t->lumen_mid : t->etch3);
+        }
     }
     for (i = 0; i < 4; i++) {
         /* frc_quarter_t in order: peak 0 at 3 o'clock, node, valley, end at 12 */
         int next = lit && rd->next_quarter == i;
 
-        radial_tick(p, r_in - scaled(lay, FUI_FX(5)), r_in, (uint32_t)i * 0x4000u, next ? FUI_FX(1.3) : FUI_FX_ONE,
-                    next ? t->lumen : t->etch3);
+        radial_tick(p, r_in - scaled(lay, FUI_FX(5)), r_in, (uint32_t)i * 0x4000u,
+                    next ? (mono ? FUI_FX(2) : FUI_FX(1.3)) : FUI_FX_ONE, next ? t->lumen : t->etch3);
     }
 }
 
@@ -282,8 +325,9 @@ static void centre_lines(fui_painter_t *p, const char *const *line, const fui_st
     }
 }
 
-/* What the centre shows: a brief label, the status, or the odometer. */
-static void centre(fui_painter_t *p)
+/* What the centre shows: a brief label, the status, or the odometer, its
+ * glyphs at `u` px per design unit (Q16), their strokes `pen` px on one bit. */
+static void centre(fui_painter_t *p, uint32_t u, int pen)
 {
     const fui_ui_t *ui = p->ui;
     const fui_layout_t *lay = p->lay;
@@ -300,7 +344,7 @@ static void centre(fui_painter_t *p)
         line[0] = ui->mode == FUI_MODE_EARTH ? FUI_S_EARTH : FUI_S_RING;
         line[1] = ui->mode == FUI_MODE_EARTH ? "Earth" : "Pure";
         style[0] = FUI_STYLE_READING_BIG;
-        style[1] = FUI_STYLE_FURNITURE;
+        style[1] = lay->info.mono ? FUI_STYLE_NAME : FUI_STYLE_FURNITURE; /* paper: no 1 px words */
         centre_lines(p, line, style, 2);
     } else if (ui->screen == FUI_SCREEN_SCALES) {
         /* The level just stepped to: its letter, then its name. */
@@ -310,7 +354,7 @@ static void centre(fui_painter_t *p)
         fui_i_add_level_title(&s, ui->focus);
         line[0] = text[0]; line[1] = text[1];
         style[0] = FUI_STYLE_TITLE;
-        style[1] = FUI_STYLE_FURNITURE;
+        style[1] = lay->info.mono ? FUI_STYLE_NAME : FUI_STYLE_FURNITURE;
         centre_lines(p, line, style, 2);
     } else if (ui->status != FUI_STATUS_OK) {
         if (lay->reading_y < 0) { /* a face without rows: said here */
@@ -325,11 +369,15 @@ static void centre(fui_painter_t *p)
             /* The focused level's odometer: two 2-stroke glyphs, stems 5.6 u
              * apart (a whole number of pixels), each stem and the top bar on
              * a pixel centre so they stay crisp. */
-            fui_fx_t pitch = (fui_fx_t)((((uint64_t)lay->u * 56) / 10) >> 16) * FUI_FX_ONE;
+            fui_fx_t pitch = (fui_fx_t)((((uint64_t)u * 56) / 10) >> 16) * FUI_FX_ONE;
             fui_fx_t left = ((lay->cx - pitch / 2) & ~0xFF) | 0x80;
-            fui_fx_t top = (fui_glyph_origin_y(lay->cy, 2, lay->u) & ~0xFF) | 0x80;
+            fui_fx_t top = (fui_glyph_origin_y(lay->cy, 2, u) & ~0xFF) | 0x80;
 
-            fui_odometer_draw(p->canvas, ui->reading.odometer, 2, 2, left, top, pitch, lay->u, p->theme->lumen);
+            if (pen > 1) {
+                fui_canvas_set_pen(p->canvas, pen, 1, 2);
+            }
+            fui_odometer_draw(p->canvas, ui->reading.odometer, 2, 2, left, top, pitch, u, p->theme->lumen);
+            fui_canvas_set_pen(p->canvas, 1, 1, 2);
         }
         if (lay->info.round && ui->mode == FUI_MODE_EARTH) {
             /* The round face has no row for a translation: the Earth sign is
@@ -372,7 +420,9 @@ void fui_i_instrument(fui_painter_t *p)
         fui_i_ring_paint(p, &now);
         beads(p);
         bezel(p, r_in);
-        if (now.valid) {
+        if (now.valid && fui_canvas_is_mono(p->canvas)) {
+            fui_i_now_block(p, now.x, now.y, 3, t->lumen); /* one bit: the block, no alidade */
+        } else if (now.valid) {
             /* The alidade: from the bezel through now to just past the last ring. */
             uint32_t angle = phase_angle(ui->reading.level[ui->focus].phase);
 
@@ -385,5 +435,57 @@ void fui_i_instrument(fui_painter_t *p)
             fui_fill_disc(p->canvas, now.x, now.y, FUI_FX(1.2), t->core);
         }
     }
-    centre(p);
+    centre(p, lay->u, 1);
+}
+
+/*
+ * THE WAVE (the 400 x 300 paper face, the owner's layout): the focused
+ * cycle's two levels alone, sized to their room (fui_i_ring_prepare), round
+ * the inner circle with the two glyphs; nothing outside it (no counter
+ * rings, beads, graduations, quarter ticks or alidade). One-bit marks:
+ * elapsed solid, to come dotted, now a block. Thick for paper (the owner,
+ * after the first look on glass): arcs and the circle 2 px, the dots of
+ * what is to come 2 pixels of the path on and 3 off, the glyphs' strokes
+ * WAVE_GLYPH_PEN px, the block 9 x 9.
+ */
+#define WAVE_PEN       2
+#define WAVE_DASH_ON   2
+#define WAVE_DASH_OFF  3
+#define WAVE_GLYPH_PEN 3
+#define WAVE_BLOCK     4 /* half: 9 x 9 */
+void fui_i_wave(fui_painter_t *p)
+{
+    const fui_ui_t *ui = p->ui;
+    const fui_ring_t *ring = &ui->ring;
+    /* the inner circle: the bezel's place, inside the hero's inward bulges
+     * and 2.5 px clear of them past both pens */
+    fui_fx_t r_in = (ring->radius * 71) / 100;
+    int32_t k, whole;
+    uint32_t u;
+    fui_ring_now_t now;
+
+    if (r_in > ring->reach_in - FUI_FX(2.5 + WAVE_PEN)) {
+        r_in = ring->reach_in - FUI_FX(2.5 + WAVE_PEN);
+    }
+    /* The glyphs as large as the circle holds (their box's half-diagonal is
+     * 6.48 u, and 3 px to spare), at a whole multiple of 10/3 px per unit so
+     * stems and bars fall on whole pixels (fui_glyph.h); where that step
+     * would waste more than a fifth of the room (a small circle: the nested
+     * factors of 5 in EARTH), at whole pixels per unit instead. */
+    k = (int32_t)(((int64_t)(r_in - FUI_FX(3)) * 30) / (648 * FUI_FX_ONE));
+    whole = (int32_t)(((int64_t)(r_in - FUI_FX(3)) * 100) / (648 * FUI_FX_ONE));
+    u = (uint32_t)(k < 1 ? 1 : k) * FUI_U_MONO;
+    if (whole > 0 && (int64_t)u * 5 < (int64_t)FUI_U_PX(whole) * 4) {
+        u = FUI_U_PX(whole);
+    }
+    if (p->canvas) {
+        fui_canvas_set_pen(p->canvas, WAVE_PEN, WAVE_DASH_ON, WAVE_DASH_OFF);
+        fui_i_ring_paint(p, &now);
+        fui_draw_ring(p->canvas, ring->cx, ring->cy, r_in, FUI_FX_ONE, p->theme->etch2);
+        fui_canvas_set_pen(p->canvas, 1, 1, 2);
+        if (now.valid) {
+            fui_i_now_block(p, now.x, now.y, WAVE_BLOCK, p->theme->lumen);
+        }
+    }
+    centre(p, u, WAVE_GLYPH_PEN);
 }

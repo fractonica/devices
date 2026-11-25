@@ -20,9 +20,17 @@ constexpr MemberInfo kDisplayCommands[] = {
     {6, "ui_set"},
     {7, "snapshot"},
     {8, "snapshot_read"},
+    {9, "bitmap"},
+    {10, "refresh"},
+    {11, "hold"},
 };
-constexpr MemberInfo kDisplayEvents[] = {{1, "ui"}};
-constexpr MemberInfo kDisplayProperties[] = {{1, "brightness"}};
+constexpr MemberInfo kDisplayEvents[] = {{1, "ui"}, {2, "refreshed"}};
+constexpr MemberInfo kDisplayProperties[] = {
+    {1, "brightness"},
+    {2, "partials"},
+    {3, "shown_crc"},
+    {4, "refresh_ms"},
+};
 constexpr MemberInfo kAudioOutCommands[] = {{1, "tone"}, {2, "play"}, {3, "stop"}, {4, "set_volume"}};
 constexpr MemberInfo kAudioOutEvents[] = {{1, "play_done"}};
 constexpr MemberInfo kAudioOutProperties[] = {{1, "playing"}, {2, "volume"}};
@@ -121,9 +129,9 @@ constexpr MemberInfo kStorageProperties[] = {
     {4, "card_type"},
     {5, "busy"},
 };
-constexpr MemberInfo kClockCommands[] = {{1, "read"}, {2, "set"}, {3, "set_aging"}, {4, "inject"}};
-constexpr MemberInfo kClockEvents[] = {{1, "lost_power"}, {2, "set"}};
-constexpr MemberInfo kClockProperties[] = {{1, "unix"}, {2, "valid"}, {3, "temp_c10"}, {4, "offset_ms"}};
+constexpr MemberInfo kRtcCommands[] = {{1, "read"}, {2, "set"}, {3, "set_aging"}, {4, "inject"}};
+constexpr MemberInfo kRtcEvents[] = {{1, "lost_power"}, {2, "set"}};
+constexpr MemberInfo kRtcProperties[] = {{1, "unix"}, {2, "valid"}, {3, "temp_c10"}, {4, "offset_ms"}};
 constexpr MemberInfo kStepperCommands[] = {
     {1, "move_to"},
     {2, "move_by"},
@@ -169,6 +177,20 @@ constexpr MemberInfo kBuzzerCommands[] = {
 };
 constexpr MemberInfo kBuzzerEvents[] = {{1, "done"}};
 constexpr MemberInfo kBuzzerProperties[] = {{1, "playing"}, {2, "volume"}};
+constexpr MemberInfo kFaceCommands[] = {{1, "show"}, {2, "input"}, {3, "set"}};
+constexpr MemberInfo kFaceProperties[] = {
+    {1, "mode"},
+    {2, "screen"},
+    {3, "focus"},
+    {4, "step"},
+    {5, "utc_offset_min"},
+    {6, "shown"},
+    {7, "time_valid"},
+    {8, "time_source"},
+    {9, "power_save"},
+    {10, "chime"},
+    {11, "clicks"},
+};
 constexpr MemberInfo kNodeCommands[] = {
     {1, "identify"},
     {2, "describe"},
@@ -190,7 +212,7 @@ constexpr MemberInfo kDiagEvents[] = {{1, "mark"}};
 constexpr CapInfo kCaps[] = {
     {0x0001, "fr.button", {1, 0}, kButtonCommands, kButtonEvents, kButtonProperties},
     {0x0002, "fr.led", {1, 0}, kLedCommands, kLedEvents, kLedProperties},
-    {0x0003, "fr.display", {1, 2}, kDisplayCommands, kDisplayEvents, kDisplayProperties},
+    {0x0003, "fr.display", {1, 3}, kDisplayCommands, kDisplayEvents, kDisplayProperties},
     {0x0004, "fr.audio_out", {1, 0}, kAudioOutCommands, kAudioOutEvents, kAudioOutProperties},
     {0x0005, "fr.analog_in", {1, 0}, kAnalogInCommands, kAnalogInEvents, kAnalogInProperties},
     {0x0006, "fr.fixture", {0, 2}, kFixtureCommands, kFixtureEvents, kFixtureProperties},
@@ -203,9 +225,10 @@ constexpr CapInfo kCaps[] = {
     {0x000D, "fr.battery", {1, 0}, kBatteryCommands, kBatteryEvents, kBatteryProperties},
     {0x000E, "fr.haptic", {1, 1}, kHapticCommands, kHapticEvents, kHapticProperties},
     {0x000F, "fr.storage", {1, 0}, kStorageCommands, kStorageEvents, kStorageProperties},
-    {0x0010, "fr.clock", {1, 0}, kClockCommands, kClockEvents, kClockProperties},
+    {0x0010, "fr.rtc", {1, 0}, kRtcCommands, kRtcEvents, kRtcProperties},
     {0x0012, "fr.stepper", {1, 0}, kStepperCommands, kStepperEvents, kStepperProperties},
     {0x0013, "fr.buzzer", {1, 0}, kBuzzerCommands, kBuzzerEvents, kBuzzerProperties},
+    {0x0014, "fr.face", {1, 0}, kFaceCommands, {}, kFaceProperties},
     {0x00F0, "fr.node", {1, 1}, kNodeCommands, kNodeEvents, {}},
     {0x00F1, "fr.ota", {1, 0}, {}, {}, {}},
     {0x00F2, "fr.diag", {1, 0}, kDiagCommands, kDiagEvents, {}},

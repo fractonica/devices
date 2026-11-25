@@ -2,6 +2,7 @@
 #
 #   make            build build/fractonica-sim
 #   make shots      render every face x screen x mode (every page of each card) at SPEC vector A into out/
+#                   (and the 400 x 300 paper face's NOW at the Preon and the Flavon step)
 #   make test       unit tests, golden images, the no-heap check, the sanitizer fuzz
 #   make golden     re-render the golden images and rewrite golden/hashes.txt
 #   make pictures   the shots docs/GUIDE.md shows, into ../docs/ (kept in the repository)
@@ -56,7 +57,7 @@ PROBE    := $(BUILD)/probe
 TESTS    := test_raster test_canvas test_font test_ui test_golden test_firmware test_fuzz
 TEST_BIN := $(addprefix $(BUILD)/,$(TESTS))
 
-FACES   := round240 rect240 rect240x320 mono
+FACES   := round240 rect240 rect240x320 mono mono400x300
 SCREENS := now scales lens sun stamp
 MODES   := pure earth
 # EARTH shots use UTC+2 so the offset is visible in every translation.
@@ -160,6 +161,10 @@ shots: $(SIM)
 	@for face in $(FACES); do for focus in 0 1 2 3 4 5 6 7 8 9 10 11 12 13; do \
 	    $(SIM) --face $$face --focus $$focus --out out/focus/$$face-focus$$focus.png || exit 1; \
 	done; done
+	@for step in preon flavon; do for mode in $(MODES); do \
+	    $(SIM) --face mono400x300 --step $$step --mode $$mode --utc-offset $(OFFSET) \
+	           --out out/mono400x300-now-$$mode-$$step.png || exit 1; \
+	done; done
 	@for face in $(FACES); do \
 	    $(SIM) --face $$face --t none --out out/state/$$face-time-not-set.png || exit 1; \
 	    $(SIM) --face $$face --t none --events N --out out/state/$$face-time-not-set-level-named.png || exit 1; \
@@ -175,7 +180,8 @@ shots: $(SIM)
 # unless the name says otherwise. A picture that is no longer made is removed.
 # docs/hero.jpg, the front picture of README.md, is not made here (laid out by
 # hand from round240-now, rect240x320-now-earth and mono-now); being a JPEG it
-# is left alone.
+# is left alone. The paper face (mono400x300) is shown black on white, as the
+# panel shows it, and also at the Preon and the Flavon step (--step).
 DOCS := ../docs
 pictures: $(SIM)
 	@mkdir -p $(DOCS)
@@ -198,6 +204,13 @@ pictures: $(SIM)
 	@$(SIM) --face round240 --t none --events N --out $(DOCS)/round240-time-not-set-level-named.png >/dev/null
 	@$(SIM) --face round240 --t 99999999999 --out $(DOCS)/round240-out-of-catalogue.png >/dev/null
 	@$(SIM) --face rect240 --t 99999999999 --out $(DOCS)/rect240-out-of-catalogue.png >/dev/null
+	@for step in preon flavon; do \
+	    $(SIM) --face mono400x300 --step $$step --out $(DOCS)/mono400x300-now-$$step.png >/dev/null || exit 1; \
+	    $(SIM) --face mono400x300 --step $$step --mode earth --utc-offset $(OFFSET) \
+	           --out $(DOCS)/mono400x300-now-earth-$$step.png >/dev/null || exit 1; \
+	done
+	@$(SIM) --face mono400x300 --step preon --screen scales --out $(DOCS)/mono400x300-scales.png >/dev/null
+	@$(SIM) --face mono400x300 --t 99999999999 --out $(DOCS)/mono400x300-out-of-catalogue.png >/dev/null
 	@python3 ../tools/png-compress.py $(DOCS)/*.png
 	@ls $(DOCS)/*.png | wc -l | xargs echo "pictures in docs/:"
 

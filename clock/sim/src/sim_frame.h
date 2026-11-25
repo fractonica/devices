@@ -16,13 +16,18 @@ typedef struct sim_frame {
     fui_canvas_t canvas;
 } sim_frame_t;
 
-/** A whole-face canvas over a static buffer (RGB565 or SSD1306 pages), cleared. */
+/** A whole-face canvas over a static buffer (RGB565 or SSD1306 pages), cleared.
+ *  (Pages for the 400 x 300 face too: the pixels, and so the hash, are those
+ *  of any format; test_ui checks MONO_ROW against it.) */
 void sim_frame_init(sim_frame_t *frame, fui_face_t face);
 
 /** "round240" ... / "now" ... / "pure" | "earth". -1 when unknown. */
 int sim_parse_face(const char *name);
 int sim_parse_screen(const char *name);
 int sim_parse_mode(const char *name);
+/** "none" 0, "helion" 6, "theta" 7, "preon" 8, "kappa" 9, "flavon" 10, or the
+ *  level's number; -1 for anything fui_ui_set_step refuses. */
+int sim_parse_step(const char *name);
 
 /**
  * sim_goto_screen puts `ui` on the first page of `screen` (SCALES: by a step
@@ -44,8 +49,8 @@ uint64_t sim_frame_hash(const sim_frame_t *frame);
 
 /**
  * The frame as RGB bytes (malloc'ed, w * h * 3), each pixel `scale` wide.
- * The round face is masked to its circle; a one-bit face scaled 3 or more
- * shows a grid so single pixels can be counted.
+ * The round face is masked to its circle; the 128 x 64 face scaled 3 or more
+ * shows a grid so single pixels can be counted. A set bit is white.
  */
 uint8_t *sim_frame_rgb(const sim_frame_t *frame, int scale, int *w, int *h);
 

@@ -124,7 +124,7 @@ export * from './ops/storage.ts';
 export * from './ops/clock.ts';
 export * from './ops/app-host.ts';
 import { CSI_OPS } from './ops/csi.ts';
-import { DISPLAY_OPS } from './ops/display.ts';
+import { DISPLAY_OPS, PAPER_OPS } from './ops/display.ts';
 import { cursor, MAX_WAIT_S, op, portSel, sourceDir, waitS, type OpDef } from './ops/common.ts';
 import { HUB_OPS, HubStatusSchema } from './ops/hub.ts';
 import { LINKS_OPS } from './ops/links.ts';
@@ -209,10 +209,23 @@ export {
 } from './ops/csi.ts';
 export { DEFAULT_NETWORK, NETWORK_BAND_IDENT, NETWORK_BANDS, NetworkSchema, networkName, type Network, type NetworkBand } from './ops/network.ts';
 export { cliFlag, MAX_WAIT_S, OP_ACROSS, OP_TARGETS, opBoardFields, opRepeatable, type OpAcross, type OpBoardField, type OpDef, type OpKind, type OpTarget, type OpTier } from './ops/common.ts';
+export { PAPER_OPS } from './ops/display.ts';
 export {
+  DISPLAY_DITHERS,
+  DISPLAY_FITS,
   DISPLAY_FORMATS,
+  DisplayRefreshSchema,
   DisplayRenderSchema,
+  DisplayShowSchema,
   DisplaySnapshotRowSchema,
+  EPAPER_BITMAP_MAX_BYTES,
+  EPAPER_CONFIG_DEFAULTS,
+  EPAPER_HOLD_MAX_MS,
+  EPAPER_REFRESH_MODES,
+  EPAPER_TIMEOUT_MS,
+  EPAPER_VENDOR_MS,
+  monoFrameBytes,
+  type EpaperRefreshMode,
   RENDER_COMMANDS,
   RENDERER_BIN,
   RENDERER_BUILD,
@@ -548,6 +561,8 @@ export const OPS = [
   ...MULTI_HUB_OPS,
   // The hubs' link, step 2.1 (design multi-hub-m2): network_admit, hub_name_set, hub_peers.
   ...PEER_OPS,
+  // EPAPER-1 (design epaper-e1 D9): pictures, pages and text on a 1-bit panel, and the e-paper refresh.
+  ...PAPER_OPS,
 ] as const;
 
 export type OpName = (typeof OPS)[number]['name'];

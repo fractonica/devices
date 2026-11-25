@@ -7,6 +7,7 @@
 #include <cstring>
 
 #include "diag_json.hpp"
+#include "fr/display/epaper_backend.hpp"
 #include "fr/display/mono_backend.hpp"
 #include "fr/ui/lvgl_backend.hpp"
 #include "touch.hpp"
@@ -118,6 +119,28 @@ const char *kind_name(fr::cap::DisplayUiEventKind k)
     return n != nullptr ? n : "unknown";
 }
 
+fr::Status HostEpaper::init(fr::Core &core, fr::hal::Rotation rotation)
+{
+    core_ = &core;
+    rotation_ = rotation;
+    timer_ = core.timer([this] {
+        busy_ = false;
+        answered_ = true;
+        if (idle_) {
+            idle_(core_->now());
+        }
+    });
+    return timer_ != nullptr ? fr::Status{} : std::unexpected(fr::Err::failed);
+}
+
+fr::Status HostEpaper::start(Op)
+{
+    busy_ = true;
+    answered_ = false;
+    timer_->start(1000);
+    return {};
+}
+
 Session::Session(const Geometry &g) : geo_(g), panel_(native_w(g), native_h(g), g.format) {}
 
 Session::~Session()
@@ -139,7 +162,19 @@ std::expected<void, std::string> Session::start()
     if (!geo_.ui && geo_.format != fr::hal::PixelFormat::mono1) {
         return std::unexpected("--ui 0 needs --format mono1 (the built-in renderer is the 1-bit one)");
     }
-    if (geo_.ui) {
+    if (geo_.epaper && (geo_.ui || geo_.format != fr::hal::PixelFormat::mono1)) {
+        return std::unexpected("--epaper 1 needs --format mono1 and --ui 0 (e-paper panels are 1-bit)");
+    }
+    fr::hal::Display *panel = &panel_;
+    if (geo_.epaper) {
+        epd_ = std::make_unique<HostEpaper>(native_w(geo_), native_h(geo_));
+        const size_t bytes = fr::display::MonoCanvas::stride_of(geo_.width) * geo_.height;
+        frame_buf_.assign(bytes, 0);
+        shown_buf_.assign(bytes, 0);
+        frozen_buf_.assign(bytes, 0);
+        backend_ = std::make_unique<fr::display::EpaperBackend>(*epd_, fr::display::EpaperBackend::Buffers{frame_buf_, shown_buf_, frozen_buf_});
+        panel = epd_.get();
+    } else if (geo_.ui) {
         auto b = std::make_unique<fr::ui::LvglBackend>();
         lvgl_ = b.get();
         backend_ = std::move(b);
@@ -151,7 +186,7 @@ std::expected<void, std::string> Session::start()
     }
     fr::cap::DisplayConfig cfg{};
     cfg.rotation = static_cast<fr::cap::DisplayRotation>(geo_.rotation);
-    display_ = std::make_unique<fr::DisplayService>(panel_, *backend_, cfg);
+    display_ = std::make_unique<fr::DisplayService>(*panel, *backend_, cfg);
     fr::cap::TouchConfig tcfg{};
     tcfg.display = kDisplayPort;
     touch_ = std::make_unique<fr::TouchService>(touch_src_, tcfg);

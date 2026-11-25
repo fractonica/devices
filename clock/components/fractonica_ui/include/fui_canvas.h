@@ -72,6 +72,9 @@ typedef struct fui_canvas {
     uint8_t    format;   /* fui_format_t                                        */
     fui_rect_t clip;     /* screen coordinates; always inside the buffer        */
     fui_rect_t dirty;    /* bounding box of everything drawn since the reset    */
+    uint8_t    pen;      /* ONE BIT: arcs and glyph strokes this many px wide   */
+    uint8_t    dash_on;  /* ONE BIT: a dotted arc inks `dash_on` pixels of its  */
+    uint8_t    dash_off; /* path, then skips `dash_off` (fui_canvas_set_pen)    */
 } fui_canvas_t;
 
 /** Bytes a buffer of this format and size needs (MONO_PAGE rounds h up to 8). */
@@ -89,6 +92,17 @@ void fui_canvas_set_origin(fui_canvas_t *c, int ox, int oy);
 
 /** Restrict drawing to `r` (intersected with the buffer). NULL = whole buffer. */
 void fui_canvas_set_clip(fui_canvas_t *c, const fui_rect_t *r);
+
+/**
+ * ONE BIT: the pen of the arcs (fui_draw_arc, _dotted, fui_draw_ring) and the
+ * glyph strokes (fui_draw_segments) that follow: `width` px (1..4: a square
+ * of that side stamped at every pixel of the 1 px path, so the stroke stays
+ * crisp, no grey), and the dotted arcs' pattern, `on` pixels of the path
+ * inked and `off` skipped. fui_canvas_init sets 1, 1, 2 (DESIGN.md S11:
+ * 1 px, 1 on / 2 off). Colour canvases ignore it; straight lines
+ * (fui_draw_line) keep their own `width`.
+ */
+void fui_canvas_set_pen(fui_canvas_t *c, int width, int on, int off);
 
 static inline int fui_canvas_is_mono(const fui_canvas_t *c)
 {

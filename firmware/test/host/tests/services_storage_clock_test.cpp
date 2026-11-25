@@ -1,4 +1,4 @@
-// StorageService and ClockService against FakeCore, an in-memory file store and a fake RTC counting on the core's clock
+// StorageService and RtcService against FakeCore, an in-memory file store and a fake RTC counting on the core's clock
 // (design lcd-clock-c1 D5-D8): path rules, mount and the lost card, chunks, list paging, remount; the DS3231 register
 // conversions; the rollover timestamp, set at a node time, lost_power, temperature, inject.
 #include <cstdint>
@@ -11,7 +11,8 @@
 
 #include "tests/fake_worker.hpp"
 #include "fr/rtc/ds3231_regs.hpp"
-#include "fr/services/clock_service.hpp"
+#include "fr/services/rtc_service.hpp"
+#include "fr/wall_clock.hpp"
 #include "fr/services/display_service.hpp"
 #include "fr/services/storage_service.hpp"
 #include "tests/fake_core.hpp"
@@ -19,7 +20,7 @@
 
 namespace {
 
-using fr::ClockService;
+using fr::RtcService;
 using fr::Err;
 using fr::StorageService;
 using fr::TimeUs;
@@ -516,7 +517,7 @@ TEST(ds3231_temperature)
     CHECK_EQ(regs::temp_c10(0xF6, 0x00), int16_t(-100));
 }
 
-// ---- ClockService ----
+// ---- RtcService ----
 
 class FakeRtc final : public fr::hal::Rtc
 {
@@ -555,7 +556,6 @@ public:
         aging_v = o;
         return {};
     }
-    void set_system_time(uint32_t unix) override { system = unix; }
     fr::hal::Selftest selftest() override { return {true, "fake"}; }
     void note(const char *what) override { notes.emplace_back(what); }
     /** A stray write: the chip's time moves by `s` seconds and its 1 Hz chain restarts now. */
@@ -574,7 +574,6 @@ public:
     bool dead = false;
     int16_t temp = 231;
     int8_t aging_v = 0;
-    uint32_t system = 0;
     TimeUs set_at = 0;
     int polls = 0;
     int fail_bursts = 0;
@@ -583,7 +582,17 @@ public:
 constexpr uint8_t kClockPort = 5;
 
 struct ClockRig {
-    explicit ClockRig(fr::cap::ClockConfig cfg = {}) : rtc(core), svc(rtc, cfg) { svc.attach(kClockPort, "clock", sink); }
+    explicit ClockRig(fr::cap::RtcConfig cfg = {}) : rtc(core), svc(rtc, cfg)
+    {
+        fr::wall_clock().reset();  // the node's one wall clock: each test starts unset (design face-f1 D1)
+        svc.attach(kClockPort, "clock", sink);
+    }
+    /** The wall clock's whole seconds now, 0 while unset. */
+    uint32_t wall_s()
+    {
+        const auto u = fr::wall_clock().unix_at(core.now());
+        return u ? static_cast<uint32_t>(*u / 1'000'000) : 0u;
+    }
     std::vector<RecordingSink::Emission> events(uint8_t id) const
     {
         std::vector<RecordingSink::Emission> out;
@@ -597,19 +606,19 @@ struct ClockRig {
     FakeCore core;
     RecordingSink sink{core};
     FakeRtc rtc;
-    ClockService svc;
+    RtcService svc;
 };
 
 TEST(clock_next_poll_goes_fast_near_the_rollover)
 {
-    CHECK_EQ(ClockService::next_poll(0, 100'000, 0), TimeUs(100'000));
+    CHECK_EQ(RtcService::next_poll(0, 100'000, 0), TimeUs(100'000));
     // Far from the expected rollover: the period, clipped to the fast window's start.
-    CHECK_EQ(ClockService::next_poll(800'000, 100'000, 1'000'000), TimeUs(900'000));
-    CHECK_EQ(ClockService::next_poll(850'000, 100'000, 1'000'000), TimeUs(1'000'000 - ClockService::kFastBeforeUs));
+    CHECK_EQ(RtcService::next_poll(800'000, 100'000, 1'000'000), TimeUs(900'000));
+    CHECK_EQ(RtcService::next_poll(850'000, 100'000, 1'000'000), TimeUs(1'000'000 - RtcService::kFastBeforeUs));
     // Inside the window: fast.
-    CHECK_EQ(ClockService::next_poll(950'000, 100'000, 1'000'000), TimeUs(950'000 + ClockService::kFastPollUs));
+    CHECK_EQ(RtcService::next_poll(950'000, 100'000, 1'000'000), TimeUs(950'000 + RtcService::kFastPollUs));
     // After it: the period again.
-    CHECK_EQ(ClockService::next_poll(1'150'000, 100'000, 1'000'000), TimeUs(1'250'000));
+    CHECK_EQ(RtcService::next_poll(1'150'000, 100'000, 1'000'000), TimeUs(1'250'000));
 }
 
 TEST(clock_valid_time_seeds_the_system_and_rollovers_are_caught_within_10ms)
@@ -617,12 +626,13 @@ TEST(clock_valid_time_seeds_the_system_and_rollovers_are_caught_within_10ms)
     ClockRig r;
     REQUIRE(r.svc.init(r.core));
     CHECK(r.svc.valid());
-    CHECK_EQ(r.rtc.system, r.rtc.base);
-    CHECK(r.events(fr::cap::Clock::kEventLostPower).empty());
+    CHECK_EQ(r.wall_s(), r.rtc.base);
+    CHECK(fr::wall_clock().source() == fr::TimeSource::rtc);
+    CHECK(r.events(fr::cap::Rtc::kEventLostPower).empty());
     r.core.advance_ms(5'000);
     // The chip's boundaries are at epoch + k s; the last one seen is within one fast poll of one.
     const TimeUs phase = (r.svc.rollover_us() - r.rtc.epoch) % 1'000'000;
-    CHECK(phase >= 0 && phase <= ClockService::kFastPollUs);
+    CHECK(phase >= 0 && phase <= RtcService::kFastPollUs);
     auto rd = r.svc.read();
     REQUIRE(rd.has_value());
     CHECK_EQ(rd->unix, r.rtc.now_unix());
@@ -648,7 +658,7 @@ TEST(clock_read_pairs_unix_with_the_rollover_it_began_at)
         CHECK_EQ(rd->unix, r.rtc.base + static_cast<uint32_t>(since / 1'000'000));
         // The first rollovers are caught at the normal period; the fast window then closes in within ~3 s.
         if (step >= 20) {
-            CHECK(since % 1'000'000 <= ClockService::kFastPollUs);
+            CHECK(since % 1'000'000 <= RtcService::kFastPollUs);
         }
     }
     // A failed burst at a rollover keeps the old pair instead of a new rollover with an old second.
@@ -671,8 +681,8 @@ TEST(clock_lost_power_at_boot)
     r.rtc.osf = true;
     REQUIRE(r.svc.init(r.core));
     CHECK(!r.svc.valid());
-    CHECK_EQ(r.events(fr::cap::Clock::kEventLostPower).size(), size_t{1});
-    CHECK_EQ(r.rtc.system, 0u);  // not seeded from an untrusted time
+    CHECK_EQ(r.events(fr::cap::Rtc::kEventLostPower).size(), size_t{1});
+    CHECK(!fr::wall_clock().valid());  // not seeded from an untrusted time
 }
 
 TEST(clock_set_lands_at_the_target_and_validates)
@@ -681,30 +691,30 @@ TEST(clock_set_lands_at_the_target_and_validates)
     r.rtc.osf = true;
     REQUIRE(r.svc.init(r.core));
     const TimeUs target = r.core.now() + 700'000;
-    fr::cap::ClockSetArgs a{};
+    fr::cap::RtcSetArgs a{};
     a.unix = 1800000000;
     a.at_us = static_cast<uint64_t>(target);
-    a.by = fr::cap::ClockSetBy::sync;
+    a.by = fr::cap::RtcSetBy::sync;
     REQUIRE(r.svc.set(a));
     CHECK(r.svc.set_pending());
     CHECK(r.svc.set(a).error() == Err::busy);
     r.core.advance_ms(1'000);
     CHECK(!r.svc.set_pending());
     // The fake clock does not move during the spin: the write lands at the timer, kSpinUs before the target at worst.
-    CHECK(r.rtc.set_at >= target - ClockService::kSpinUs && r.rtc.set_at <= target);
+    CHECK(r.rtc.set_at >= target - RtcService::kSpinUs && r.rtc.set_at <= target);
     CHECK(r.svc.valid());
-    const auto ev = r.events(fr::cap::Clock::kEventSet);
+    const auto ev = r.events(fr::cap::Rtc::kEventSet);
     REQUIRE_EQ(ev.size(), size_t{1});
     CHECK_EQ(frt::field_u(ev[0].bytes, 1), uint64_t(1800000000));
-    CHECK_EQ(frt::field_u(ev[0].bytes, 2), uint64_t(fr::cap::ClockSetBy::sync));
-    CHECK_EQ(r.rtc.system, 1800000000u);
+    CHECK_EQ(frt::field_u(ev[0].bytes, 2), uint64_t(fr::cap::RtcSetBy::sync));
+    CHECK_EQ(r.wall_s(), 1800000000u);
 }
 
 TEST(clock_set_in_the_past_moves_by_whole_seconds_and_too_far_is_refused)
 {
     ClockRig r;
     REQUIRE(r.svc.init(r.core));
-    fr::cap::ClockSetArgs a{};
+    fr::cap::RtcSetArgs a{};
     a.unix = 1800000000;
     a.at_us = static_cast<uint64_t>(r.core.now() - 500'000);  // 0.5 s ago: the boundary 1 s after, unix + 1
     REQUIRE(r.svc.set(a));
@@ -728,7 +738,7 @@ TEST(clock_set_late_timer_reaims_to_the_next_boundary)
     ClockRig r;
     REQUIRE(r.svc.init(r.core));
     const TimeUs target = r.core.now() + 500'000;
-    fr::cap::ClockSetArgs a{};
+    fr::cap::RtcSetArgs a{};
     a.unix = 1800000000;
     a.at_us = static_cast<uint64_t>(target);
     REQUIRE(r.svc.set(a));
@@ -740,7 +750,7 @@ TEST(clock_set_late_timer_reaims_to_the_next_boundary)
     r.core.advance_ms(1'000);
     CHECK(!r.svc.set_pending());
     CHECK_EQ(r.rtc.base, 1800000001u);  // the next boundary, unix + 1
-    CHECK(r.rtc.set_at >= target + 1'000'000 - ClockService::kSpinUs && r.rtc.set_at <= target + 1'000'000);
+    CHECK(r.rtc.set_at >= target + 1'000'000 - RtcService::kSpinUs && r.rtc.set_at <= target + 1'000'000);
     CHECK_EQ(r.svc.set_errors(), 0u);
 }
 
@@ -751,12 +761,12 @@ TEST(clock_jump_without_set_invalidates_until_the_next_set)
     r.core.advance_ms(5'000);
     CHECK(r.svc.valid());
     CHECK_EQ(r.svc.jumps(), 0u);
-    const auto lost_before = r.events(fr::cap::Clock::kEventLostPower).size();
+    const auto lost_before = r.events(fr::cap::Rtc::kEventLostPower).size();
     r.rtc.stray(+101);  // what the bench saw: a stray write moved the chip forward
     r.core.advance_ms(3'000);
     CHECK_EQ(r.svc.jumps(), 1u);
     CHECK(!r.svc.valid());
-    CHECK_EQ(r.events(fr::cap::Clock::kEventLostPower).size(), lost_before + 1);
+    CHECK_EQ(r.events(fr::cap::Rtc::kEventLostPower).size(), lost_before + 1);
     REQUIRE(!r.rtc.notes.empty());
     CHECK(r.rtc.notes.back().find("jumped +10") != std::string::npos);
     // It stays not valid while the chip keeps counting normally from the new time.
@@ -764,7 +774,7 @@ TEST(clock_jump_without_set_invalidates_until_the_next_set)
     CHECK(!r.svc.valid());
     CHECK_EQ(r.svc.jumps(), 1u);
     // A set makes it valid again (and seeds the system time).
-    fr::cap::ClockSetArgs a{};
+    fr::cap::RtcSetArgs a{};
     a.unix = 1800000000;
     REQUIRE(r.svc.set(a));
     CHECK(r.svc.valid());
@@ -814,7 +824,7 @@ TEST(clock_set_now_writes_at_once)
 {
     ClockRig r;
     REQUIRE(r.svc.init(r.core));
-    fr::cap::ClockSetArgs a{};
+    fr::cap::RtcSetArgs a{};
     a.unix = 1800000000;
     REQUIRE(r.svc.set(a));
     CHECK(!r.svc.set_pending());
@@ -825,7 +835,7 @@ TEST(clock_aging_and_dead_chip)
 {
     ClockRig r;
     REQUIRE(r.svc.init(r.core));
-    fr::cap::ClockSetAgingArgs g{};
+    fr::cap::RtcSetAgingArgs g{};
     g.offset = -7;
     REQUIRE(r.svc.set_aging(g));
     CHECK_EQ(r.rtc.aging_v, int8_t(-7));
@@ -842,7 +852,7 @@ TEST(clock_inject_holds_and_counts_on)
 {
     ClockRig r;
     REQUIRE(r.svc.init(r.core));
-    fr::cap::ClockInjectArgs in{};
+    fr::cap::RtcInjectArgs in{};
     in.unix = 2000000000;
     in.hold_ms = 5000;
     REQUIRE(r.svc.inject(in));

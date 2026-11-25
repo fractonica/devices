@@ -1,0 +1,27 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:fractonica:schema:fr.face.input.args",
+  "title": "fr.face.input arguments",
+  "description": "What the face's button would do: next, prev, select or long (the clock's four events).",
+  "type": "object",
+  "properties": {
+    "event": {
+      "type": "string",
+      "enum": [
+        "next",
+        "prev",
+        "select",
+        "long"
+      ]
+    }
+  },
+  "additionalProperties": false,
+  "examples": [
+    {
+      "event": "next"
+    },
+    {
+      "event": "select"
+    }
+  ]
+}

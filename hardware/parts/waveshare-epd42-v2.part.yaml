@@ -1,0 +1,25 @@
+schema: fractonica/part@1
+id: waveshare-epd42-v2
+name: Waveshare 4.2inch e-Paper Module V2
+category: display
+summary: 400 × 300 black-and-white e-paper on 4-line SPI (an SSD1683); partial refresh 0.36 s, full 3.3 s; keeps its picture without power.
+specs:
+  pixels: 400 × 300, 1 bit
+  controller: SSD1683 (inferred from Waveshare's code and Good Display's GDEY042T81, the same glass; its sequences drove the bench unit, design epaper-e1 §10)
+  supply: 3.3 V or 5 V on VCC (its own regulator and level shifter); about 6 mA while refreshing, 2 µA asleep
+  refresh: partial 0.3-0.42 s, fast 1-1.5 s, full 2-3 s (vendor); measured on paper-c6 0.362 s, 1.70 s, 3.33 s
+  spi: up to 20 MHz write; no MISO
+pins:
+  - { name: VCC, desc: "3.3 V (or 5 V)" }
+  - { name: GND, desc: ground }
+  - { name: DIN, desc: "SPI MOSI" }
+  - { name: CLK, desc: "SPI clock" }
+  - { name: CS, desc: "chip select, low = selected" }
+  - { name: DC, desc: "data/command: low command, high data" }
+  - { name: RST, desc: "reset, low = reset; on this module it also switches the panel's power: keep pulses short" }
+  - { name: BUSY, desc: "high while the controller works (an output)" }
+notes:
+  - "The BS resistor on the back picks the interface: 0 = 4-line SPI (as shipped; the driver's), 1 = 3-line."
+  - "Driver: hardware/drivers/ssd1683_spi; capability fr.display 1.3 (trait epaper); design docs/design/epaper-e1.md."
+  - "After several partial refreshes a clean one clears the ghosts (the vendor says a full one after 5; on the bench traces stayed very faint up to 60 partials and a fast refresh removed them); refresh at least once a day; store it showing white."
+  - "The flat cable between the board and the glass tears easily: do not bend it at the connector."

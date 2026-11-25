@@ -24,6 +24,7 @@ import {
   registryInputsHashOf,
   SealedKeySchema,
 } from '../src/index.ts';
+import { beforeRtc } from './before-rtc.ts';
 
 const PUBLIC_KEY = Buffer.alloc(32, 7).toString('base64');
 const member = { id: '5d1c20a0b1c2', name: 'lab', host: 'lab-hub.local', addr: '192.168.1.20', link_port: 7423, slot: 0, joined_at: '2026-11-21T10:00:00.000Z' };
@@ -31,9 +32,11 @@ const sealed = { alg: 'x25519-hkdf-sha256-aes256gcm', epk: 'AA==', salt: 'AA==',
 
 describe("the hubs' link ops", () => {
   it('adds three ops at the end, on `fr net admit`, `fr hub name` and `fr hub peers`, and moves REGISTRY_HASH', () => {
-    expect(OPS.filter((o) => o.name !== 'haptic_tap')).toHaveLength(131); // HAPTIC-1 adds haptic_tap (protocol-haptic-h1.test.ts)
-    expect(OPS.slice(-3).map((o) => o.name)).toEqual(['network_admit', 'hub_name_set', 'hub_peers']);
-    expect(PEER_OPS.map((o) => o.name)).toEqual(OPS.slice(-3).map((o) => o.name));
+    // HAPTIC-1 adds haptic_tap (protocol-haptic-h1.test.ts), EPAPER-1 four display ops at the end (protocol-epaper-e1.test.ts).
+    const before = beforeRtc(OPS).filter((o) => !/^display_(image|html|text|refresh)$/.test(o.name));
+    expect(before.filter((o) => o.name !== 'haptic_tap')).toHaveLength(131);
+    expect(before.slice(-3).map((o) => o.name)).toEqual(['network_admit', 'hub_name_set', 'hub_peers']);
+    expect(PEER_OPS.map((o) => o.name)).toEqual(before.slice(-3).map((o) => o.name));
     expect(findOp('network_admit')).toMatchObject({ kind: 'command', tier: 'mutate', cli: { path: ['net', 'admit'] } });
     expect(findOp('hub_name_set')).toMatchObject({ kind: 'command', tier: 'mutate', cli: { path: ['hub', 'name'], positional: ['name'] } });
     expect(findOp('hub_peers')).toMatchObject({ kind: 'query', tier: 'read', cli: { path: ['hub', 'peers'] } });
@@ -42,7 +45,7 @@ describe("the hubs' link ops", () => {
     }
     // Step 2.1's hash is the hash of the names and inputs to this day: step 2.2 changed no input and added no op. It
     // moved REGISTRY_HASH by what joined it, where each op runs (protocol-targets.test.ts).
-    const beforeHaptic = OPS.filter((o) => o.name !== 'haptic_tap') as readonly OpDef[];
+    const beforeHaptic = beforeRtc(OPS).filter((o) => o.name !== 'haptic_tap' && !/^display_(image|html|text|refresh)$/.test(o.name)) as readonly OpDef[];
     expect(registryInputsHashOf(beforeHaptic)).toBe('7113df84c91b');
     expect(registryHashOf(beforeHaptic)).toBe('8910d0ce4075');
     expect(REGISTRY_HASH).not.toBe('8910d0ce4075'); // HAPTIC-1's haptic_tap moved it (protocol-haptic-h1.test.ts)

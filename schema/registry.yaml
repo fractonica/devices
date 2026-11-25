@@ -15,9 +15,10 @@ standard:
   0x000D: fr.battery       # design power-p1 D2
   0x000E: fr.haptic        # design power-p1 D6
   0x000F: fr.storage       # design lcd-clock-c1 D5
-  0x0010: fr.clock         # design lcd-clock-c1 D7
+  0x0010: fr.rtc           # design lcd-clock-c1 D7 (fr.clock until design face-f1 D11)
   0x0012: fr.stepper       # design stepper-s1 D1
   0x0013: fr.buzzer        # design buzzer-b1 D1
+  0x0014: fr.face          # design face-f1 D2
 system:
   0x00F0: fr.node
   0x00F1: fr.ota

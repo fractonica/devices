@@ -44,6 +44,8 @@ export interface Panel {
   touch: boolean;
   /** Trait round (design scale-round-c1 D5): the renderer greys the corners the glass does not show. */
   round: boolean;
+  /** Trait epaper (design epaper-e1 D12): the renderer draws through EpaperBackend (frames past 128 x 64). */
+  epaper?: boolean;
 }
 
 /** What the panel needs of a manifest instance (codegen's ManifestCap). */
@@ -122,6 +124,7 @@ export async function resolvePanel(sourceDir: string, profile: string, instance?
     ui: p.traits.ui === true,
     touch: p.traits.touch === true,
     round: p.traits.round === true,
+    epaper: p.traits.epaper === true,
   };
 }
 
@@ -392,6 +395,8 @@ export async function runRenderer(bin: string, panel: Panel, scriptFile: string,
     out,
     // A round panel's PNG greys the corners its glass does not show; the crc stays the whole frame's.
     ...(panel.round ? ['--round', '1'] : []),
+    // An e-paper panel draws through EpaperBackend (design epaper-e1 D12).
+    ...(panel.epaper ? ['--epaper', '1'] : []),
   ];
   const r = await run(bin, args, opts);
   if (r.timedOut) {

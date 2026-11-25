@@ -12,4 +12,4 @@ caps:
   screen: { cap: fr.display, driver: st7789_spi,  bind: displays.lcd, config: { max_brightness: 128 } }
   card:   { cap: fr.storage, driver: sdspi_card,  bind: sd_cards.card }
   # 100 kHz (design D8 as built): more margin on the jumper wires; the driver never points a read at a writable register.
-  clock:  { cap: fr.clock,   driver: ds3231_i2c,  bind: { sda: gpio.18, scl: gpio.19 }, config: { khz: 100 } }
+  clock:  { cap: fr.rtc,   driver: ds3231_i2c,  bind: { sda: gpio.18, scl: gpio.19 }, config: { khz: 100 } }

@@ -20,6 +20,6 @@ pins:
 notes:
   - "The module charges its coin cell through a 200 Ω resistor and a diode from VCC, meant for a rechargeable LIR2032. With a plain CR2032, remove that diode (or the resistor next to it) so the cell is not charged."
   - "The time survives power-off only with a coin cell fitted."
-  - "Writing the seconds register restarts the 1 Hz chain: fr.clock uses that to set the time to the second boundary."
+  - "Writing the seconds register restarts the 1 Hz chain: fr.rtc uses that to set the time to the second boundary."
 datasheets:
   - https://www.analog.com/media/en/technical-documentation/data-sheets/DS3231.pdf

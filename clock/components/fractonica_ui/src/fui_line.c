@@ -38,6 +38,32 @@ void fui_i_line_px(fui_canvas_t *c, int x0, int y0, int x1, int y1, fui_color_t 
     }
 }
 
+void fui_i_line_pen(fui_canvas_t *c, int x0, int y0, int x1, int y1, fui_color_t color)
+{
+    int dx = x1 > x0 ? x1 - x0 : x0 - x1, sx = x0 < x1 ? 1 : -1;
+    int dy = y1 > y0 ? y0 - y1 : y1 - y0, sy = y0 < y1 ? 1 : -1; /* dy <= 0 */
+    int err = dx + dy, w = c->pen;
+
+    fui_canvas_touch(c, (x0 < x1 ? x0 : x1) - w, (y0 < y1 ? y0 : y1) - w, (x0 > x1 ? x0 : x1) + w + 1,
+                     (y0 > y1 ? y0 : y1) + w + 1);
+    for (;;) {
+        int twice = 2 * err;
+
+        fui_i_stamp(c, x0, y0, color);
+        if (x0 == x1 && y0 == y1) {
+            break;
+        }
+        if (twice >= dy) {
+            err += dy;
+            x0 += sx;
+        }
+        if (twice <= dx) {
+            err += dx;
+            y0 += sy;
+        }
+    }
+}
+
 static void line_mono(fui_canvas_t *c, fui_fx_t x0, fui_fx_t y0, fui_fx_t x1, fui_fx_t y1,
                       fui_fx_t width, fui_color_t color)
 {

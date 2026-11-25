@@ -31,6 +31,7 @@
 #include "display.hpp"  // generated fr::cap::Display* types
 #include "fr/base.hpp"
 #include "fr/core/core.hpp"
+#include "fr/display/mono_canvas.hpp"
 #include "fr/hal/display.hpp"
 
 namespace fr::display {
@@ -49,6 +50,14 @@ struct Snapshot {
  * included) is only borrowed for the call.
  */
 using UiEventSink = Callback<void(const cap::DisplayUi &), 16>;
+
+/**
+ * Where an e-paper backend reports each refresh as it ends (design epaper-e1 D2): DisplayService emits `refreshed` and
+ * reports the properties that changed. Core task.
+ */
+using RefreshSink = Callback<void(const cap::DisplayRefreshed &), 16>;
+/** Draws into a 1-bit frame within `box` (design face-f1 D7: the clock face); the canvas is only borrowed. */
+using PaintFn = Callback<void(MonoCanvas &canvas, const Box &box), 16>;
 
 class Backend
 {
@@ -83,6 +92,46 @@ public:
         static_cast<void>(a);
         return std::unexpected(Err::unsupported);
     }
+    /** fr.display bitmap (args valid()): mono backends draw it; LVGL answers UNSUPPORTED (design epaper-e1 D2). */
+    virtual Status bitmap(const cap::DisplayBitmapArgs &a)
+    {
+        static_cast<void>(a);
+        return std::unexpected(Err::unsupported);
+    }
+
+    /**
+     * Design face-f1 D7: a drawer on the node (the clock face) paints into the 1-bit frame within `box` (clipped to
+     * the screen), which the backend then treats as drawn. Backends with a 1-bit frame; others answer UNSUPPORTED.
+     */
+    virtual Status paint(const Box &box, PaintFn fn)
+    {
+        static_cast<void>(box);
+        static_cast<void>(fn);
+        return std::unexpected(Err::unsupported);
+    }
+
+    // E-paper (fr.display trait epaper; design epaper-e1 D2-D3). Other backends answer UNSUPPORTED and report 0.
+    /** Whether this is an e-paper backend (fr.display trait epaper). Valid before init(). */
+    virtual bool epaper() const { return false; }
+    /** Before init(): where each refresh is reported. */
+    virtual void set_refresh_sink(RefreshSink sink) { static_cast<void>(sink); }
+    /** fr.display refresh: the mode that will run and whether the frame differs from the glass. */
+    virtual std::expected<cap::DisplayRefreshResult, Err> refresh(cap::DisplayRefreshMode mode)
+    {
+        static_cast<void>(mode);
+        return std::unexpected(Err::unsupported);
+    }
+    /** fr.display hold: no automatic refresh for `ms` (0 releases). */
+    virtual Status hold(uint16_t ms)
+    {
+        static_cast<void>(ms);
+        return std::unexpected(Err::unsupported);
+    }
+    /** The e-paper properties: partials since the last clean, CRC of the glass (0 unknown), the last refresh's ms. */
+    virtual uint8_t partials() const { return 0; }
+    virtual uint32_t shown_crc() const { return 0; }
+    virtual uint16_t refresh_ms() const { return 0; }
+
     /**
      * A touch at (x, y) in the panel's coordinates (after rotation), from TouchService through DisplayService, any
      * task: the backend queues it (LVGL: its pointer input). pressed false is the release at the last position.

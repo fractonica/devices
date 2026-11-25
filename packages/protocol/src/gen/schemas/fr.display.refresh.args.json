@@ -1,0 +1,27 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:fractonica:schema:fr.display.refresh.args",
+  "title": "fr.display.refresh arguments",
+  "description": "E-paper: refresh now in `mode` (auto: partial, or full when the glass is not known, or the `clean` mode when the ghost budget is spent; an explicit partial runs past the budget; fast and full redraw the whole screen even with nothing new). RESULT: the mode that will run and whether the frame differs from the glass; `refreshed` follows (none when nothing changed and the mode is auto or partial). One refresh may wait while another runs; it takes the strongest mode asked. UNSUPPORTED where trait epaper is false.",
+  "type": "object",
+  "properties": {
+    "mode": {
+      "type": "string",
+      "enum": [
+        "auto",
+        "partial",
+        "fast",
+        "full"
+      ]
+    }
+  },
+  "additionalProperties": false,
+  "examples": [
+    {
+      "mode": "auto"
+    },
+    {
+      "mode": "full"
+    }
+  ]
+}

@@ -554,7 +554,9 @@ static void arc_reach(const fui_ring_t *ring, const fui_arc16_t *arc, double *in
 
 static void test_geometry(void)
 {
-    static const fui_face_t colour[] = { FUI_FACE_ROUND240, FUI_FACE_RECT240, FUI_FACE_RECT240X320 };
+    /* the colour faces' instrument, and the paper face's, which is the same at 5/4 */
+    static const fui_face_t colour[] = { FUI_FACE_ROUND240, FUI_FACE_RECT240, FUI_FACE_RECT240X320,
+                                         FUI_FACE_MONO400X300 };
     sim_frame_t frame;
     fui_ui_t ui;
     unsigned f;
@@ -623,6 +625,7 @@ typedef struct page_text {
     int  small;              /* rows under the size rule (see collect) */
     int  folded_pb;          /* rows that would draw "pB" in capitals */
     char head[ROWS_MAX];     /* 1: a card's head (the level letter, on every page) */
+    int  x[ROWS_MAX], y[ROWS_MAX], w[ROWS_MAX], h[ROWS_MAX]; /* each row's box */
     char text[ROWS_MAX][FUI_TEXT_MAX];
 } page_text_t;
 
@@ -643,6 +646,10 @@ static void collect(void *ctx, const char *text, size_t bytes, int x, int y, con
         return;
     }
     page->head[page->rows] = style->scale >= 3;
+    page->x[page->rows] = x;
+    page->y[page->rows] = y;
+    page->w[page->rows] = width;
+    page->h[page->rows] = height;
     copy = page->text[page->rows++];
     memcpy(copy, text, bytes);
     copy[bytes] = '\0';
@@ -803,9 +810,10 @@ static void test_cards(void)
                     if (when[w] == T_A) {
                         CHECK(strlen(earth) > strlen(pure)); /* and with a reading it does add */
                     }
-                    /* the page count docs/GUIDE.md states, at the Helion, in EARTH */
+                    /* the page count docs/GUIDE.md states, at the Helion, in EARTH
+                     * (the 400 x 300 paper face holds it on one) */
                     if (when[w] == T_A && screen == FUI_SCREEN_LENS && level == 6) {
-                        CHECK_EQ(pages, 2);
+                        CHECK_EQ(pages, face == FUI_FACE_MONO400X300 ? 1 : 2);
                     }
                 }
             }
@@ -1278,8 +1286,11 @@ static void test_marks(void)
             /* furniture: the words row of the tall face (Pentad mark + the
              * Delta's name: 2 texts), the Earth hallmark of the round face */
             CHECK_EQ(page.small, face == FUI_FACE_RECT240X320 ? 2 : face == FUI_FACE_ROUND240 && mode ? 1 : 0);
+            /* (the paper face's corners: ε, η, ι and the Pentad's numeral;
+             * EARTH adds the civil time) */
             CHECK_EQ(page.rows, face == FUI_FACE_ROUND240 ? mode : face == FUI_FACE_RECT240 ? 2 + mode
-                                : face == FUI_FACE_RECT240X320 ? 4 + mode : 1 + mode);
+                                : face == FUI_FACE_RECT240X320 ? 4 + mode : face == FUI_FACE_MONO400X300 ? 4 + mode
+                                : 1 + mode);
             /* the status, when there is no reading, is never furniture */
             start(&ui, (fui_face_t)face, (fui_mode_t)mode, 6);
             fui_ui_update(&ui, FRC_TIME_NONE, 0);
@@ -1362,6 +1373,451 @@ static void test_quiet_lines(void)
     CHECK(sun_wakes < 12);
 }
 
+/* ------------------------------------------------------------------------- */
+/* The step (fui_ui_set_step) and the paper face (FUI_FACE_MONO400X300)       */
+/* ------------------------------------------------------------------------- */
+
+/* Does any row of the page count in a unit finer than `finest` (a digit
+ * before its symbol: "21λ", not the level letter of "ι Peak in")? The SUN's
+ * drift is left out: a fact of the sync in whole Flavons (the lead's ruling),
+ * the same all through it, not a reading that moves. */
+static int finer_unit_shown(const page_text_t *page, frc_unit_t finest)
+{
+    int unit, i;
+
+    for (unit = finest + 1; unit < FRC_UNIT_COUNT; unit++) {
+        char symbol[8];
+
+        frc_format_unit_symbol((frc_unit_t)unit, symbol, sizeof symbol);
+        for (i = 0; i < page->rows; i++) {
+            const char *at = page->text[i];
+
+            if (strncmp(at, "drift", 5) == 0) {
+                continue;
+            }
+            while ((at = strstr(at, symbol)) != NULL) {
+                if (at > page->text[i] && at[-1] >= '0' && at[-1] <= '9') {
+                    return 1;
+                }
+                at++;
+            }
+        }
+    }
+    return 0;
+}
+
+static int page_has_row(const page_text_t *page, const char *text)
+{
+    int i;
+
+    for (i = 0; i < page->rows; i++) {
+        if (strcmp(page->text[i], text) == 0) {
+            return 1;
+        }
+    }
+    return 0;
+}
+
+static void test_step(void)
+{
+    static const int LEVELS[] = { FUI_STEP_HELION, FUI_STEP_THETA, FUI_STEP_PREON, FUI_STEP_KAPPA, FUI_STEP_FLAVON };
+    static const frc_unit_t FINEST[] = { FRC_UNIT_HELION, FRC_UNIT_HELION, FRC_UNIT_PREON, FRC_UNIT_PREON,
+                                         FRC_UNIT_FLAVON };
+    static page_text_t page;
+    const frc_catalogue_t *cat = &FRC_SAROS_141;
+    const fui_frame_t *f;
+    frc_cycle_t cycle, next_cycle;
+    frc_threshold_t next;
+    frc_span_t span;
+    fui_config_t config;
+    fui_ui_t ui;
+    char text[FUI_TEXT_MAX];
+    frc_time_t t;
+    unsigned l;
+    int face, focus, k, w, wakes, redraws;
+
+    TEST_SECTION("step: what it takes");
+    start(&ui, FUI_FACE_MONO400X300, FUI_MODE_PURE, 6);
+    CHECK_EQ(ui.step, FUI_STEP_NONE); /* every face's default: no step */
+    for (k = -1; k <= 12; k++) {
+        int valid = k == 0 || (k >= 6 && k <= 10);
+
+        CHECK_EQ(fui_ui_set_step(&ui, FUI_STEP_PREON), 1);
+        CHECK_EQ(fui_ui_set_step(&ui, k), valid);
+        CHECK_EQ(ui.step, valid ? k : FUI_STEP_PREON); /* refused: left as it was */
+    }
+    memset(&config, 0, sizeof config);
+    config.face = FUI_FACE_MONO400X300;
+    config.step = 99;
+    fui_ui_init(&ui, &config);
+    CHECK_EQ(ui.step, FUI_STEP_NONE);
+    config.step = FUI_STEP_FLAVON;
+    fui_ui_init(&ui, &config);
+    CHECK_EQ(ui.step, FUI_STEP_FLAVON);
+
+    TEST_SECTION("step: the face shows the cycle's start and wakes at its end, on every face");
+    for (face = 0; face < FUI_FACE_COUNT; face++) {
+        for (l = 0; l < sizeof LEVELS / sizeof LEVELS[0]; l++) {
+            for (w = 0; w < 3; w++) {
+                frc_time_t from = w == 0 ? T_A : w == 1 ? FRC_TIME_FROM_S(946684800LL) : FRC_TIME_FROM_S(2886085800LL);
+
+                start(&ui, (fui_face_t)face, FUI_MODE_EARTH, 6);
+                CHECK_EQ(fui_ui_set_step(&ui, LEVELS[l]), 1);
+                t = from + 1234567; /* somewhere inside a cycle */
+                CHECK(frc_cycle_at(cat, t, (uint8_t)LEVELS[l], &cycle) == FRC_OK);
+                f = fui_ui_update(&ui, t, 0);
+                CHECK(f->redraw);
+                CHECK_EQ(ui.t, cycle.start);
+                if (cycle.end - t >= (frc_time_t)ui.min_frame_us) {
+                    CHECK_EQ(f->next_wake, cycle.end);
+                }
+                /* anywhere in the cycle: nothing moves */
+                f = fui_ui_update(&ui, cycle.end - 1, 0);
+                CHECK(!f->redraw);
+                CHECK_EQ(ui.t, cycle.start);
+                /* follow the wakes: each is a boundary, one a cycle, none between */
+                t = cycle.end;
+                wakes = redraws = 0;
+                for (k = 0; k < 12; k++) {
+                    f = fui_ui_update(&ui, t, 0);
+                    wakes++;
+                    redraws += f->redraw;
+                    CHECK(frc_cycle_at(cat, t, (uint8_t)LEVELS[l], &next_cycle) == FRC_OK);
+                    CHECK_EQ(next_cycle.start, t);
+                    CHECK_EQ(ui.t, t);
+                    CHECK_EQ(f->next_wake, next_cycle.end);
+                    t = f->next_wake;
+                }
+                CHECK_EQ(wakes, 12);
+                /* the faces with a reading show a count down to a unit step:
+                 * it changes at every boundary (theta and kappa are not units:
+                 * their count moves at the Helion's and the Preon's; the
+                 * 128 x 64 face has room for two terms only, the paper face's
+                 * corners end at the Preon) */
+                if ((face == FUI_FACE_RECT240 || face == FUI_FACE_RECT240X320 ||
+                     (face == FUI_FACE_MONO400X300 && LEVELS[l] <= FUI_STEP_PREON)) &&
+                    frc_unit_of_level((uint8_t)LEVELS[l]) >= 0) {
+                    CHECK_EQ(redraws, 12);
+                } else {
+                    CHECK(redraws <= 12);
+                }
+            }
+        }
+    }
+
+    TEST_SECTION("step: readings go down to the step's unit and no finer");
+    for (l = 0; l < sizeof LEVELS / sizeof LEVELS[0]; l++) {
+        for (focus = 0; focus <= FUI_FOCUS_MAX; focus++) {
+            for (w = 0; w < 4; w++) {
+                frc_time_t when = w == 0 ? T_A : FRC_TIME_FROM_S(946684800LL + (long long)(test_random() % 3000000000u));
+
+                for (face = 0; face < FUI_FACE_COUNT; face++) {
+                    int screen;
+
+                    for (screen = FUI_SCREEN_NOW; screen <= FUI_SCREEN_STAMP; screen++) {
+                        if (screen == FUI_SCREEN_SCALES || screen == FUI_SCREEN_LENS) {
+                            continue; /* (the LENS says a level's length in its units) */
+                        }
+                        start(&ui, (fui_face_t)face, FUI_MODE_PURE, (uint8_t)focus);
+                        CHECK_EQ(fui_ui_set_step(&ui, LEVELS[l]), 1);
+                        fui_ui_set_screen(&ui, (fui_screen_t)screen);
+                        fui_ui_update(&ui, when, 0);
+                        read_page(&ui, &page);
+                        CHECK(!finer_unit_shown(&page, FINEST[l]));
+                    }
+                }
+            }
+        }
+    }
+    /* the owner's corners at the instant the step shows (vector A: ε#5 34η 29ι 21λ 3ν,
+     * Pentad II): the core's terms, nothing finer than the step */
+    start(&ui, FUI_FACE_MONO400X300, FUI_MODE_PURE, 6);
+    fui_ui_set_step(&ui, FUI_STEP_PREON);
+    fui_ui_update(&ui, T_A, 0);
+    read_page(&ui, &page);
+    CHECK(page_has_row(&page, "\xCE\xB5#5") && page_has_row(&page, "34\xCE\xB7") && page_has_row(&page, "29\xCE\xB9"));
+    CHECK(page_has_row(&page, "II"));
+    CHECK_EQ(page.rows, 4);
+    fui_ui_set_step(&ui, FUI_STEP_FLAVON); /* the corners stop at the Preon: the same rows */
+    fui_ui_update(&ui, T_A, 0);
+    read_page(&ui, &page);
+    CHECK(page_has_row(&page, "29\xCE\xB9"));
+    CHECK_EQ(page.rows, 4);
+    fui_ui_set_step(&ui, FUI_STEP_HELION); /* the Preon is finer than the step: not shown */
+    fui_ui_update(&ui, T_A, 0);
+    read_page(&ui, &page);
+    CHECK(page_has_row(&page, "34\xCE\xB7") && !page_has_row(&page, "29\xCE\xB9"));
+    CHECK_EQ(page.rows, 3);
+    /* EARTH: minutes at the Preon, seconds at the Flavon; led by the Earth sign */
+    start(&ui, FUI_FACE_MONO400X300, FUI_MODE_EARTH, 6);
+    fui_ui_set_step(&ui, FUI_STEP_PREON);
+    fui_ui_update(&ui, T_A, 0);
+    read_page(&ui, &page);
+    CHECK(page_has_row(&page, FUI_S_EARTH " 13:57"));
+    CHECK_EQ(page.rows, 5);
+    fui_ui_set_step(&ui, FUI_STEP_FLAVON);
+    fui_ui_update(&ui, T_A, 0);
+    read_page(&ui, &page);
+    CHECK(page_has_row(&page, FUI_S_EARTH " 13:59:58"));
+    /* a countdown at a step: the core's span cut to the step's unit (the shim);
+     * under one unit "0" of it */
+    {
+        frc_span_t cut;
+
+        CHECK(frc_cycle_at(cat, T_A, FUI_STEP_PREON, &cycle) == FRC_OK);
+        CHECK(frc_next_threshold(cat, cycle.start, 6, &next) == FRC_OK);
+        CHECK(frc_span_between(cat, cycle.start, next.time, &span) == FRC_OK);
+        fui_shim_format_span_to(&span, 0, FRC_UNIT_PREON, text, sizeof text);
+        CHECK_EQ(strcmp(text, "7\xCE\xB9"), 0); /* 29ι + 7ι = 36ι, the Helion's END */
+        CHECK(frc_span_between(cat, T_A, next.time, &span) == FRC_OK);
+        fui_shim_format_span_to(&span, 0, FRC_UNIT_PREON, text, sizeof text);
+        CHECK_EQ(strcmp(text, "6\xCE\xB9"), 0); /* 6ι 43λ live, cut */
+        fui_shim_format_span_to(&span, 0, FRC_UNIT_FLAVON, text, sizeof text);
+        CHECK_EQ(strcmp(text, "6\xCE\xB9 43\xCE\xBB"), 0);
+        fui_shim_format_span_to(&span, 0, FRC_UNIT_BLINK, text, sizeof text);
+        frc_format_span(&span, 0, text + 64, sizeof text - 64);
+        CHECK_EQ(strcmp(text, text + 64), 0); /* the Blink: frc_format_span itself */
+        CHECK(frc_span_between(cat, T_A, T_A + 60 * 1000000, &cut) == FRC_OK);
+        fui_shim_format_span_to(&cut, 0, FRC_UNIT_PREON, text, sizeof text);
+        CHECK_EQ(strcmp(text, "0\xCE\xB9"), 0);
+    }
+
+    TEST_SECTION("step: labels still come and go on time; input redraws at once");
+    start(&ui, FUI_FACE_MONO400X300, FUI_MODE_PURE, 6);
+    fui_ui_set_step(&ui, FUI_STEP_PREON);
+    CHECK(frc_cycle_at(cat, T_A, FUI_STEP_PREON, &cycle) == FRC_OK);
+    fui_ui_update(&ui, T_A, 1000);
+    fui_ui_event(&ui, FUI_EV_NEXT, 1000);
+    f = fui_ui_update(&ui, T_A, 1000);
+    CHECK(f->redraw && f->dirty.y1 == 300 && f->dirty.x1 == 400);
+    CHECK_EQ(ui.screen, FUI_SCREEN_SCALES);
+    CHECK_EQ(ui.t, cycle.start);
+    CHECK_EQ(f->sleep_us, (int64_t)FUI_NAME_MS * 1000); /* the name's end, before the cycle's */
+    f = fui_ui_update(&ui, T_A + FRC_TIME_FROM_S(1), 2000); /* (1 s later: nothing) */
+    CHECK(!f->redraw);
+    f = fui_ui_update(&ui, T_A + (frc_time_t)FUI_NAME_MS * 1000, 1000 + FUI_NAME_MS);
+    CHECK_EQ(ui.screen, FUI_SCREEN_NOW);
+    CHECK(f->redraw);
+    CHECK_EQ(ui.t, cycle.start);
+    CHECK_EQ(f->next_wake, cycle.end);
+    fui_ui_event(&ui, FUI_EV_LONG, 5000);
+    f = fui_ui_update(&ui, T_A + FRC_TIME_FROM_S(4), 5000);
+    CHECK(f->redraw && ui.toast);
+    CHECK_EQ(f->sleep_us, (int64_t)FUI_TOAST_MS * 1000);
+    f = fui_ui_update(&ui, T_A + FRC_TIME_FROM_S(4) + FUI_TOAST_MS * 1000, 5000 + FUI_TOAST_MS);
+    CHECK(f->redraw && !ui.toast);
+    CHECK_EQ(f->next_wake, cycle.end);
+    fui_ui_event(&ui, FUI_EV_SELECT, 9000);
+    f = fui_ui_update(&ui, T_A + FRC_TIME_FROM_S(9), 9000);
+    CHECK(f->redraw);
+    CHECK_EQ(ui.screen, FUI_SCREEN_LENS);
+    CHECK_EQ(ui.t, cycle.start);
+    /* no step again: the face moves as the clock does */
+    fui_ui_set_step(&ui, FUI_STEP_NONE);
+    fui_ui_set_screen(&ui, FUI_SCREEN_NOW);
+    f = fui_ui_update(&ui, T_A, 9000);
+    CHECK_EQ(ui.t, T_A);
+    CHECK(f->next_wake < cycle.end);
+}
+
+/* The paper face's NOW: the wave as large as its room, every corner clear of it. */
+static void test_wave(void)
+{
+    static page_text_t page;
+    fui_ui_t ui;
+    int focus, mode, i;
+
+    static const frc_time_t when[] = { T_A, FRC_TIME_FROM_S(946684800LL), FRC_TIME_FROM_S(2886085800LL),
+                                       FRC_TIME_FROM_S(1791460800LL + 79200), FRC_TIME_FROM_S(1791460800LL + 172800),
+                                       FRC_TIME_FROM_S(1791460800LL + 1340000) };
+    unsigned w;
+
+    TEST_SECTION("wave: sized to its room at every focus; the corners stay clear");
+    for (w = 0; w < sizeof when / sizeof when[0]; w++)
+    for (mode = 0; mode < 2; mode++) {
+        for (focus = 0; focus <= FUI_FOCUS_MAX; focus++) {
+            const fui_ring_t *ring = &ui.ring;
+            double cx, cy, reach;
+            fui_config_t config;
+
+            memset(&config, 0, sizeof config);
+            config.face = FUI_FACE_MONO400X300;
+            config.mode = (fui_mode_t)mode;
+            config.focus = (uint8_t)focus;
+            config.utc_offset_s = 7200;
+            config.step = FUI_STEP_PREON;
+            fui_ui_init(&ui, &config);
+            fui_ui_update(&ui, when[w], 0);
+            cx = ring->cx / 256.0;
+            cy = ring->cy / 256.0;
+            reach = ring->reach_out / 256.0;
+            CHECK(cx == 199.5 && cy == 149.5);
+            /* 146 px; in EARTH 4 px above the time's cell: 122 */
+            CHECK_EQ(ring->goal, FUI_FX(mode ? 122 : 146));
+            CHECK(ring->reach_out <= ring->goal && ring->reach_out > ring->goal - FUI_FX_ONE);
+            read_page(&ui, &page);
+            CHECK_EQ(page.outside, 0);
+            /* every row's cell (the corners, the Pentad's numeral, EARTH's
+             * time) and the Pentad's mark (its 60 px box, bottom left) lie
+             * more than 2 px outside the circle the wave's ink keeps to */
+            {
+                /* three counts, the Pentad's numeral (none for the Hypopentad), EARTH's time */
+                frc_pentad_t pentad;
+                char numeral[8] = "";
+
+                if (frc_pentad_at(&FRC_SAROS_141, ui.t, &pentad) == FRC_OK) {
+                    frc_format_pentad(&pentad, FRC_PENTAD_NUMERAL, 0, numeral, sizeof numeral);
+                }
+                CHECK_EQ(page.rows, 3 + (numeral[0] != '\0') + mode);
+            }
+            for (i = 0; i <= page.rows; i++) {
+                double x0 = i < page.rows ? page.x[i] : 8, y0 = i < page.rows ? page.y[i] : 234;
+                double x1 = i < page.rows ? x0 + page.w[i] : 68, y1 = i < page.rows ? y0 + page.h[i] : 294;
+                double nx = cx < x0 ? x0 : cx > x1 ? x1 : cx, ny = cy < y0 ? y0 : cy > y1 ? y1 : cy;
+
+                CHECK(sqrt((nx - cx) * (nx - cx) + (ny - cy) * (ny - cy)) > reach + 2);
+            }
+        }
+    }
+}
+
+/* The paper corners' subset fonts hold everything those slots ever write. */
+static void test_paper_fonts(void)
+{
+    static const fui_font_t *const FONTS[] = { &fui_font_line };
+    const frc_catalogue_t *cat = &FRC_SAROS_141;
+    frc_time_t first = frc_catalogue_first(cat), last = frc_catalogue_last(cat);
+    char text[64];
+    int k, f, missing = 0, n = 0;
+
+    TEST_SECTION("paper font: the corners' texts at 2,000 instants have every glyph");
+    for (k = 0; k < 2000; k++) {
+        frc_time_t t = first + (frc_time_t)(((uint64_t)test_random() << 21) % (uint64_t)(last - first));
+        frc_date_t date;
+        frc_pentad_t pentad;
+        frc_civil_t civil;
+        int part;
+
+        CHECK(frc_date_at(cat, t, &date) == FRC_OK);
+        frc_civil_from_time(t, (int32_t)(test_random() % 50400) - 43200 + 7200, &civil);
+        for (part = 0; part < 6; part++) {
+            const char *p = text;
+            uint32_t cp;
+
+            text[0] = '\0';
+            if (part < 3) {
+                frc_format_date_term(&date, part == 0 ? FRC_UNIT_NUCLIDE : part == 1 ? FRC_UNIT_HELION : FRC_UNIT_PREON,
+                                     text, sizeof text);
+            } else if (part == 3) {
+                if (frc_pentad_at(cat, t, &pentad) == FRC_OK) {
+                    frc_format_pentad(&pentad, FRC_PENTAD_NUMERAL, 0, text, sizeof text);
+                }
+            } else {
+                size_t len;
+
+                strcpy(text, FUI_S_EARTH " ");
+                len = strlen(text);
+                frc_format_civil_text(&civil, 0, part == 4 ? FRC_CIVIL_TIME : FRC_CIVIL_MINUTE, text + len,
+                                      sizeof text - len);
+            }
+            while ((cp = fui_utf8_next(&p)) != 0) {
+                for (f = 0; f < (int)(sizeof FONTS / sizeof FONTS[0]); f++) {
+                    missing += !fui_font_has(FONTS[f], cp);
+                    n++;
+                }
+            }
+        }
+    }
+    CHECK_EQ(missing, 0);
+    CHECK(n > 20000);
+    /* and the numeral V the owner listed, though the core writes I..III only */
+    CHECK(fui_font_has(&fui_font_line, 'V'));
+    /* ... and nothing else: a letter they lack is the missing box, not a blank */
+    CHECK(!fui_font_has(&fui_font_line, 'A'));
+}
+
+/* The paper face in the framework's canvas: MONO_ROW, a set bit is white. */
+static void test_paper(void)
+{
+    static uint8_t row[15000], row_mono[15000], band[400 / 8 * 40];
+    static sim_frame_t frame;
+    fui_config_t config;
+    fui_ui_t ui;
+    fui_canvas_t c, c_mono, strip;
+    int screen, mode, x, y, ink, ground_set, differ, inverse, band_differ;
+
+    TEST_SECTION("paper: black ink (clear bits) on white paper (set bits) in MONO_ROW");
+    CHECK_EQ(fui_canvas_bytes(FUI_FMT_MONO_ROW, 400, 300), sizeof row);
+    for (screen = 0; screen < FUI_SCREEN_COUNT + 2; screen++) {
+        for (mode = 0; mode < 2; mode++) {
+            /* NOW, SCALES, LENS, SUN, STAMP at the Preon, then time not set and out of catalogue */
+            frc_time_t t = screen == FUI_SCREEN_COUNT ? FRC_TIME_NONE
+                           : screen == FUI_SCREEN_COUNT + 1 ? FRC_TIME_FROM_S(99999999999LL) : T_A;
+
+            memset(&config, 0, sizeof config);
+            config.face = FUI_FACE_MONO400X300;
+            config.mode = (fui_mode_t)mode;
+            config.focus = 6;
+            config.utc_offset_s = 7200;
+            config.step = FUI_STEP_PREON;
+            fui_ui_init(&ui, &config);
+            CHECK(ui.theme == &fui_theme_paper); /* the face's default */
+            fui_ui_update(&ui, t, 0);
+            sim_goto_screen(&ui, screen < FUI_SCREEN_COUNT ? (fui_screen_t)screen : FUI_SCREEN_NOW, 0);
+            fui_ui_update(&ui, t, 0);
+            fui_ui_invalidate(&ui);
+            fui_ui_update(&ui, t, 0);
+
+            memset(row, 0, sizeof row); /* the ground must be drawn, not found */
+            fui_canvas_init(&c, row, FUI_FMT_MONO_ROW, 400, 300);
+            fui_ui_draw(&ui, &c);
+            /* the simulator's pages: the same picture */
+            sim_frame_init(&frame, FUI_FACE_MONO400X300);
+            fui_ui_draw(&ui, &frame.canvas);
+            /* the same frame in the OLED's polarity (fui_theme_mono): every pixel the other way */
+            ui.theme = &fui_theme_mono;
+            memset(row_mono, 0xFF, sizeof row_mono);
+            fui_canvas_init(&c_mono, row_mono, FUI_FMT_MONO_ROW, 400, 300);
+            fui_ui_draw(&ui, &c_mono);
+            ui.theme = &fui_theme_paper;
+            /* bands of 40 rows through a strip, as a framework short of RAM would */
+            band_differ = 0;
+            for (y = 0; y < 300; y += 40) {
+                int rows = 300 - y < 40 ? 300 - y : 40, r;
+
+                fui_canvas_init(&strip, band, FUI_FMT_MONO_ROW, 400, rows);
+                fui_canvas_set_origin(&strip, 0, y);
+                fui_ui_draw(&ui, &strip);
+                for (r = 0; r < rows; r++) {
+                    band_differ += memcmp(band + r * 50, row + (y + r) * 50, 50) != 0;
+                }
+            }
+            CHECK_EQ(band_differ, 0);
+
+            ink = ground_set = differ = inverse = 0;
+            for (y = 0; y < 300; y++) {
+                for (x = 0; x < 400; x++) {
+                    int bit = (row[y * 50 + x / 8] >> (7 - x % 8)) & 1;
+                    int bit_mono = (row_mono[y * 50 + x / 8] >> (7 - x % 8)) & 1;
+
+                    ink += !bit;
+                    differ += bit != (fui_canvas_get(&frame.canvas, x, y) != 0);
+                    inverse += bit == bit_mono;
+                    /* a margin of the panel nothing is drawn in: the ground, set */
+                    if (y < 2 || x >= 398) {
+                        ground_set += bit;
+                    }
+                }
+            }
+            CHECK_EQ(differ, 0);
+            CHECK_EQ(inverse, 0);
+            CHECK_EQ(ground_set, 2 * 398 + 300 * 2);
+            CHECK(ink > 500);           /* there is a picture ... */
+            CHECK(ink < 400 * 300 / 4); /* ... in ink on a white ground */
+        }
+    }
+}
+
 int main(void)
 {
     test_navigation();
@@ -1375,5 +1831,9 @@ int main(void)
     test_sun();
     test_marks();
     test_quiet_lines();
+    test_step();
+    test_wave();
+    test_paper_fonts();
+    test_paper();
     TEST_SUMMARY("ui");
 }

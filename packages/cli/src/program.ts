@@ -79,10 +79,23 @@ function unwrap(schema: z.ZodType): { base: z.ZodType; optional: boolean; def: u
 
 const attrOf = (flag: string) => flag.replace(/-([a-z])/g, (_, c: string) => c.toUpperCase());
 
+/**
+ * Old names a top-level group still answers to (design face-f1 D11: `fr clock` became `fr rtc` with the capability's
+ * rename to fr.rtc).
+ */
+export const GROUP_ALIASES: Readonly<Record<string, readonly string[]>> = { rtc: ['clock'] };
+
 function group(path: string[]): Command {
   let cmd = program;
-  for (const name of path) {
-    cmd = cmd.commands.find((c) => c.name() === name) ?? cmd.command(name);
+  for (const [i, name] of path.entries()) {
+    let next = cmd.commands.find((c) => c.name() === name);
+    if (!next) {
+      next = cmd.command(name);
+      for (const alias of i === 0 ? (GROUP_ALIASES[name] ?? []) : []) {
+        next.alias(alias);
+      }
+    }
+    cmd = next;
   }
   return cmd;
 }

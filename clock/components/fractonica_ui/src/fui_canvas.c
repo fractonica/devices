@@ -76,7 +76,15 @@ void fui_canvas_init(fui_canvas_t *c, void *buf, fui_format_t format, int w, int
     c->h = (int16_t)h;
     c->format = (uint8_t)format;
     c->stride = stride_of(format, w);
+    fui_canvas_set_pen(c, 1, 1, 2);
     fui_canvas_set_origin(c, 0, 0);
+}
+
+void fui_canvas_set_pen(fui_canvas_t *c, int width, int on, int off)
+{
+    c->pen = (uint8_t)(width < 1 ? 1 : width > 4 ? 4 : width);
+    c->dash_on = (uint8_t)(on < 1 ? 1 : on > 15 ? 15 : on);
+    c->dash_off = (uint8_t)(off < 0 ? 0 : off > 15 ? 15 : off);
 }
 
 void fui_canvas_set_origin(fui_canvas_t *c, int ox, int oy)

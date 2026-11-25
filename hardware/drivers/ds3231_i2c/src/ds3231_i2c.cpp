@@ -4,7 +4,6 @@
 #include <cinttypes>
 #include <cstdio>
 #include <cstring>
-#include <sys/time.h>
 
 #include "driver/i2c_master.h"
 #include "esp_log.h"
@@ -50,6 +49,7 @@ Status Ds3231I2c::init(Core &core)
         wrap_ok_ = same_min && s0 && s1 && (*s1 == *s0 || *s1 == (*s0 + 1) % 60);
     }
     ESP_LOGI(TAG, "pointer wraps 0x12->0x00: %s", wrap_ok_ ? "yes" : "NO (fallback: pointer write, STOP, read)");
+    control_ = kControl;  // a wake on the alarm leaves A1IE set: off until set_alarm (design face-f1 D14)
     if (b[16] != kControl) {
         (void)write_regs(regs::kRegControl, &kControl, 1);
     }
@@ -132,9 +132,9 @@ std::expected<hal::RtcTime, Err> Ds3231I2c::now()
                  r[4], r[5], r[6]);
         return std::unexpected(Err::failed);
     }
-    const bool control_ok = b[16] == kControl;
+    const bool control_ok = b[16] == control_;
     if (!control_ok && b[16] != last_bad_control_) {
-        ESP_LOGW(TAG, "control register reads 0x%02X, expected 0x%02X (a stray write?)", b[16], kControl);
+        ESP_LOGW(TAG, "control register reads 0x%02X, expected 0x%02X (a stray write?)", b[16], control_);
     }
     last_bad_control_ = control_ok ? 0xFF : b[16];
     return hal::RtcTime{.unix = *unix,
@@ -206,11 +206,42 @@ Status Ds3231I2c::set_aging(int8_t offset)
     return write_regs(regs::kRegAging, &a, 1);
 }
 
-void Ds3231I2c::set_system_time(uint32_t unix)
+Status Ds3231I2c::set_alarm(uint32_t unix)
 {
-    timeval tv{};
-    tv.tv_sec = static_cast<time_t>(unix);
-    settimeofday(&tv, nullptr);
+    if (cfg_.sqw < 0) {
+        return std::unexpected(Err::unsupported);
+    }
+    const auto a = regs::encode_alarm1(unix);
+    if (auto st = write_regs(regs::kRegAlarm1, a.data(), a.size()); !st) {
+        return st;
+    }
+    uint8_t status = 0;
+    if (auto st = read_regs(regs::kRegStatus, &status, 1); !st) {
+        return st;
+    }
+    const uint8_t cleared = static_cast<uint8_t>(status & ~regs::kStatusA1f);
+    if (auto st = write_regs(regs::kRegStatus, &cleared, 1); !st) {
+        return st;
+    }
+    control_ = static_cast<uint8_t>(kControl | regs::kControlA1ie);
+    return write_regs(regs::kRegControl, &control_, 1);
+}
+
+Status Ds3231I2c::clear_alarm()
+{
+    if (cfg_.sqw < 0) {
+        return std::unexpected(Err::unsupported);
+    }
+    control_ = kControl;
+    if (auto st = write_regs(regs::kRegControl, &control_, 1); !st) {
+        return st;
+    }
+    uint8_t status = 0;
+    if (auto st = read_regs(regs::kRegStatus, &status, 1); !st) {
+        return st;
+    }
+    const uint8_t cleared = static_cast<uint8_t>(status & ~regs::kStatusA1f);
+    return write_regs(regs::kRegStatus, &cleared, 1);
 }
 
 void Ds3231I2c::note(const char *what)

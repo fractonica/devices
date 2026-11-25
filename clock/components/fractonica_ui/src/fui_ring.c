@@ -74,31 +74,26 @@ static void reach(const fui_ring_t *ring, const fui_arc16_t *arc, fui_fx_t *in, 
     *in = distance - (fui_fx_t)arc->r * 4;
 }
 
-void fui_i_ring_prepare(fui_ui_t *ui)
+/* The ring of `focus` with carrier radius `radius` round the layout's centre. */
+static void build(fui_ring_t *ring, const fui_layout_t *lay, uint8_t focus, fui_fx_t radius)
 {
-    const fui_layout_t *lay = fui_i_layout(ui->face);
-    fui_ring_t *ring = &ui->ring;
     frc_arc_t root, child, grand;
-    uint8_t slots = (uint8_t)(2 * frc_factor(ui->focus)), per = frc_factor((uint8_t)(ui->focus + 1));
+    uint8_t slots = (uint8_t)(2 * frc_factor(focus)), per = frc_factor((uint8_t)(focus + 1));
     uint8_t j, k;
     fui_fx_t nest_in, nest_out;
     float smallest;
 
-    if (ring->valid && ring->focus == ui->focus && ring->cx == lay->cx && ring->cy == lay->cy &&
-        ring->radius == lay->radius) {
-        return;
-    }
     ring->valid = 1;
-    ring->focus = ui->focus;
+    ring->focus = focus;
     ring->cx = lay->cx;
     ring->cy = lay->cy;
-    ring->radius = lay->radius;
+    ring->radius = radius;
     ring->children = slots;
     ring->per_child = 0;
 
     root.cx = (float)lay->cx / 256.0f;
     root.cy = (float)lay->cy / 256.0f;
-    root.radius = (float)lay->radius / 256.0f;
+    root.radius = (float)radius / 256.0f;
     root.start = -FRC_PI / 2.0f; /* a cycle starts at 12 o'clock ... */
     root.sweep = 2.0f * FRC_PI;  /* ... and runs clockwise */
     for (j = 0; j < slots; j++) {
@@ -109,9 +104,10 @@ void fui_i_ring_prepare(fui_ui_t *ui)
      * arc has the same radius and its centre the same distance from ours. */
     reach(ring, &ring->arc[0], &ring->reach_in, &ring->reach_out);
 
-    /* The second level: only on colour, only if it fits the cache and its
-     * smaller kind of arc (the one on an inward-bulging parent) is readable. */
-    if (lay->info.mono || (unsigned)slots * per > FUI_RING_GRAND) {
+    /* The second level: not on the 128 x 64 face (DESIGN.md S11: first level
+     * only), only if it fits the cache and its smaller kind of arc (the one
+     * on an inward-bulging parent) is readable. */
+    if (lay->tiny || (unsigned)slots * per > FUI_RING_GRAND) {
         return;
     }
     child = frc_arc_child(&root, slots, 0, 0);
@@ -143,13 +139,57 @@ void fui_i_ring_prepare(fui_ui_t *ui)
                 nest_out = out > nest_out ? out : nest_out;
             }
         }
-        if (j == 1 && nest_in < (lay->radius * NEST_MIN_REACH_IN) / 100) {
+        if (j == 1 && nest_in < (radius * NEST_MIN_REACH_IN) / 100) {
             return; /* too large: first level only (per_child stays 0) */
         }
     }
     ring->per_child = per;
     ring->reach_in = nest_in;
     ring->reach_out = nest_out;
+}
+
+fui_fx_t fui_i_wave_goal(const fui_ui_t *ui)
+{
+    const fui_layout_t *lay = fui_i_layout(ui->face);
+
+    if (lay->wave_reach <= 0) {
+        return 0;
+    }
+    if (ui->mode == FUI_MODE_EARTH) {
+        /* above the Earth time's cell (the line font at 14 px), 4 px clear */
+        fui_text_style_t style;
+        int room = fui_i_paper_time(ui, &style) - 4 - fui_i_px(lay->cy) - 1;
+
+        return FUI_FX(room < lay->wave_reach_earth ? room : lay->wave_reach_earth);
+    }
+    return FUI_FX(lay->wave_reach);
+}
+
+void fui_i_ring_prepare(fui_ui_t *ui)
+{
+    const fui_layout_t *lay = fui_i_layout(ui->face);
+    fui_ring_t *ring = &ui->ring;
+    fui_fx_t goal = fui_i_wave_goal(ui);
+    int pass;
+
+    if (ring->valid && ring->focus == ui->focus && ring->cx == lay->cx && ring->cy == lay->cy &&
+        ring->goal == goal && (goal > 0 || ring->radius == lay->radius)) {
+        return;
+    }
+    build(ring, lay, ui->focus, lay->radius);
+    /* THE WAVE (the paper face): as large as its room. The geometry is linear
+     * in R, so one rescale lands on the goal; whether the second level is
+     * drawn is decided again at the new size, so a few more passes make sure
+     * the ink never reaches past it. */
+    for (pass = 0; goal > 0 && pass < 4 && ring->reach_out > 0; pass++) {
+        fui_fx_t radius = (fui_fx_t)(((int64_t)ring->radius * goal) / ring->reach_out);
+
+        if (ring->reach_out <= goal && ring->reach_out > goal - FUI_FX_ONE) {
+            break;
+        }
+        build(ring, lay, ui->focus, pass < 3 ? radius : radius - FUI_FX_ONE);
+    }
+    ring->goal = goal;
 }
 
 /* One arc of the ring, lit from its start to `lit` (0..65536). */
@@ -169,6 +209,23 @@ static void split_arc(fui_canvas_t *c, const fui_arc_t *arc, int32_t lit, const 
         fui_arc_t done = fui_arc_part(arc, 0, lit);
 
         fui_draw_arc(c, &done, ink->done_width, ink->done);
+    }
+}
+
+/* One arc on one bit: elapsed (solid), to come (dotted), or the running one,
+ * solid to `lit` (0..65536) and dotted after it. The dots run on from arc to
+ * arc (`dots`). */
+static void mono_arc(fui_canvas_t *c, const fui_arc_t *arc, int running, int32_t lit, fui_color_t ink, uint8_t *dots)
+{
+    if (running) {
+        fui_arc_t done = fui_arc_part(arc, 0, lit), rest = fui_arc_part(arc, lit, 65536);
+
+        fui_draw_arc(c, &done, FUI_FX_ONE, ink);
+        fui_draw_arc_dotted(c, &rest, ink, dots);
+    } else if (lit >= 65536) {
+        fui_draw_arc(c, arc, FUI_FX_ONE, ink);
+    } else {
+        fui_draw_arc_dotted(c, arc, ink, dots);
     }
 }
 
@@ -207,19 +264,23 @@ void fui_i_ring_paint(fui_painter_t *p, fui_ring_now_t *now)
     }
 
     if (mono) {
-        /* DESIGN.md S11: first level only, elapsed solid, to come dotted. */
+        /* DESIGN.md S11: elapsed solid, to come dotted. The second level
+         * (none on the 128 x 64 face) under the first, as on colour. */
+        if (ring->per_child) {
+            uint8_t dots2 = 0;
+
+            for (j = 0; j < ring->children; j++) {
+                for (k = 0; k < ring->per_child; k++) {
+                    int32_t part = j < j0 ? 65536 : j > j0 ? 0 : k < k0 ? 65536 : k > k0 ? 0 : t2;
+
+                    arc = fui_i_arc(&ring->arc[FUI_RING_CHILDREN + j * ring->per_child + k]);
+                    mono_arc(c, &arc, j == j0 && k == k0, part, t->lumen, &dots2);
+                }
+            }
+        }
         for (j = 0; j < ring->children; j++) {
             arc = fui_i_arc(&ring->arc[j]);
-            if (j < j0) {
-                fui_draw_arc(c, &arc, FUI_FX_ONE, t->lumen);
-            } else if (j == j0) {
-                fui_arc_t done = fui_arc_part(&arc, 0, t1), rest = fui_arc_part(&arc, t1, 65536);
-
-                fui_draw_arc(c, &done, FUI_FX_ONE, t->lumen);
-                fui_draw_arc_dotted(c, &rest, t->lumen, &dots);
-            } else {
-                fui_draw_arc_dotted(c, &arc, t->lumen, &dots);
-            }
+            mono_arc(c, &arc, j == j0, j < j0 ? 65536 : j > j0 ? 0 : t1, t->lumen, &dots);
         }
     } else {
         /* The carrier: the cycle itself, its elapsed part in resting lumen. */

@@ -3,13 +3,13 @@
 // byte for byte at a proposed speed, the clock syncs to the Mac within 50 ms and keeps counting through a reboot, and
 // the display and the card share their SPI bus for 30 s without an error. With a person (--look): the colours, the
 // border on all four edges (the panel's column offset) and a backlight below full. With --drift-min: the RTC's drift.
-// All through the hub's ops (storage_info, storage_bench, storage_ls, storage_rm, clock_sync, clock_read, clock_drift,
+// All through the hub's ops (storage_info, storage_bench, storage_ls, storage_rm, rtc_sync, rtc_read, rtc_drift,
 // capability_list, command_send for fr.display ui_load and ui_set, port_list, device_reset, wait_for_event):
 //
 //   node --conditions=@fractonica/source tests/e2e/t-lcdc6.ts --device lcd-c6
 //   node --conditions=@fractonica/source tests/e2e/t-lcdc6.ts --device lcd-c6 --look --say --drift-min 30   (a person)
 //
-// The DUT: --device, else the first online node with fr.storage and fr.clock (device_get router.instances), never the
+// The DUT: --device, else the first online node with fr.storage and fr.rtc (device_get router.instances), never the
 // HIL fixture or a gateway. On the bench: lcd-c6 (c6l-lcd: the ST7789 172×320 panel as `screen`, the TF slot as `card`,
 // the DS3231 on GPIO18/19 as `clock`, BOOT as `boot`).
 //
@@ -19,13 +19,13 @@
 //     the border touching all four edges, the backlight not at full?" answered on BOOT (once: yes; held 2 s: no).
 //   2 card (no person, a card in): storage_info mounted; storage_bench --bench-mb (1) kept: identical, write ≥
 //     --min-write-kb (15 KB/s), read ≥ --min-read-kb (30 KB/s); storage_ls / lists it; storage_rm; storage_ls no longer.
-//   3 clock (no person): clock_sync, then clock_read twice --gap-s (5) apart: both valid, |error_ms| ≤ --max-error-ms
+//   3 clock (no person): rtc_sync, then rtc_read twice --gap-s (5) apart: both valid, |error_ms| ≤ --max-error-ms
 //     (50), the unix seconds --gap-s ± 1 apart, temp 0..50 °C. Then device_reset {port, hard}, the next node.boot within
-//     --reboot-s (40), clock_read again: still valid and within --max-error-ms (the DS3231 kept counting). The reboot
+//     --reboot-s (40), rtc_read again: still valid and within --max-error-ms (the DS3231 kept counting). The reboot
 //     is skipped (published, not failed) when no USB port the hub sees carries the DUT.
 //   4 share (no person): --share-s (30) of ui_set on the time label at 10 Hz while storage_bench (--bench-mb) runs: every
 //     ui_set ok, the bench identical.
-//   5 drift (--drift-min N, no person): clock_drift for N minutes; ppm, s/day and the aging step are published, no bound.
+//   5 drift (--drift-min N, no person): rtc_drift for N minutes; ppm, s/day and the aging step are published, no bound.
 //   Each phase publishes its figures.
 // Gate: every phase that ran passes; with display, card, clock and share run and none skipped the run is the gate
 // (gate_run); the look and the drift are published beside it.
@@ -125,7 +125,7 @@ export function parseArgs(argv: readonly string[]): TLcdOptions {
     throw new Error('t-lcdc6: the drift phase needs --drift-min <minutes> (1..1440)');
   }
   if (o.driftMin !== null && o.driftMin > 1440) {
-    throw new Error('t-lcdc6: --drift-min is at most 1440 (clock_drift)');
+    throw new Error('t-lcdc6: --drift-min is at most 1440 (rtc_drift)');
   }
   if (o.benchMb > 16) {
     throw new Error('t-lcdc6: --bench-mb is at most 16 (storage_bench)');
@@ -260,16 +260,16 @@ export function clockVerdict(args: { a: ClockFig | null; b: ClockFig | null; gap
   const reasons: string[] = [];
   const check = (name: string, c: ClockFig | null) => {
     if (!c) {
-      reasons.push(`clock_read ${name} did not answer`);
+      reasons.push(`rtc_read ${name} did not answer`);
       return;
     }
     if (!c.valid) {
-      reasons.push(`clock_read ${name}: not valid`);
+      reasons.push(`rtc_read ${name}: not valid`);
     }
     if (c.error_ms === null) {
-      reasons.push(`clock_read ${name}: no error_ms (the link clock is not synced, or no rollover seen)`);
+      reasons.push(`rtc_read ${name}: no error_ms (the link clock is not synced, or no rollover seen)`);
     } else if (Math.abs(c.error_ms) > args.maxErrorMs) {
-      reasons.push(`clock_read ${name}: ${c.error_ms} ms from the Mac, over ±${args.maxErrorMs}`);
+      reasons.push(`rtc_read ${name}: ${c.error_ms} ms from the Mac, over ±${args.maxErrorMs}`);
     }
   };
   check('after the sync', args.a);
@@ -351,7 +351,7 @@ export function dutProblems(d: DeviceGet): string[] {
     p.push(`${d.alias} is ${d.presence}`);
   }
   const inst = d.router?.instances ?? [];
-  for (const cap of ['fr.storage', 'fr.clock']) {
+  for (const cap of ['fr.storage', 'fr.rtc']) {
     if (!inst.some((i) => i.cap === cap)) {
       p.push(`${d.alias} has no ${cap} instance (device_get router.instances${d.router?.instances ? '' : ': none known yet'})`);
     }
@@ -376,7 +376,7 @@ async function runDut(ctx: ScenarioCtx, o: TLcdOptions): Promise<DeviceGet> {
       return row;
     }
   }
-  throw new Error('t-lcdc6: no online node with fr.storage and fr.clock');
+  throw new Error('t-lcdc6: no online node with fr.storage and fr.rtc');
 }
 
 function resultOf<T>(op: string, job: Job): T {
@@ -428,7 +428,7 @@ async function displayOf(ctx: ScenarioCtx, d: Dut): Promise<{ name: string; size
 }
 
 const clockRead = async (ctx: ScenarioCtx, d: Dut): Promise<ClockFig | null> => {
-  const r = await ctx.hub.call<ClockFig>('clock_read', { device: d.alias, instance: d.clock }, 15_000, ctx.signal);
+  const r = await ctx.hub.call<ClockFig>('rtc_read', { device: d.alias, instance: d.clock }, 15_000, ctx.signal);
   return r.ok && r.data ? r.data : null;
 };
 
@@ -522,9 +522,9 @@ interface PortRow {
 }
 
 async function phaseClock(ctx: ScenarioCtx, d: Dut, o: TLcdOptions): Promise<PhaseResult> {
-  const sync = await ctx.hub.ok<{ iso: string; lead_ms: number }>('clock_sync', { device: d.alias, instance: d.clock }, 15_000, ctx.signal);
+  const sync = await ctx.hub.ok<{ iso: string; lead_ms: number }>('rtc_sync', { device: d.alias, instance: d.clock }, 15_000, ctx.signal);
   ctx.log(`clock: synced to ${sync.iso} (aimed ${sync.lead_ms} ms ahead)`);
-  // clock_sync returns once the board confirmed the write; lead + 1.1 s is past the boundary and one more rollover.
+  // rtc_sync returns once the board confirmed the write; lead + 1.1 s is past the boundary and one more rollover.
   await sleep(sync.lead_ms + 1100, ctx.signal);
   const a = await clockRead(ctx, d);
   await sleep(o.gapS * 1000, ctx.signal);
@@ -609,8 +609,8 @@ async function phaseShare(ctx: ScenarioCtx, d: Dut, o: TLcdOptions): Promise<Pha
 
 async function phaseDrift(ctx: ScenarioCtx, d: Dut, o: TLcdOptions): Promise<PhaseResult> {
   const r = resultOf<{ samples: number; ppm: number | null; s_per_day: number | null; residual_ms: number | null; aging: number | null; aging_suggest: number | null }>(
-    'clock_drift',
-    await runJob(ctx, 'clock_drift', { device: d.alias, instance: d.clock, minutes: o.driftMin }),
+    'rtc_drift',
+    await runJob(ctx, 'rtc_drift', { device: d.alias, instance: d.clock, minutes: o.driftMin }),
   );
   ctx.log(`drift: ${r.ppm ?? '?'} ppm over ${o.driftMin} min (${r.samples} samples)`);
   return { pass: r.ppm !== null, minutes: o.driftMin, ...r, ...(r.ppm === null ? { reasons: ['too few samples to fit a drift'] } : {}) };
@@ -624,7 +624,7 @@ export async function runTLcd(ctx: ScenarioCtx, o: TLcdOptions): Promise<Outcome
     alias: row.alias,
     id: row.device_id,
     card: inst.find((i) => i.cap === 'fr.storage')!.name,
-    clock: inst.find((i) => i.cap === 'fr.clock')!.name,
+    clock: inst.find((i) => i.cap === 'fr.rtc')!.name,
     button: inst.find((i) => i.cap === 'fr.button' && i.name === 'boot')?.name ?? inst.find((i) => i.cap === 'fr.button')?.name ?? null,
   };
   const since = await cursorNow(ctx);
@@ -681,14 +681,14 @@ const scenario = defineScenario({
   title: "the Waveshare ESP32-C6-LCD-1.47 through the hub: the display's test pattern, a 1 MB card bench byte for byte at ≥ 15/30 KB/s (link-bound), the DS3231 synced within 50 ms and counting through a reboot, display and card sharing their bus for 30 s; a look at the pattern with a person, the RTC's drift with --drift-min (proposed numbers)",
   needs: {},
   needsFor: (args) => needsOf(parseArgs(args)),
-  usage: `--device lcd-c6             the DUT (default: the first online node with fr.storage and fr.clock)
+  usage: `--device lcd-c6             the DUT (default: the first online node with fr.storage and fr.rtc)
 --phase display|card|clock|share|drift|all   comma-separated (default display,card,clock,share)
 --look                       display: a person confirms the pattern on BOOT (needs a person)
 --say                        speak the person steps (sk say), again every 10 min
 --bench-mb 1 --min-write-kb 15 --min-read-kb 30     card and share: the bench's size and speed bounds (proposed)
 --gap-s 5 --max-error-ms 50 --reboot-s 40           clock: the readings' gap, the bound against the Mac, the reboot's time
 --share-s 30                 share: how long the display updates at 10 Hz while the bench runs
---drift-min 30               adds the drift phase: clock_drift for that many minutes (published, no bound)
+--drift-min 30               adds the drift phase: rtc_drift for that many minutes (published, no bound)
 --person-s 300               how long a person may take to answer
 under tests/e2e/run.ts (test_run), FR_T_LCDC6_ARGS holds these`,
   run: (ctx) => runTLcd(ctx, parseArgs(scenarioArgs(ctx, 'FR_T_LCDC6_ARGS'))),

@@ -64,6 +64,7 @@ file(GLOB FR_LIB_SRCS CONFIGURE_DEPENDS
     ${COMPONENTS_DIR}/fr_core/src/display/*.cpp
     ${COMPONENTS_DIR}/fr_core/src/audio/*.cpp
     ${COMPONENTS_DIR}/fr_core/src/stream/*.cpp
+    ${COMPONENTS_DIR}/fr_core/src/time/*.cpp
     ${COMPONENTS_DIR}/fr_core/src/host/*.cpp
     ${COMPONENTS_DIR}/fr_net/src/core/*.cpp
     ${COMPONENTS_DIR}/fr_gw/src/*.cpp
@@ -120,14 +121,16 @@ target_compile_definitions(fr_fixture_sim PRIVATE FR_HOST_SHIM=1)
 target_link_libraries(fr_fixture_sim PUBLIC fr_host_lib)
 target_compile_options(fr_fixture_sim PRIVATE ${FR_CXX_WARNINGS})
 
-# The display and touch drivers (design m2-c5-display D4, D7, D8) and fr_core's shared I2C buses, unchanged, against
+# The display and touch drivers (design m2-c5-display D4, D7, D8; ssd1683_spi, design epaper-e1 D5) and fr_core's shared
+# I2C buses, unchanged, against
 # shim/idf's I2C and SPI (shim/panel_sim.cpp) and esp_sim's GPIO, LEDC and esp_timer: the tests check the bytes the
 # drivers put on the bus.
 set(FR_PANEL_INCLUDES
     ${REPO_DIR}/hardware/drivers/st7789_spi/include
     ${REPO_DIR}/hardware/drivers/gc9a01_spi/include
     ${REPO_DIR}/hardware/drivers/ssd1306_i2c/include
-    ${REPO_DIR}/hardware/drivers/cst816_i2c/include)
+    ${REPO_DIR}/hardware/drivers/cst816_i2c/include
+    ${REPO_DIR}/hardware/drivers/ssd1683_spi/include)
 add_library(fr_panel_sim STATIC
     ${HOST_DIR}/shim/panel_sim.cpp
     ${COMPONENTS_DIR}/fr_core/src/i2c_bus.cpp
@@ -135,7 +138,8 @@ add_library(fr_panel_sim STATIC
     ${REPO_DIR}/hardware/drivers/st7789_spi/src/st7789_spi.cpp
     ${REPO_DIR}/hardware/drivers/gc9a01_spi/src/gc9a01_spi.cpp
     ${REPO_DIR}/hardware/drivers/ssd1306_i2c/src/ssd1306_i2c.cpp
-    ${REPO_DIR}/hardware/drivers/cst816_i2c/src/cst816_i2c.cpp)
+    ${REPO_DIR}/hardware/drivers/cst816_i2c/src/cst816_i2c.cpp
+    ${REPO_DIR}/hardware/drivers/ssd1683_spi/src/ssd1683_spi.cpp)
 target_include_directories(fr_panel_sim PRIVATE ${HOST_DIR}/shim/idf PUBLIC ${HOST_DIR}/shim ${FR_PANEL_INCLUDES})
 target_compile_definitions(fr_panel_sim PRIVATE FR_HOST_SHIM=1)
 target_link_libraries(fr_panel_sim PUBLIC fr_fixture_sim fr_host_lib)

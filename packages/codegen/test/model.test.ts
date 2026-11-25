@@ -100,9 +100,10 @@ describe('loading the committed schema', () => {
       [0x000d, 'fr.battery', 'Battery', 'standard'],
       [0x000e, 'fr.haptic', 'Haptic', 'standard'],
       [0x000f, 'fr.storage', 'Storage', 'standard'],
-      [0x0010, 'fr.clock', 'Clock', 'standard'],
+      [0x0010, 'fr.rtc', 'Rtc', 'standard'],
       [0x0012, 'fr.stepper', 'Stepper', 'standard'],
       [0x0013, 'fr.buzzer', 'Buzzer', 'standard'],
+      [0x0014, 'fr.face', 'Face', 'standard'],
       [0x00f0, 'fr.node', 'Node', 'system'],
       [0x00f1, 'fr.ota', 'Ota', 'system'],
       [0x00f2, 'fr.diag', 'Diag', 'system'],
@@ -549,7 +550,7 @@ describe('capability message types and bulk commands (design m2-c5-display D1, D
   it('fr.display: UiWidget, then UiLayout holding array<UiWidget> of 24, which ui_load holds directly', () => {
     const d = cap(model(), 'fr.display');
     // 1.1: trait round (design scale-round-c1 D5); 1.2: config max_brightness (design lcd-clock-c1 D4).
-    expect(d).toMatchObject({ id: 0x0003, section: 'standard', version: { major: 1, minor: 2 }, ordered: false });
+    expect(d).toMatchObject({ id: 0x0003, section: 'standard', version: { major: 1, minor: 3 }, ordered: false }); // 1.3: e-paper (design epaper-e1 D2)
     expect(d.types.map((t) => [t.name, t.scope])).toEqual([
       ['UiWidget', 'fr.display'],
       ['UiLayout', 'fr.display'],
@@ -564,7 +565,7 @@ describe('capability message types and bulk commands (design m2-c5-display D1, D
     // BULK: the worst case is far over the realtime budget (and over one BULK frame: a layout must fit one).
     expect(load).toMatchObject({ delivery: 'reliable', bulk: true, realtime: false, maxArgs: 1 + 2 + layout.maxSize });
     expect(load.maxArgs).toBeGreaterThan(200);
-    expect(d.commands.filter((c) => c.bulk).map((c) => c.name)).toEqual(['ui_load', 'snapshot', 'snapshot_read']);
+    expect(d.commands.filter((c) => c.bulk).map((c) => c.name)).toEqual(['ui_load', 'snapshot', 'snapshot_read', 'bitmap']); // bitmap: design epaper-e1 D2
     expect(d.commands.filter((c) => c.visibility === 'test').map((c) => c.name)).toEqual(['snapshot', 'snapshot_read']);
     expect(d.commands.map((c) => [c.name, c.id])).toEqual([
       ['clear', 1],
@@ -575,12 +576,19 @@ describe('capability message types and bulk commands (design m2-c5-display D1, D
       ['ui_set', 6],
       ['snapshot', 7],
       ['snapshot_read', 8],
+      // fr.display 1.3 (design epaper-e1 D2).
+      ['bitmap', 9],
+      ['refresh', 10],
+      ['hold', 11],
     ]);
-    expect(d.traits.map((t) => t.name)).toEqual(['width', 'height', 'color', 'ui', 'touch', 'round']);
-    expect(d.events).toEqual([expect.objectContaining({ name: 'ui', priority: 'normal', requires: { trait: 'ui' } })]);
-    expect(d.properties.map((p) => p.name)).toEqual(['brightness']);
-    // Every other command still fits the realtime budget.
-    expect(d.commands.filter((c) => c.name !== 'ui_load').every((c) => c.maxArgs <= 200)).toBe(true);
+    expect(d.traits.map((t) => t.name)).toEqual(['width', 'height', 'color', 'ui', 'touch', 'round', 'epaper']);
+    expect(d.events).toEqual([
+      expect.objectContaining({ name: 'ui', priority: 'normal', requires: { trait: 'ui' } }),
+      expect.objectContaining({ name: 'refreshed', priority: 'normal', requires: { trait: 'epaper' } }),
+    ]);
+    expect(d.properties.map((p) => p.name)).toEqual(['brightness', 'partials', 'shown_crc', 'refresh_ms']);
+    // Every other command still fits the realtime budget (bitmap's 1,200 B of pixels is BULK, design epaper-e1 D2).
+    expect(d.commands.filter((c) => c.name !== 'ui_load' && c.name !== 'bitmap').every((c) => c.maxArgs <= 200)).toBe(true);
     // The only other bulk command is fr.camera's sd_list (design camera-c1 D7: a page of 64 recordings, over one realtime frame).
     expect(model().capabilities.filter((c) => c.name !== 'fr.display').flatMap((c) => c.commands.filter((x) => x.bulk).map((x) => `${c.name}.${x.name}`))).toEqual(['fr.camera.sd_list']);
   });

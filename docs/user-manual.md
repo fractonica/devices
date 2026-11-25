@@ -357,7 +357,7 @@ Keep content inside the circle: the corners of the 240×240 frame are not on the
 
 ## 5. LCD board, micro-SD card and clock
 
-**The board:** lcd-c6, a **Waveshare ESP32-C6-LCD-1.47** (ESP32-C6FH4, 4 MB flash, no PSRAM) with its own **1.47" ST7789 display**, 172×320 (the `screen` instance, `fr.display`), a **micro-SD (TF) slot** on the display's SPI bus (the `card` instance, `fr.storage`) and an RGB LED. A **DS3231 real-time clock** module is wired to it: SDA to GPIO18, SCL to GPIO19, VCC to 3.3 V, GND (the `clock` instance, `fr.clock`). The wiring guide is on the dashboard's Bench page: <http://127.0.0.1:7420/#/bench>, guide `clock-lcd-c6`.
+**The board:** lcd-c6, a **Waveshare ESP32-C6-LCD-1.47** (ESP32-C6FH4, 4 MB flash, no PSRAM) with its own **1.47" ST7789 display**, 172×320 (the `screen` instance, `fr.display`), a **micro-SD (TF) slot** on the display's SPI bus (the `card` instance, `fr.storage`) and an RGB LED. A **DS3231 real-time clock** module is wired to it: SDA to GPIO18, SCL to GPIO19, VCC to 3.3 V, GND (the `clock` instance, `fr.rtc`). The wiring guide is on the dashboard's Bench page: <http://127.0.0.1:7420/#/bench>, guide `clock-lcd-c6`.
 
 **What it does:** layouts and drawing on the display (its backlight is capped at half, as Waveshare advises: full brightness overheats the panel), files to and from the card, a clock that keeps time on its coin cell through power cuts, set from the Mac to the second boundary, and a drift measurement against the Mac.
 
@@ -396,7 +396,7 @@ Keep content inside the circle: the corners of the 240×240 frame are not on the
 1. **Set it from the Mac:**
 
    ```bash
-   fr clock sync lcd-c6
+   fr rtc sync lcd-c6
    ```
 
    The hub sets the DS3231 so its next second starts with the Mac's. "Busy" right after the board comes online: wait a few seconds and repeat.
@@ -404,20 +404,20 @@ Keep content inside the circle: the corners of the 240×240 frame are not on the
 2. **Read it:**
 
    ```bash
-   fr clock read lcd-c6
+   fr rtc read lcd-c6
    ```
 
    You should see `lcd-c6 clock: 2026-11-05T14:00:00Z, valid, +3.2 ms against the Mac (±1.4 ms), 24.50 °C`. The time is UTC. **NOT valid** means the clock lost power since it was set (no coin cell, or a flat one): sync it again.
 
-3. **Unplug the board for a minute and plug it back:** `fr clock read lcd-c6` still says valid and a few ms from the Mac. The coin cell kept it counting.
+3. **Unplug the board for a minute and plug it back:** `fr rtc read lcd-c6` still says valid and a few ms from the Mac. The coin cell kept it counting.
 
 4. **Measure its drift** (optional; it takes as long as you ask):
 
    ```bash
-   fr clock drift lcd-c6 60
+   fr rtc drift lcd-c6 60
    ```
 
-   After an hour: `0.80 ppm fast (0.069 s a day)`. A DS3231 is within about ±2 ppm. When a long run suggests a trim, `fr clock aging lcd-c6 <value>` applies it (positive slows the clock, about 0.1 ppm a step).
+   After an hour: `0.80 ppm fast (0.069 s a day)`. A DS3231 is within about ±2 ppm. When a long run suggests a trim, `fr rtc aging lcd-c6 <value>` applies it (positive slows the clock, about 0.1 ppm a step).
 
 ### 5.3 The display and the automated test
 
@@ -1693,3 +1693,104 @@ The firmware holds both loads inside their limits:
 | The board resets while charging | The USB port gives too little for the charger's 1 A: change the TP4056 module's PROG resistor (1.2 kΩ) for 2.4 kΩ (about 0.5 A). |
 | `cap.mv` far from the meter | `fr send stepper-c3 cap.calibrate` with the meter's reading of OUT+. |
 | Leaving the board unplugged for weeks | The capacitor drains slowly through the divider and the charger: store it charged, and meter it (above 2.5 V) before using it again. |
+
+## 25. An e-paper panel
+
+**The parts:** a **Waveshare 4.2inch e-Paper Module V2** (400 × 300 pixels, black and white) on a spare **ESP32-C6
+Super Mini**, the device **paper-c6** (profile `c6e-paper`, instance `paper`). The module's BS resistor stays at 0. The
+wiring guide `epaper-c6` on the Bench page shows the eight wires: VCC and GND to 3V3 and GND, CLK, DIN and CS to
+GPIO19, 18 and 14, DC, RST and BUSY to GPIO3, 2 and 1. The design is `docs/design/epaper-e1.md`.
+
+**How it shows things:** e-paper keeps its picture without power and changes it by a **refresh**:
+
+- a **partial** refresh (about 0.4 s) moves only the pixels that changed, without a flash;
+- a **fast** refresh (1–1.5 s) and a **full** one (2–3 s) redraw the whole screen with a flash, and clear the faint
+  **ghosts** that partial refreshes leave behind.
+
+The board refreshes by itself shortly after something is drawn, partial when it can. On paper-c6 every 60th partial is
+followed by a fast clean (the bench showed only very faint traces up to 60, which a fast refresh removes; the vendor's
+cautious default, used where a profile says nothing, is a full refresh after 5), and once a day it cleans even with
+nothing new (the vendor's advice). Measured on paper-c6: a partial 0.36 s, fast 1.7 s, full 3.3 s. The first refresh after
+the board starts is always full: until then it does not know what the glass shows (after a reboot the glass keeps its
+old picture until something new is drawn).
+
+**Putting something on it:** the hub draws, the board shows.
+
+- `fr display text paper-c6 "Fractonica"`: text in any font the hub machine's Chrome has (`--size-px`, `--font`).
+- `fr display image paper-c6 /path/picture.png`: a picture, fitted to the panel (`--fit cover` fills it; for a photo
+  add `--dither diffusion`). PNG works on any hub; JPEG and other formats need Chrome on the hub machine.
+- `fr display html paper-c6 --url https://…` or `--html '<h1>Hi</h1>'`: a web page drawn at exactly 400 × 300.
+- `fr display refresh paper-c6 --mode full`: a refresh now (`partial`, `fast` or `full`).
+
+Each sends only the parts of the picture that changed since the last one, then one refresh. The board's own commands
+(`clear`, `text` in the built-in small font, `fill_rect`, `bitmap`) work too; the panel page on the dashboard has the
+refresh buttons, a picture button and a text field.
+
+### 25.1 First run, step by step
+
+1. **Check the BS resistor** on the module's back: on the 0 side.
+2. **Wire it** by the guide, USB unplugged.
+3. **Flash** `c6e-paper` (ask for the go-ahead first if a hub holds the port) and provision it as `paper-c6`.
+4. `fr diag paper-c6 selftest`: the `paper` row says **answered**.
+5. `fr display text paper-c6 "Fractonica"`: a full refresh (a black-and-white flash), then the word.
+6. `fr display text paper-c6 "Fractonica 2"`: only the new characters change, without a flash.
+
+### 25.2 Panel troubleshooting
+
+| You see | Do this |
+|---|---|
+| selftest says **absent** | BUSY never rose: check VCC, GND and BUSY, and that the flat cable sits in its connector. |
+| selftest says **stuck busy** | BUSY never fell: the BS resistor is at 1, or CLK and DIN are swapped. |
+| Faint copies of old pictures | Ghosts: `fr display refresh paper-c6 --mode fast` (or `full`). If they come back quickly, lower `full_every` in the profile (60 on paper-c6). |
+| `refreshed` with `ok: false` | The panel did not finish in time: check the wiring; the next refresh resets it and is full. |
+| CAPABILITY_UNSUPPORTED for text or a page | The hub machine has no Chrome or Chromium: install one, or send a PNG with `fr display image`. |
+| A photo looks like blobs | Use `--dither diffusion` (or `ordered`). |
+
+### 25.3 The clock face
+
+paper-c6 shows the **Fractonica clock** by itself (instance `face`, design `docs/design/face-f1.md`): the wave and its
+two glyphs in the middle, the Nuclide top left (`ε#5`), the Helion top right (`34η`), the Preon bottom right (`29ι`)
+and the Pentad's mark bottom left; in Earth mode the civil time at the bottom. The board draws it from the core; the hub only
+gives it the time, which it takes from the hub's own messages. It moves on its **step**, by default every **Preon**
+(about every 8.4 minutes), exactly on the Preon's boundary, and its text goes no finer than the step.
+
+- **The three keys** (wired by the `epaper-c6` guide, each from its pin to GND): **left** (GPIO22) and **right**
+  (GPIO4) move the focus one period coarser or finer, at the press; the **centre** key (GPIO21) turns the screen (now,
+  lens, sun, stamp) at its release; held 0.6–5 s it switches the mode (pure or with Earth). The same from the hub:
+  `fr send paper-c6 face.input '{"event":"next"}'` (`prev`, `next`, `select`, `long`). A face with only the centre key
+  keeps the old gestures: a click *next*, a double click *select*.
+- **Sounds** (the buzzer on GPIO23): every press clicks, each key at its own pitch. When a period begins the face
+  chimes: one note for a Preon, two for a θ (34 minutes), three rising for a Helion, four for anything longer. Quieter:
+  `fr send paper-c6 face.set '{"chime":"helion"}'` (`off`, `helion`, `theta`, `preon`), `{"clicks":false}`; louder or
+  softer: `fr send paper-c6 buzzer.set_volume '{"volume":30}'` (until the next restart). It chimes only at the steps
+  the face moves on, while the face is on the panel.
+- **Settings** (kept across reboots): `fr send paper-c6 face.set '{"step":"flavon"}'` (`helion`, `theta`,
+  `preon`, `kappa`, `flavon`), `{"mode":"earth"}`, `{"focus":8}`, `{"utc_offset_min":180}` (Earth mode's offset). The
+  dashboard has them on the face's page, and the device's Overview shows what the face is doing with four buttons.
+- **Sharing the panel:** anything the hub draws (`fr display text`, a picture, a page) takes the screen; the face waits.
+  A press of the button, or `face.show`, brings it back.
+- A finer step moves more often: the Flavon (7.8 s) is about 11,000 partial refreshes a day and a cleaning flash every
+  8 minutes; the Preon about 170 a day and a flash every 8 hours.
+
+### 25.4 Power save
+
+For a clock on a battery: the board keeps time with its **DS3231** (SDA GPIO6, SCL GPIO7, SQW GPIO5), sleeps between
+redraws and **never turns Wi-Fi on**.
+
+- **On:** `fr send paper-c6 face.set '{"power_save":true}'`, or hold the centre key 5 s. The board first sets the
+  DS3231 from the hub's time, says goodbye to the hub (the hub shows it asleep), restarts and leaves the network.
+- **While on:** at each step the DS3231 wakes it; it draws, refreshes (about 1–1.5 s awake), chimes when a period
+  began, and sleeps again. A press of the right key wakes it (left and centre cannot: GPIO21 and 22 are no wake pins);
+  for 30 s after the last press all three keys work as usual.
+- **Off:** press the right key to wake it, then hold the centre key 5 s. The board restarts and rejoins the hub. Nothing on the network can do it: the board
+  is not listening.
+- **If a key is broken:** flash the board over USB with its NVS erased (BOOT held while plugging it in reaches it
+  even asleep).
+- For a battery, remove the Super Mini's power LED and the DS3231 module's LED: they draw more than the sleeping chip.
+
+| You see | Do this |
+|---|---|
+| The face says the time is not set | The board has no time yet: wait for the hub (or, in power save, `fr rtc sync` before turning it on: the DS3231 lost its time). |
+| Power save refused (`FAILED`) | Neither the hub's time nor the DS3231's: connect to the hub first. |
+| Power save refused (`INVALID_ARGS`) | The profile has no wake button or no SQW wire: see the `epaper-c6` guide. |
+| It wakes but never sleeps | A key is stuck pressed, or SQW is held low: check the wires. |

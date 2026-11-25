@@ -89,6 +89,9 @@ void ButtonService::press(TimeUs at, bool raw)
     }
     emit_down({}, at);
     report_pressed(true, at);
+    if (listener_ != nullptr) {
+        listener_->on_button_down(at);
+    }
     if (!raw && traits_.long_press) {
         TimeUs deadline = at + static_cast<TimeUs>(cfg_.long_press_ms) * 1000;
         if (!arm_at(long_, deadline)) {
@@ -106,6 +109,9 @@ void ButtonService::release(TimeUs at)
     long_->stop();
     emit_up({.held_ms = held_ms(press_at_, at)}, at);
     report_pressed(false, at);
+    if (listener_ != nullptr) {
+        listener_->on_button_up(held_ms(press_at_, at), at);
+    }
     if (raw_hold_) {
         raw_hold_ = false;
         return;
@@ -140,6 +146,9 @@ void ButtonService::flush_clicks(TimeUs at)
         uint8_t n = count_;
         count_ = 0;
         emit_click({.count = n}, at);
+        if (listener_ != nullptr) {
+            listener_->on_button_click(n, at);
+        }
     }
 }
 

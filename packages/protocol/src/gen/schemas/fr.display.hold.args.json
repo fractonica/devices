@@ -1,0 +1,21 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:fractonica:schema:fr.display.hold.args",
+  "title": "fr.display.hold arguments",
+  "description": "E-paper: no automatic refresh for `ms` or until `refresh`; 0 releases. A client drawing many pieces holds, draws, then refreshes once; if it stops half-way the hold runs out. UNSUPPORTED where trait epaper is false.",
+  "type": "object",
+  "properties": {
+    "ms": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 10000,
+      "description": "(ms; 0..10000)"
+    }
+  },
+  "additionalProperties": false,
+  "examples": [
+    {
+      "ms": 5000
+    }
+  ]
+}

@@ -7,6 +7,7 @@ import { describe, expect, it } from 'vitest';
 import { z } from 'zod';
 
 import { AUDIO_RATES, AudioLevelSchema, AudioPlaySchema, AudioRecordSchema, findOp, HUB_EVENT_FIELDS, HUB_EVENT_TYPES, JOB_KINDS, OPS, REGISTRY_HASH } from '../src/index.ts';
+import { beforeRtc } from './before-rtc.ts';
 
 const hashOf = (ops: readonly { name: string; input: z.ZodType }[]) =>
   createHash('sha256')
@@ -18,7 +19,7 @@ describe('A1 ops (design audio-a1 D8)', () => {
   it('adds audio_record and audio_play as mutate jobs and audio_level as a read query, and moves REGISTRY_HASH once', () => {
     // A2 (design audio-a2 D5) adds audio_monitor: protocol-a2.test.ts; CSI-1 network_list and the csi_ ops
     // (protocol-csi.test.ts).
-    const a1 = OPS.filter((o) => o.name !== 'audio_monitor' && o.name !== 'network_list' && !/^(csi|camera|scale|battery|cell|haptic|wiring|part|storage|clock|app|time)_|^device_adopt$|^port_(lend|ignore|claim)$|^hub_doctor_fix$|^device_enroll$|^device_(hubs_set|hubs_get|share)$|^network_join$|^network_admit$|^hub_(name_set|peers)$/.test(o.name)); // CAM-1 adds seven camera_ ops
+    const a1 = beforeRtc(OPS).filter((o) => o.name !== 'audio_monitor' && o.name !== 'network_list' && !/^(csi|camera|scale|battery|cell|haptic|wiring|part|storage|clock|app|time)_|^device_adopt$|^port_(lend|ignore|claim)$|^hub_doctor_fix$|^device_enroll$|^device_(hubs_set|hubs_get|share)$|^network_join$|^network_admit$|^hub_(name_set|peers)$|^display_(image|html|text|refresh)$/.test(o.name)); // CAM-1 adds seven camera_ ops
     expect(a1).toHaveLength(51);
     expect(findOp('audio_record')).toMatchObject({ kind: 'job', tier: 'mutate', cli: { path: ['audio', 'record'], positional: ['device', 'out'] } });
     expect(findOp('audio_play')).toMatchObject({ kind: 'job', tier: 'mutate', cli: { path: ['audio', 'play'], positional: ['device', 'file'] } });

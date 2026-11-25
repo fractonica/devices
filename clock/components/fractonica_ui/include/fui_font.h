@@ -11,6 +11,9 @@
  *   fui_font_small  3 x 5 class, 8-row cell: the one-bit face (drawn at
  *                   scale 2 for the count, scale 1 for cards)
  *   fui_font_text   5 x 7 class, 10-row cell: the colour faces
+ *   fui_font_line   STROKES (monoline, geometric), 20-row cell, a SUBSET
+ *                   (digits, '#', ':', I, V, ε η ι λ, ⊕): the 400 x 300 paper
+ *                   face's corners, Pentad numeral and Earth time
  *
  * A code point without a glyph draws as a hollow box, so a gap is seen on
  * the display; sim/tests/test_font.c fails the build before that happens.
@@ -18,8 +21,15 @@
  * TABLE LAYOUT (all const, in flash)
  *   codepoints[count]  sorted. The first 95 are ASCII 0x20..0x7E, so ASCII is
  *                      indexed directly and only the rest is searched.
- *   glyphs             count records of (1 + height) bytes: the width in
- *                      columns (1..8), then one byte per row, bit 7 leftmost.
+ *   glyphs             count records of `record` bytes (1 + height for a
+ *                      bitmap font): the width in columns (1..8), then one
+ *                      byte per row, bit 7 leftmost. A record of width 0 is
+ *                      a glyph a SUBSET font does not have (drawn as the box).
+ *   A STROKE font (strokes = 1): records of 3 bytes, the width and the
+ *   offset in `glyphs` (low byte first) of its points: (x, y) in quarter
+ *   dots of the cell, joined by lines; 0xFF lifts the pen, 0xFE ends. It is
+ *   drawn `scale` px per dot with a pen scale + 1 px wide, 1 px at scale 1
+ *   (on one bit the canvas's pen, fui_canvas_set_pen; put back after).
  *   Glyphs are proportional; `1` blank column follows each.
  */
 #ifndef FUI_FONT_H
@@ -39,10 +49,13 @@ typedef struct fui_font {
     uint8_t         cap_top;   /* first row of a capital / digit                */
     uint8_t         baseline;  /* first row below the baseline (descenders)     */
     uint8_t         box;       /* width of the missing-glyph box                */
+    uint8_t         record;    /* bytes per glyph record                        */
+    uint8_t         strokes;   /* 0: a bitmap font, 1: a stroke font            */
 } fui_font_t;
 
 extern const fui_font_t fui_font_small;
 extern const fui_font_t fui_font_text;
+extern const fui_font_t fui_font_line;
 
 /** Draw ASCII a-z as A-Z: the engraved capitals of DESIGN.md S3. Greek is
  *  never folded (the letters are symbols and stay lowercase). */

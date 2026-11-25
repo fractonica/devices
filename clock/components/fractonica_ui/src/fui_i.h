@@ -43,6 +43,21 @@ typedef struct fui_layout {
     int16_t  card_bottom;
     int16_t  card_marks_y; /* the row of the page beads                           */
     int16_t  card_cy;      /* the centre of the Sun's ring                        */
+    /* what differs between the one-bit faces                                  */
+    uint8_t  tiny;         /* 1: the 128 x 64 face (DESIGN.md S11): its own NOW
+                              (fui_face_mono.c), the ring's first level only,
+                              written text at 1 px per dot, the dot font for the
+                              count, cards without heads, the SUN figure on a page
+                              of its own. 0: the colour faces' arrangements (the
+                              400 x 300 paper face too, with one-bit marks)       */
+    int16_t  wave_reach;   /* > 0: NOW is the WAVE alone (the 400 x 300 paper face):
+                              the focused ring, its inner circle and glyphs, sized
+                              so its ink reaches this far from the centre (px), the
+                              readings in the corners (fui_face_mono400.c)        */
+    int16_t  wave_reach_earth; /* the same in EARTH, which takes the bottom centre */
+    int16_t  sun_r;        /* the Sun's ring on the SUN card, px (colour: 112; the
+                              card's other measures scale with it)                */
+    uint32_t sun_u;        /* the three glyphs of the SUN card, Q16 px per unit   */
 } fui_layout_t;
 
 const fui_layout_t *fui_i_layout(uint8_t face);
@@ -112,9 +127,12 @@ void fui_i_span_until(fui_painter_t *p, frc_time_t boundary);
  * line that tells something is drawn at 2 px per dot or more: 14 px capitals,
  * 1.9 mm on a 1.28 inch panel. One pixel per dot (0.95 mm capitals) is kept
  * for FURNITURE: a word beside a sign that already says it, and the Earth
- * hallmark of the round face. On one bit everything written out uses the
- * 5 x 7 font at 1 px per dot (1.2 mm on a 0.96 inch panel, the size these
- * displays are read at); the 3 x 5 dot font is drawn at 2 px per dot only.
+ * hallmark of the round face. On the 128 x 64 one-bit face everything
+ * written out uses the 5 x 7 font at 1 px per dot (1.2 mm on a 0.96 inch
+ * panel, the size these displays are read at); the 3 x 5 dot font is drawn
+ * at 2 px per dot only. The 400 x 300 paper face takes the colour faces'
+ * sizes (2 px per dot, 3 for the title: 3 mm capitals on 4.2 inches), and
+ * its label words are written at 2 px per dot too (no furniture there).
  */
 typedef enum fui_style_id {
     FUI_STYLE_READING = 0, /* digits bone, unit letters ash, capitals; an Earth tail in ash */
@@ -232,7 +250,9 @@ typedef enum fui_civil_form {
     FUI_CIVIL_TIME = 0, /* "⊕ 14:00:00"                                   */
     FUI_CIVIL_FULL = 1, /* "⊕ THU 8 OCT 2026 · 14:00:00 UTC+2": a card line */
     FUI_CIVIL_DAY  = 2, /* "⊕ 9 OCT 2026 03:34"                           */
-    FUI_CIVIL_NOW  = 3  /* "⊕ 2026-10-08 14:00:00"                        */
+    FUI_CIVIL_NOW  = 3, /* "⊕ 2026-10-08 14:00:00"                        */
+    FUI_CIVIL_FULL_MINUTE = 4, /* "⊕ THU 8 OCT 2026 · 14:00 UTC+2": FULL at a step */
+    FUI_CIVIL_MINUTE = 5 /* "⊕ 14:00"                                      */
 } fui_civil_form_t;
 void fui_i_add_civil(fui_str_t *s, frc_time_t t, int32_t utc_offset_s, fui_civil_form_t form);
 int fui_i_same_civil_day(frc_time_t a, frc_time_t b, int32_t utc_offset_s);
@@ -241,10 +261,19 @@ frc_time_t fui_i_next_midnight(frc_time_t t, int32_t utc_offset_s);
  *  (fui_i_span_until); pass NULL where the line is flagged LIVE anyway. A
  *  card wraps it only before "in": "in 6ι 43λ" is kept whole. */
 void fui_i_add_countdown(fui_str_t *s, const fui_ui_t *ui, uint8_t level, fui_painter_t *p);
-/** "Valley in 29ι 7λ": a quarter and the span to it, kept as fui_i_add_countdown keeps it. */
-void fui_i_add_quarter_in(fui_str_t *s, frc_quarter_t quarter, const frc_span_t *span);
-/** frc_format_span(span, 0), kept together (fui_i_str_keep). */
+/** "Valley in 29ι 7λ": a quarter and the span to it, kept as fui_i_add_countdown
+ *  keeps it, with no part finer than `finest` (fui_i_add_span_to). */
+void fui_i_add_quarter_in(fui_str_t *s, frc_quarter_t quarter, const frc_span_t *span, frc_unit_t finest);
+/** frc_format_span(span, 0), kept together (fui_i_str_keep): a level's length. */
 void fui_i_add_span(fui_str_t *s, const frc_span_t *span);
+/** The same with no part finer than `finest` (FRC_UNIT_BLINK: exactly
+ *  fui_i_add_span): a countdown read at a step (fui_shim_format_span_to). */
+void fui_i_add_span_to(fui_str_t *s, const frc_span_t *span, frc_unit_t finest);
+/** The finest unit a reading shows: FRC_UNIT_BLINK without a step, else the
+ *  finest unit not finer than the step level (the Preon at kappa). */
+frc_unit_t fui_i_finest_unit(const fui_ui_t *ui);
+/** 1 when the civil time shows seconds: no step, or the Flavon's. */
+int fui_i_civil_seconds(const fui_ui_t *ui);
 void fui_i_add_level_title(fui_str_t *s, uint8_t level);
 /** The date's terms from `first` to `last` joined by spaces, each written by
  *  frc_format_date_term: "34η 29ι"; all nine are the stamp. */
@@ -289,6 +318,21 @@ fui_arc_t fui_i_arc(const fui_arc16_t *a);
 void fui_i_instrument(fui_painter_t *p);   /* fui_instrument.c: the colour instrument     */
 void fui_i_now_rows(fui_painter_t *p);     /* fui_screen_now.c: rows under it (rect faces) */
 void fui_i_now_mono(fui_painter_t *p);     /* fui_face_mono.c: the 128 x 64 NOW / SCALES   */
+void fui_i_wave(fui_painter_t *p);         /* fui_instrument.c: the paper face's wave alone */
+void fui_i_now_corners(fui_painter_t *p);  /* fui_face_mono400.c: the paper face's corners  */
+/** The style of the paper face's Earth time and the top of its cell: the
+ *  wave keeps above it. fui_face_mono400.c */
+int fui_i_paper_time(const fui_ui_t *ui, fui_text_style_t *style);
+/** The reach the ring is fitted to on a wave face, Q8 (0: a face whose ring has
+ *  the layout's radius). fui_ring.c */
+fui_fx_t fui_i_wave_goal(const fui_ui_t *ui);
+/** A drawn mark that stands for a line: rows [y0, y1) are redrawn when
+ *  `what` changes (a shape the text lines do not cover). fui_paint.c */
+void fui_i_mark(fui_painter_t *p, int y0, int y1, const void *what, size_t bytes);
+/** The one-bit mark of now: a block 2 half + 1 px square (3 x 3 on the tiny
+ *  face, 7 x 7 on the paper face's cards, 9 x 9 in its wave) in a 1 px frame
+ *  cleared to the ground. fui_instrument.c */
+void fui_i_now_block(fui_painter_t *p, fui_fx_t x, fui_fx_t y, int half, fui_color_t ink);
 void fui_i_screen_lens(fui_painter_t *p);  /* fui_screen_lens.c  */
 void fui_i_screen_sun(fui_painter_t *p);   /* fui_screen_sun.c   */
 void fui_i_screen_stamp(fui_painter_t *p); /* fui_screen_stamp.c */
@@ -310,6 +354,17 @@ typedef struct fui_slots {
     fui_color_t done, lit, rest;
 } fui_slots_t;
 void fui_i_slots(fui_canvas_t *c, const fui_slots_t *s);
+
+/* ------------------------------------------------------------------------- */
+/* SHIM: stand-ins for what the core does not offer yet (AGENTS.md section   */
+/* 10). Delete each when the core answers.                                    */
+/* ------------------------------------------------------------------------- */
+
+/** frc_format_span(span, max_parts) with no part finer than `finest`: the
+ *  span cut toward zero to whole `finest` units; under one of them,
+ *  frc_format_span_in_unit ("0ι"). FRC_UNIT_BLINK: frc_format_span itself.
+ *  Wanted from the core as frc_format_span_to (section 10). fui_shim.c */
+int fui_shim_format_span_to(const frc_span_t *span, uint8_t max_parts, frc_unit_t finest, char *buf, size_t size);
 
 /* FNV-1a, the hash of scenes and lines. */
 #define FUI_I_HASH_SEED 2166136261u

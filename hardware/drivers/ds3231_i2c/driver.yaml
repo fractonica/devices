@@ -1,5 +1,5 @@
 # Driver manifest (design lcd-clock-c1 D7, D8; spec 07 §7.8). `fr gen firmware` validates profiles against it and fills
-# fr::drv::Ds3231I2c::Config from the instance's multi-pin bind, `bind: { sda: gpio.<n>, scl: gpio.<n> }` (each in the
+# fr::drv::Ds3231I2c::Config from the instance's multi-pin bind, `bind: { sda: gpio.<n>, scl: gpio.<n>, sqw?: gpio.<n> }` (each in the
 # board's pins.free). The bus is fr_core's shared i2c_bus, so other I2C parts on the same pins share it.
 schema: fractonica/driver@1
 id: ds3231_i2c
@@ -13,7 +13,8 @@ config:                                 # same order as Ds3231I2c::Config
   sda: { type: gpio, from: bind.sda, doc: "the module's SDA (the ZS-042 module has 4.7 kOhm pull-ups to its VCC)" }
   scl: { type: gpio, from: bind.scl }
   khz: { type: u16, default: 100, range: [100, 400], doc: "the bus clock (the DS3231 does 400 kHz; 100 is the default: more margin on jumper wires)" }
-# fr.clock traits its service reports (has_temperature(), resolution_ms()).
+  sqw: { type: gpio, from: bind.sqw, optional: true, doc: "the module's SQW/INT (open drain, pulled up on the ZS-042): the alarm that wakes a deep-sleeping node (design face-f1 D14); absent: no alarm" }
+# fr.rtc traits its service reports (has_temperature(), resolution_ms()).
 traits: { has_temperature: true, resolution_ms: 1000 }
-resources: { gpio: 2 }
+resources: { gpio: 3 }   # sda, scl and the optional sqw
 dependencies: {}

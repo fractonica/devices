@@ -1,0 +1,121 @@
+schema: fractonica/wiring@1
+id: epaper-c6
+title: A 4.2" e-paper panel on an ESP32-C6 Super Mini
+summary: >-
+  A Waveshare 4.2inch e-Paper Module V2 (400 × 300, black and white) on 4-line SPI to an ESP32-C6 Super Mini: CLK,
+  DIN and CS on GPIO19, 18 and 14 of the right row beside 3V3 and GND, DC, RST and BUSY on GPIO3, 2 and 1 of the left
+  row. No strapping pin; GPIO20 stays the board's latency-test pin. For the clock face's power save (design face-f1): a
+  DS3231 module on SDA GPIO6, SCL GPIO7 and its SQW on GPIO5 (left row). For its keys and sounds (D18, D19): three
+  buttons in a row, each to GND, left on GPIO22, the centre on GPIO21 and right on GPIO4 (the wake key), and a passive
+  buzzer on GPIO23 (never GPIO12 or 13: the USB lines).
+board: esp32c6-supermini
+profile: c6e-paper
+device: paper-c6
+design: docs/design/epaper-e1.md
+covers: [paper, rtc, key, left, right, buzzer]
+safety:
+  - "Unplug the board's USB before connecting or moving any wire."
+  - "The flat flex cable between the module and the glass tears easily: hold the module by its board, never bend the cable at its connector."
+  - "VCC from the board's 3V3 only: the module's logic follows its VCC, and the C6's pins are 3.3 V."
+  - "With a plain CR2032 in the DS3231 module, remove the module's charging diode (or the 200 Ω resistor next to it) first: the module would otherwise try to charge it."
+bom:
+  - { part: esp32c6-supermini-board, qty: 1, note: paper-c6 }
+  - { part: waveshare-epd42-v2, qty: 1, note: "with its 8-wire cable (female ends)" }
+  - { part: ds3231-zs042, qty: 1, note: "power save's clock" }
+  - { part: cr2032, value: CR2032, qty: 1, note: "or a LIR2032 with the charging path left in" }
+  - { part: push-button, value: 6x6 mm tactile, qty: 3, note: "the centre key (power save's wake key), left and right (any momentary buttons)" }
+  - { part: passive-buzzer-module, qty: 1, note: "the face's clicks and chimes: S, +, −; design buzzer-b1" }
+  - { part: resistor, value: "100 Ω", qty: 1, note: "only for a magnetic buzzer (10–50 Ω between S and −), in series with S" }
+diagrams:
+  - { id: map, title: "The e-paper module to the C6 Super Mini", file: map.svg }
+connections:
+  - { pin: 3v3, to: "e-paper VCC" }
+  - { pin: gnd, to: "e-paper GND" }
+  - { pin: gpio.19, instance: paper, bind: sclk, to: "e-paper CLK" }
+  - { pin: gpio.18, instance: paper, bind: mosi, to: "e-paper DIN" }
+  - { pin: gpio.14, instance: paper, bind: cs, to: "e-paper CS" }
+  - { pin: gpio.3, instance: paper, bind: dc, to: "e-paper DC" }
+  - { pin: gpio.2, instance: paper, bind: rst, to: "e-paper RST" }
+  - { pin: gpio.1, instance: paper, bind: busy, to: "e-paper BUSY", via: "an input with the C6's pull-down" }
+  - { pin: gpio.6, instance: rtc, bind: sda, to: "DS3231 SDA", via: "the module's 4.7 kΩ pull-up" }
+  - { pin: gpio.7, instance: rtc, bind: scl, to: "DS3231 SCL", via: "the module's 4.7 kΩ pull-up" }
+  - { pin: gpio.5, instance: rtc, bind: sqw, to: "DS3231 SQW", via: "the module's pull-up; low when the alarm fires" }
+  - { pin: gpio.21, instance: key, to: "centre push button, its other side to GND", via: "the C6's pull-up" }
+  - { pin: gpio.22, instance: left, to: "left push button, its other side to GND", via: "the C6's pull-up" }
+  - { pin: gpio.4, instance: right, to: "right push button, its other side to GND (power save's wake key)", via: "the C6's pull-up" }
+  - { pin: gpio.23, instance: buzzer, to: "buzzer S", via: "100 Ω in series for a magnetic buzzer" }
+  - { pin: gnd, to: "buzzer −" }
+sections:
+  - id: check
+    title: Before wiring
+    diagram: map
+    steps:
+      - id: bs
+        text: "Turn the module over. Find the small resistor marked BS between the pads 1 and 0."
+        check: "It sits on the 0 side (4-line SPI, as shipped)."
+        note: "On the 1 side it is in 3-line mode, which the driver does not speak: move it to 0 (a 0 Ω resistor, or a solder bridge) before going on."
+      - id: cable
+        text: "Plug the 8-wire cable into the module's white header. Go by the labels printed beside the header (BUSY, RST, DC, CS, CLK, DIN, GND, VCC), not by the wire colours."
+  - id: power
+    title: Power
+    diagram: map
+    steps:
+      - id: vcc
+        text: "USB unplugged. VCC to the Super Mini's 3V3, GND to GND (both on the right row, under 5V)."
+        pins: [3v3, gnd]
+        check: "With USB plugged in: VCC to GND at the module reads 3.2-3.4 V."
+  - id: spi
+    title: The bus and the control lines
+    diagram: map
+    steps:
+      - id: bus
+        text: "USB unplugged. CLK to GPIO19, DIN to GPIO18, CS to GPIO14 (right row; GPIO15, the board's LED pin between 18 and 14, stays free)."
+        pins: [gpio.19, gpio.18, gpio.14]
+      - id: control
+        text: "DC to GPIO3, RST to GPIO2, BUSY to GPIO1 (left row, under TX, RX and 0)."
+        pins: [gpio.3, gpio.2, gpio.1]
+        note: "Keep the wires short and together; the driver runs the bus at 10 MHz, which loose wires of 20 cm carry."
+  - id: first
+    title: The first picture
+    diagram: map
+    steps:
+      - id: selftest
+        text: "After flashing c6e-paper: fr diag paper-c6 selftest"
+        check: "The paper row says answered (its controller came out of reset)."
+        note: "absent: BUSY never rose (VCC, GND or BUSY not connected, or the panel's cable loose). stuck busy: BUSY never fell (the BS resistor at 1, or DIN and CLK swapped)."
+      - id: text
+        text: "fr display text paper-c6 \"Fractonica\""
+        check: "The panel flashes black and white for 2-3 s (the first refresh is full), then shows the word."
+        note: "A second fr display text with other words changes only the letters that differ, without the flash (a partial refresh)."
+  - id: clock
+    title: The clock module and the key (power save)
+    diagram: map
+    steps:
+      - id: ds3231
+        text: "USB unplugged. The DS3231 module: VCC to 3V3, GND to GND (shared with the panel's), SDA to GPIO6, SCL to GPIO7, SQW to GPIO5 (left row, under 4)."
+        pins: [gpio.6, gpio.7, gpio.5]
+        note: "The ZS-042's 32K pin stays free."
+      - id: key
+        text: "The right push button (power save's wake key): one side to GPIO4 (left row, under 3), the other to GND."
+        pins: [gpio.4]
+      - id: rtc-check
+        text: "After flashing c6e-paper: fr rtc sync paper-c6, then fr rtc read paper-c6"
+        check: "valid true, and a time within a second of the Mac's."
+  - id: keys
+    title: Left, right and the buzzer (the face's keys and sounds)
+    diagram: map
+    intro: "Design face-f1 D18, D19. Left and right move the face's focus one period coarser and finer; the centre key turns the screen. The buzzer clicks at each press and chimes when a Preon or longer begins."
+    steps:
+      - id: side-keys
+        text: "USB unplugged. The left button: one side to GPIO22, the other to GND. The centre button: one side to GPIO21, the other to GND."
+        pins: [gpio.21, gpio.22]
+        note: "To GND, not to 3V3: the C6's pull-up holds the pin high, and a press pulls it low. Never on GPIO12 or 13: they are the USB data lines, and a press there cuts the link to the hub. GPIO21 and 22 cannot wake the chip from deep sleep: in power save the right key (GPIO4) wakes it, then all three keys work."
+      - id: buzzer-meter
+        text: "Buzzer module off the board, multimeter on Ω. Measure S to −, then + to S and + to −."
+        check: "S to − reads open (a piezo disc) or 10–50 Ω (a magnetic buzzer). + reads open to both: it is not connected, leave it free."
+      - id: buzzer
+        text: "S to GPIO23 (through 100 Ω for a magnetic buzzer), − to GND."
+        pins: [gpio.23]
+      - id: keys-check
+        text: "After flashing c6e-paper: press left, then right, then the centre key."
+        check: "Each press clicks at its own pitch; left and right move the wave's focus, the centre key turns to the next screen. At the next Preon the face chimes once."

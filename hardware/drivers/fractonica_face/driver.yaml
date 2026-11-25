@@ -1,0 +1,16 @@
+# Driver manifest (design face-f1 D5; spec 07 §7.8). Nothing on the board: the clock library draws into a panel's
+# frame, so the profile's instance has no `bind` (codegen's binds: none). The face's size comes from its panel at init
+# (fr.face's display; codegen checks the library has a face for it). The library and the core it draws with come from
+# component_dirs: the clock's components, the core found through FRACTONICA_CORE_DIR or the sibling checkout.
+schema: fractonica/driver@1
+id: fractonica_face
+summary: The Fractonica clock face, drawn by the clock library (clock/components/fractonica_ui over the core) into a one-bit panel's frame.
+implements: hal.Face
+class: fr::drv::FractonicaFace        # header: include/fr/drv/fractonica_face.hpp
+targets: [esp32c6, esp32c3, esp32s3, esp32c5, esp32]
+binds: none
+accepts_kinds: [none]
+config: {}
+resources: {}
+component_dirs: [clock/components/fractonica, clock/components/fractonica_ui]
+dependencies: {}

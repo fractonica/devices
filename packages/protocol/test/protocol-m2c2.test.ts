@@ -23,6 +23,7 @@ import {
   simAliases,
   simMac,
 } from '@fractonica/protocol';
+import { beforeRtc } from './before-rtc.ts';
 
 /** Design m2-c2 §2.2, as tests/sim/scenarios/t2-flood-30.yaml will hold it. */
 const T2_FLOOD_30 = `
@@ -66,7 +67,7 @@ describe('REGISTRY_HASH (design m2-c2 D22)', () => {
   it("moves once for M2-C2: the descriptions of deploy.expect_log and test_run.suite, and no new op", () => {
     // No new op at M2-C2; M2-C5 adds display_snapshot and display_render (protocol-m2c5.test.ts), A1 the audio_ ops,
     // CSI-1 network_list and the csi_ ops.
-    expect(OPS.filter((o) => !/^(display|audio|csi|camera|scale|battery|cell|haptic|wiring|part|storage|clock|app|time)_|^device_adopt$|^port_(lend|ignore|claim)$|^hub_doctor_fix$|^device_enroll$|^device_(hubs_set|hubs_get|share)$|^network_join$|^network_admit$|^hub_(name_set|peers)$/.test(o.name) && o.name !== 'network_list')).toHaveLength(46);
+    expect(beforeRtc(OPS).filter((o) => !/^(display|audio|csi|camera|scale|battery|cell|haptic|wiring|part|storage|clock|app|time)_|^device_adopt$|^port_(lend|ignore|claim)$|^hub_doctor_fix$|^device_enroll$|^device_(hubs_set|hubs_get|share)$|^network_join$|^network_admit$|^hub_(name_set|peers)$|^display_(image|html|text|refresh)$/.test(o.name) && o.name !== 'network_list')).toHaveLength(46);
     expect(hashOf(OPS)).toBe(REGISTRY_INPUTS_HASH);
     expect(REGISTRY_HASH).not.toBe('94a574562aa9'); // M2-C1's
     expect(REGISTRY_HASH).not.toBe('8805351bae42'); // M1's

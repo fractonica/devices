@@ -124,6 +124,10 @@ static void fuzz_raster(int cases, int extreme)
         fui_canvas_set_origin(&c, ox, oy);
         clip = fui_rect_make(ox + between(-20, w), oy + between(-20, h), ox + between(0, w + 20), oy + between(0, h + 20));
         fui_canvas_set_clip(&c, &clip);
+        if (test_random() % 2) {
+            /* the one-bit pen (stamped width, dash pattern), out of range too */
+            fui_canvas_set_pen(&c, (int)(test_random() % 7) - 1, (int)(test_random() % 20) - 2, (int)(test_random() % 20) - 2);
+        }
         for (k = 0; k < 4; k++) {
             random_primitive(&c, ox, oy, w, h, extreme);
         }
@@ -179,12 +183,16 @@ static void fuzz_ui(int sessions)
         config.focus = (uint8_t)(test_random() % 16);
         config.utc_offset_s = (between(0, 1560) - 720) * 60;
         config.min_frame_us = test_random() % 3 ? 0 : test_random() % 5000000;
+        config.step = (uint8_t)(test_random() % 2 ? 0 : test_random() % 12); /* none, a step, or refused */
         fui_ui_init(&ui, &config);
         for (k = 0; k < 12; k++) {
             const fui_frame_t *f;
 
             if (test_random() % 3 == 0) {
                 (void)fui_ui_event(&ui, (fui_event_t)(test_random() % 5), ms);
+            }
+            if (test_random() % 16 == 0) {
+                (void)fui_ui_set_step(&ui, (int)(test_random() % 14) - 1);
             }
             f = fui_ui_update(&ui, t, ms);
             CHECK(f->sleep_us >= -1);

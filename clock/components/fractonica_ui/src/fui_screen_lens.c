@@ -22,7 +22,8 @@
  *
  * Each group above is one PART of the card (fui_i.h): a part is kept on one
  * page, and the card takes the pages it needs at 2 px per dot (two or three
- * on the 240 x 240 faces, two on one bit, one on 240 x 320 in PURE).
+ * on the 240 x 240 faces, two on 128 x 64, one on 240 x 320 in PURE and on
+ * the 400 x 300 paper face).
  *
  * EARTH only ever adds (DESIGN.md S1.5): no Fractonica line gives way to a
  * translation, on any face.
@@ -260,7 +261,7 @@ static void part_media(fui_card_t *card)
     fui_str_t s;
     int medium;
 
-    if (lay->info.mono || lay->info.height <= lay->info.width) {
+    if (lay->tiny || lay->info.height <= lay->info.width) {
         return; /* only where a page has room for them beside the rest */
     }
     for (medium = FRC_MEDIUM_BOUNDED; medium < FRC_MEDIUM_COUNT; medium += 2) {
@@ -300,7 +301,7 @@ void fui_i_screen_lens(fui_painter_t *p)
     static const fui_card_part_t PARTS[] = { part_identity, part_size, part_threshold, part_wave, part_media, part_status };
     const fui_layout_t *lay = p->lay;
     uint8_t level = p->ui->lens_level;
-    int mono = lay->info.mono;
+    int mono = lay->tiny; /* the 128 x 64 face has no room for the head */
     char text[FUI_TEXT_MAX];
     fui_card_t card;
 

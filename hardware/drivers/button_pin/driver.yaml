@@ -1,0 +1,17 @@
+# Driver manifest (design face-f1 D16; spec 07 §7.8): button_gpio's ButtonGpio under its own id, for a button wired to a
+# bare pin (bind gpio.<n>, in the board's pins.free) rather than a board `buttons` entry: power save's wake key.
+schema: fractonica/driver@1
+id: button_pin
+summary: Push button wired to a free GPIO (to GND, the internal pull-up); an any-edge interrupt feeds the core input slot, ButtonService debounces.
+implements: hal.ButtonSource
+class: fr::drv::ButtonGpio              # header: include/fr/drv/button_pin.hpp (includes button_gpio's)
+targets: [esp32, esp32c3, esp32c5, esp32c6, esp32s3]
+binds: gpio
+accepts_kinds: [gpio]
+uses: [button_gpio]                     # the class's code is button_gpio's component
+config:                                 # same order as ButtonGpio::Config
+  gpio:         { type: gpio, from: bind }
+  active_level: { type: enum, values: [low, high], default: low }
+  pull:         { type: enum, values: [up, down, external, none], default: up, doc: "external and none leave the internal pulls off" }
+resources: { gpio: 1, input_slot: 1 }
+dependencies: {}

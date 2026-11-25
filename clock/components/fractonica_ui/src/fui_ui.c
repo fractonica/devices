@@ -17,6 +17,14 @@
  *                is looked at again only then.
  * The UI task sleeps until the soonest of those instants, never less than
  * min_frame_us: nothing here polls faster than the display can show.
+ *
+ * WITH A STEP (fui_ui_set_step) the instant of the frame is the start of the
+ * step level's running cycle, not `now`: between two boundaries of that
+ * level it does not move, so nothing above is due, and the only deadline is
+ * the cycle's end. At that end the instant jumps to the next start; the
+ * rings are redrawn if the core's next change lies in between, and every
+ * line is formatted again (the readings go down to the step's unit, so the
+ * text changes at each boundary).
  */
 #include "fui_i.h"
 
@@ -34,7 +42,7 @@ static frc_time_t sooner(frc_time_t a, frc_time_t b)
 /* Everything that decides WHAT is on screen, apart from the time itself. */
 static uint32_t scene_hash(const fui_ui_t *ui)
 {
-    uint8_t state[8];
+    uint8_t state[9];
     uint32_t h;
 
     state[0] = ui->face;
@@ -45,6 +53,7 @@ static uint32_t scene_hash(const fui_ui_t *ui)
     state[5] = ui->toast;
     state[6] = ui->status;
     state[7] = ui->page;
+    state[8] = ui->step;
     h = fui_i_hash(FUI_I_HASH_SEED, state, sizeof state);
     return fui_i_hash(h, &ui->utc_offset_s, sizeof ui->utc_offset_s);
 }
@@ -68,8 +77,11 @@ void fui_i_paint(fui_painter_t *p)
         fui_i_screen_stamp(p);
         break;
     default: /* NOW and SCALES: the instrument */
-        if (p->lay->info.mono) {
+        if (p->lay->tiny) {
             fui_i_now_mono(p);
+        } else if (p->lay->wave_reach > 0) {
+            fui_i_wave(p); /* the paper face: the wave alone, the readings in the corners */
+            fui_i_now_corners(p);
         } else {
             /* A redraw of the text rows alone (every Blink on the rectangular
              * faces) need not walk the instrument's 200 arcs and lines just to
@@ -238,14 +250,19 @@ void fui_ui_init(fui_ui_t *ui, const fui_config_t *config)
     }
     ui->face = (uint8_t)((unsigned)config->face < FUI_FACE_COUNT ? config->face : FUI_FACE_ROUND240);
     ui->cat = config->catalogue ? config->catalogue : &FRC_SAROS_141;
+    /* The paper face is black ink on white paper by default (fui_theme.h). */
     ui->theme = config->theme ? config->theme
-                              : (fui_i_layout(ui->face)->info.mono ? &fui_theme_mono : &fui_theme_astrolabe);
+                : ui->face == FUI_FACE_MONO400X300 ? &fui_theme_paper
+                : (fui_i_layout(ui->face)->info.mono ? &fui_theme_mono : &fui_theme_astrolabe);
     ui->utc_offset_s = config->utc_offset_s;
     ui->min_frame_us = config->min_frame_us ? config->min_frame_us
                                             : (fui_i_layout(ui->face)->info.mono ? 50000u : 100000u);
     ui->mode = (uint8_t)(config->mode == FUI_MODE_EARTH ? FUI_MODE_EARTH : FUI_MODE_PURE);
     ui->focus = (uint8_t)(config->focus <= FUI_FOCUS_MAX ? config->focus : FUI_FOCUS_DEFAULT);
     ui->lens_level = ui->focus;
+    if (!fui_ui_set_step(ui, config->step)) {
+        ui->step = FUI_STEP_NONE;
+    }
     ui->pentad_starts = pentad_starts(ui->cat);
     ui->screen = FUI_SCREEN_NOW;
     ui->status = FUI_STATUS_TIME_UNSET;
@@ -291,6 +308,16 @@ void fui_ui_set_utc_offset(fui_ui_t *ui, int32_t utc_offset_s)
 {
     ui->utc_offset_s = utc_offset_s;
     ui->invalid = 1;
+}
+
+int fui_ui_set_step(fui_ui_t *ui, int level)
+{
+    if (level != FUI_STEP_NONE && (level < FUI_STEP_HELION || level > FUI_STEP_FLAVON)) {
+        return 0;
+    }
+    ui->step = (uint8_t)level;
+    ui->invalid = 1;
+    return 1;
 }
 
 /* value + step on a ring of `count` */
@@ -395,9 +422,9 @@ const fui_frame_t *fui_ui_update(fui_ui_t *ui, frc_time_t now, uint32_t now_ms)
     fui_rect_t dirty = fui_rect_make(0, 0, 0, 0);
     uint8_t status;
     uint32_t scene, label_ms = 0;
-    int backwards, has_label = 0;
+    int backwards, stepped = 0, has_label = 0;
     int64_t sleep = -1;
-    frc_time_t wake;
+    frc_time_t wake, shown = now, step_end = FRC_TIME_NONE;
 
     /* The brief labels end by themselves (unsigned difference: wrap-safe). */
     if (ui->screen == FUI_SCREEN_SCALES && (uint32_t)(now_ms - ui->scales_since_ms) >= FUI_NAME_MS) {
@@ -409,10 +436,22 @@ const fui_frame_t *fui_ui_update(fui_ui_t *ui, frc_time_t now, uint32_t now_ms)
 
     status = (uint8_t)(now == FRC_TIME_NONE ? FUI_STATUS_TIME_UNSET
                        : frc_catalogue_contains(ui->cat, now) ? FUI_STATUS_OK : FUI_STATUS_OUT_OF_CATALOGUE);
+    if (status == FUI_STATUS_OK && ui->step != FUI_STEP_NONE) {
+        /* THE STEP: show the instant the step level's running cycle began;
+         * the face next moves when it ends (none after the catalogue's last
+         * instant, which belongs to the last cycle: there end == now). */
+        frc_cycle_t cycle;
+
+        if (frc_cycle_at(ui->cat, now, ui->step, &cycle) == FRC_OK) {
+            shown = cycle.start;
+            step_end = cycle.end > now ? cycle.end : FRC_TIME_NONE;
+        }
+        stepped = ui->status == FUI_STATUS_OK && ui->t != shown;
+    }
     /* A clock set backwards makes every scheduled instant meaningless. */
-    backwards = status == FUI_STATUS_OK && ui->status == FUI_STATUS_OK && ui->t != FRC_TIME_NONE && now < ui->t;
+    backwards = status == FUI_STATUS_OK && ui->status == FUI_STATUS_OK && ui->t != FRC_TIME_NONE && shown < ui->t;
     ui->status = status;
-    ui->t = now;
+    ui->t = shown;
     scene = scene_hash(ui);
 
     if (ui->invalid || scene != ui->scene || backwards) {
@@ -424,7 +463,7 @@ const fui_frame_t *fui_ui_update(fui_ui_t *ui, frc_time_t now, uint32_t now_ms)
         (void)check_text(ui, 0); /* (may bring ui->page into range, and then renews ui->scene) */
         dirty = whole;
     } else if (status == FUI_STATUS_OK) {
-        int ring_due = ui->ring_next != FRC_TIME_NONE && now >= ui->ring_next;
+        int ring_due = ui->ring_next != FRC_TIME_NONE && shown >= ui->ring_next;
 
         if (ring_due) {
             fui_i_read(ui);
@@ -432,8 +471,9 @@ const fui_frame_t *fui_ui_update(fui_ui_t *ui, frc_time_t now, uint32_t now_ms)
             dirty = ring_rect(ui);
         }
         /* A ring redraw may repaint text rows too: re-check them with it so
-         * the stored hashes match what is on screen. */
-        if (ring_due || (ui->text_next != FRC_TIME_NONE && now >= ui->text_next)) {
+         * the stored hashes match what is on screen. (At a step boundary
+         * every line is looked at: the readings end at the step's unit.) */
+        if (ring_due || stepped || (ui->text_next != FRC_TIME_NONE && shown >= ui->text_next)) {
             fui_rect_t rows = check_text(ui, 1);
 
             dirty = fui_rect_union(&dirty, &rows);
@@ -443,8 +483,9 @@ const fui_frame_t *fui_ui_update(fui_ui_t *ui, frc_time_t now, uint32_t now_ms)
     ui->frame.dirty = fui_rect_intersect(&dirty, &whole);
     ui->frame.redraw = (uint8_t)!fui_rect_is_empty(&ui->frame.dirty);
 
-    /* Sleep until the clock next changes something on screen ... */
-    wake = sooner(ui->ring_next, ui->text_next);
+    /* Sleep until the clock next changes something on screen (with a step:
+     * until the step's cycle ends, and never before) ... */
+    wake = ui->step != FUI_STEP_NONE ? step_end : sooner(ui->ring_next, ui->text_next);
     if (status == FUI_STATUS_OK && wake != FRC_TIME_NONE) {
         sleep = wake - now;
         if (sleep < (int64_t)ui->min_frame_us) {

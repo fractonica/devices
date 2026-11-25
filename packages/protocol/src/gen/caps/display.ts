@@ -30,6 +30,11 @@ export type DisplayUiEventKind = keyof typeof DisplayUiEventKind;
 
 const DisplayUiEventKindNames = $.enumNames(DisplayUiEventKind);
 
+export const DisplayRefreshMode = { auto: 0, partial: 1, fast: 2, full: 3 } as const;
+export type DisplayRefreshMode = keyof typeof DisplayRefreshMode;
+
+const DisplayRefreshModeNames = $.enumNames(DisplayRefreshMode);
+
 const DISPLAY_UI_WIDGET_JSON: readonly $.JsonField[] = [{ name: 'id' }, { name: 'kind', members: DisplayUiWidgetKind }, { name: 'x' }, { name: 'y' }, { name: 'w' }, { name: 'h' }, { name: 'text' }, { name: 'value' }, { name: 'min' }, { name: 'max' }, { name: 'color' }, { name: 'bg' }, { name: 'font', range: [0, 2] }, { name: 'align', members: DisplayUiAlign }];
 
 /** fr.display UiWidget (message type). One widget: `id` names it for ui_set and ui events; button, slider and switch emit ui events when touched. */
@@ -217,6 +222,7 @@ export interface DisplayTraits {
   ui: boolean;
   touch: boolean;
   round: boolean;
+  epaper: boolean;
 }
 
 /** Absent fields take their defaults; throws RangeError on a value the field type cannot carry. */
@@ -234,12 +240,14 @@ export function encodeDisplayTraits(v: Partial<DisplayTraits> = {}): Uint8Array 
   if (f5) w.fieldBool(5, f5);
   const f6 = $.bool(v.round ?? false, 'round');
   if (f6) w.fieldBool(6, f6);
+  const f7 = $.bool(v.epaper ?? false, 'epaper');
+  if (f7) w.fieldBool(7, f7);
   return w.finish();
 }
 
 export function decodeDisplayTraits(bytes: Uint8Array): Decoded<DisplayTraits> {
   const r = new Reader(bytes);
-  const v: DisplayTraits = { width: 0, height: 0, color: 'mono1', ui: false, touch: false, round: false };
+  const v: DisplayTraits = { width: 0, height: 0, color: 'mono1', ui: false, touch: false, round: false, epaper: false };
   while (r.next()) {
     switch (r.field) {
       case 1:
@@ -260,6 +268,9 @@ export function decodeDisplayTraits(bytes: Uint8Array): Decoded<DisplayTraits> {
       case 6:
         v.round = r.readBool();
         break;
+      case 7:
+        v.epaper = r.readBool();
+        break;
       default:
         r.skip();
     }
@@ -275,11 +286,25 @@ export interface DisplayConfig {
   brightness: number;
   /** a hard cap on the backlight: set_brightness and brightness scale into 0..max (design lcd-clock-c1 D4; 128 where the vendor warns against full brightness) (1..255; default 255) */
   max_brightness: number;
-  /** coalescing period: the panel is flushed at most this often (50 Hz) (ms; 20..1000; default 20) */
+  /** coalescing period: the panel is flushed at most this often (50 Hz); on e-paper the shortest time between the starts of two refreshes (ms; 20..1000; default 20) */
   flush_ms: number;
+  /** e-paper: an automatic refresh starts this long after the last drawing command (ms; 0..1000; default 60) */
+  settle_ms: number;
+  /** e-paper: automatic partial refreshes before an automatic clean one (the vendor says 5); 0 never cleans automatically (0..100; default 5) */
+  full_every: number;
+  /** e-paper: the refresh that cleans ghosts, full or fast (default full) */
+  clean: DisplayRefreshMode | number;
+  /** e-paper: a clean refresh when the glass has had none for this long, even with nothing new (the vendor's 24 h rule); 0 off (0..168; default 24) */
+  clean_hours: number;
+  /** e-paper: the high voltage stays on this long after a partial, so a partial that follows starts sooner; 0 powers it down after every refresh (ms; 0..5000; default 1000) */
+  burst_ms: number;
+  /** e-paper: deep sleep after this many seconds without a refresh; 0 never (0..3600; default 10) */
+  sleep_s: number;
+  /** e-paper: a full refresh to white at boot; false keeps the glass's picture across a reboot (default false) */
+  boot_clear: boolean;
 }
 
-export const DISPLAY_CONFIG_DEFAULTS: Readonly<DisplayConfig> = { rotation: 'r0', brightness: 255, max_brightness: 255, flush_ms: 20 };
+export const DISPLAY_CONFIG_DEFAULTS: Readonly<DisplayConfig> = { rotation: 'r0', brightness: 255, max_brightness: 255, flush_ms: 20, settle_ms: 60, full_every: 5, clean: 'full', clean_hours: 24, burst_ms: 1000, sleep_s: 10, boot_clear: false };
 
 /** fr.display.clear arguments (command 1, reliable). Drops every primitive and any layout, and fills the panel with `color`. */
 export interface DisplayClearArgs {
@@ -692,6 +717,166 @@ export function decodeDisplaySnapshotReadResult(bytes: Uint8Array): Decoded<Disp
   return $.done(r, v);
 }
 
+/** fr.display.bitmap arguments (command 9, reliable). A rectangle of 1-bit pixels at (x, y): rows of ceil(w / 8) bytes, MSB first (the snapshot layout); a 1 takes `color`, a 0 `bg`, so with the defaults the bits are the frame's own (1 light). Clipped to the screen; INVALID_ARGS when data is not exactly ceil(w / 8) x h bytes. Mono panels (e-paper, the C3 OLED); UNSUPPORTED on LVGL panels. BULK: TCP or serial, never over a gateway. */
+export interface DisplayBitmapArgs {
+  /** (px) */
+  x: number;
+  /** (px) */
+  y: number;
+  /** (px) */
+  w: number;
+  /** (px) */
+  h: number;
+  /** (<= 1200 bytes) */
+  data: Uint8Array;
+  /** (default 16777215) */
+  color: number;
+  bg: number;
+}
+
+/** Absent fields take their defaults; throws RangeError on a value the field type cannot carry. */
+export function encodeDisplayBitmapArgs(v: Partial<DisplayBitmapArgs> = {}): Uint8Array {
+  const w = new Writer();
+  const f1 = $.int(v.x ?? 0, -32768, 32767, 'x');
+  if (f1 !== 0) w.fieldSint(1, f1);
+  const f2 = $.int(v.y ?? 0, -32768, 32767, 'y');
+  if (f2 !== 0) w.fieldSint(2, f2);
+  const f3 = $.int(v.w ?? 0, 0, 65535, 'w');
+  if (f3 !== 0) w.fieldUint(3, f3);
+  const f4 = $.int(v.h ?? 0, 0, 65535, 'h');
+  if (f4 !== 0) w.fieldUint(4, f4);
+  const f5 = $.bytes(v.data ?? $.EMPTY, 1200, 'data');
+  if (f5.length > 0) w.fieldBytes(5, f5);
+  w.fieldUint(6, $.int(v.color ?? 0xffffff, 0, 0xffffffff, 'color'));
+  const f7 = $.int(v.bg ?? 0, 0, 0xffffffff, 'bg');
+  if (f7 !== 0) w.fieldUint(7, f7);
+  return w.finish();
+}
+
+export function decodeDisplayBitmapArgs(bytes: Uint8Array): Decoded<DisplayBitmapArgs> {
+  const r = new Reader(bytes);
+  const v: DisplayBitmapArgs = { x: 0, y: 0, w: 0, h: 0, data: new Uint8Array(0), color: 0xffffff, bg: 0 };
+  while (r.next()) {
+    switch (r.field) {
+      case 1:
+        v.x = r.readSint(-32768, 32767);
+        break;
+      case 2:
+        v.y = r.readSint(-32768, 32767);
+        break;
+      case 3:
+        v.w = r.readUint(65535);
+        break;
+      case 4:
+        v.h = r.readUint(65535);
+        break;
+      case 5:
+        v.data = r.readBytes(1200).slice();
+        break;
+      case 6:
+        v.color = r.readUint(0xffffffff);
+        break;
+      case 7:
+        v.bg = r.readUint(0xffffffff);
+        break;
+      default:
+        r.skip();
+    }
+  }
+  return $.done(r, v);
+}
+
+/** fr.display.refresh arguments (command 10, reliable). E-paper: refresh now in `mode` (auto: partial, or full when the glass is not known, or the `clean` mode when the ghost budget is spent; an explicit partial runs past the budget; fast and full redraw the whole screen even with nothing new). RESULT: the mode that will run and whether the frame differs from the glass; `refreshed` follows (none when nothing changed and the mode is auto or partial). One refresh may wait while another runs; it takes the strongest mode asked. UNSUPPORTED where trait epaper is false. */
+export interface DisplayRefreshArgs {
+  mode: DisplayRefreshMode | number;
+}
+
+/** Absent fields take their defaults; throws RangeError on a value the field type cannot carry. */
+export function encodeDisplayRefreshArgs(v: Partial<DisplayRefreshArgs> = {}): Uint8Array {
+  const w = new Writer();
+  const f1 = $.enumValue(DisplayRefreshMode, v.mode ?? 'auto', 'mode', 255);
+  if (f1 !== 0) w.fieldUint(1, f1);
+  return w.finish();
+}
+
+export function decodeDisplayRefreshArgs(bytes: Uint8Array): Decoded<DisplayRefreshArgs> {
+  const r = new Reader(bytes);
+  const v: DisplayRefreshArgs = { mode: 'auto' };
+  while (r.next()) {
+    switch (r.field) {
+      case 1:
+        v.mode = $.readEnum(r, DisplayRefreshModeNames, 255);
+        break;
+      default:
+        r.skip();
+    }
+  }
+  return $.done(r, v);
+}
+
+/** fr.display.refresh RESULT fields. */
+export interface DisplayRefreshResult {
+  mode: DisplayRefreshMode | number;
+  changed: boolean;
+}
+
+/** Absent fields take their defaults; throws RangeError on a value the field type cannot carry. */
+export function encodeDisplayRefreshResult(v: Partial<DisplayRefreshResult> = {}): Uint8Array {
+  const w = new Writer();
+  const f1 = $.enumValue(DisplayRefreshMode, v.mode ?? 'auto', 'mode', 255);
+  if (f1 !== 0) w.fieldUint(1, f1);
+  const f2 = $.bool(v.changed ?? false, 'changed');
+  if (f2) w.fieldBool(2, f2);
+  return w.finish();
+}
+
+export function decodeDisplayRefreshResult(bytes: Uint8Array): Decoded<DisplayRefreshResult> {
+  const r = new Reader(bytes);
+  const v: DisplayRefreshResult = { mode: 'auto', changed: false };
+  while (r.next()) {
+    switch (r.field) {
+      case 1:
+        v.mode = $.readEnum(r, DisplayRefreshModeNames, 255);
+        break;
+      case 2:
+        v.changed = r.readBool();
+        break;
+      default:
+        r.skip();
+    }
+  }
+  return $.done(r, v);
+}
+
+/** fr.display.hold arguments (command 11, reliable). E-paper: no automatic refresh for `ms` or until `refresh`; 0 releases. A client drawing many pieces holds, draws, then refreshes once; if it stops half-way the hold runs out. UNSUPPORTED where trait epaper is false. */
+export interface DisplayHoldArgs {
+  /** (ms; 0..10000) */
+  ms: number;
+}
+
+/** Absent fields take their defaults; throws RangeError on a value the field type cannot carry. */
+export function encodeDisplayHoldArgs(v: Partial<DisplayHoldArgs> = {}): Uint8Array {
+  const w = new Writer();
+  const f1 = $.int(v.ms ?? 0, 0, 65535, 'ms');
+  if (f1 !== 0) w.fieldUint(1, f1);
+  return w.finish();
+}
+
+export function decodeDisplayHoldArgs(bytes: Uint8Array): Decoded<DisplayHoldArgs> {
+  const r = new Reader(bytes);
+  const v: DisplayHoldArgs = { ms: 0 };
+  while (r.next()) {
+    switch (r.field) {
+      case 1:
+        v.ms = r.readUint(65535);
+        break;
+      default:
+        r.skip();
+    }
+  }
+  return $.done(r, v);
+}
+
 /** fr.display.ui event (id 1, normal). A widget was touched (or an injected touch hit it); `value` is the slider's or switch's new value. */
 export interface DisplayUi {
   /** (<= 16 UTF-8 bytes) */
@@ -733,6 +918,87 @@ export function decodeDisplayUi(bytes: Uint8Array): Decoded<DisplayUi> {
   return $.done(r, v);
 }
 
+/** fr.display.refreshed event (id 2, normal). An e-paper refresh ended. x, y, w, h: the area that changed (the whole screen for fast and full); ok false when the panel did not finish in time (the next refresh is full); crc: what the glass shows now (shown_crc). */
+export interface DisplayRefreshed {
+  mode: DisplayRefreshMode | number;
+  ok: boolean;
+  /** (ms) */
+  ms: number;
+  partials: number;
+  /** (px) */
+  x: number;
+  /** (px) */
+  y: number;
+  /** (px) */
+  w: number;
+  /** (px) */
+  h: number;
+  crc: number;
+}
+
+/** Absent fields take their defaults; throws RangeError on a value the field type cannot carry. */
+export function encodeDisplayRefreshed(v: Partial<DisplayRefreshed> = {}): Uint8Array {
+  const w = new Writer();
+  const f1 = $.enumValue(DisplayRefreshMode, v.mode ?? 'auto', 'mode', 255);
+  if (f1 !== 0) w.fieldUint(1, f1);
+  const f2 = $.bool(v.ok ?? false, 'ok');
+  if (f2) w.fieldBool(2, f2);
+  const f3 = $.int(v.ms ?? 0, 0, 65535, 'ms');
+  if (f3 !== 0) w.fieldUint(3, f3);
+  const f4 = $.int(v.partials ?? 0, 0, 255, 'partials');
+  if (f4 !== 0) w.fieldUint(4, f4);
+  const f5 = $.int(v.x ?? 0, 0, 65535, 'x');
+  if (f5 !== 0) w.fieldUint(5, f5);
+  const f6 = $.int(v.y ?? 0, 0, 65535, 'y');
+  if (f6 !== 0) w.fieldUint(6, f6);
+  const f7 = $.int(v.w ?? 0, 0, 65535, 'w');
+  if (f7 !== 0) w.fieldUint(7, f7);
+  const f8 = $.int(v.h ?? 0, 0, 65535, 'h');
+  if (f8 !== 0) w.fieldUint(8, f8);
+  const f9 = $.int(v.crc ?? 0, 0, 0xffffffff, 'crc');
+  if (f9 !== 0) w.fieldUint(9, f9);
+  return w.finish();
+}
+
+export function decodeDisplayRefreshed(bytes: Uint8Array): Decoded<DisplayRefreshed> {
+  const r = new Reader(bytes);
+  const v: DisplayRefreshed = { mode: 'auto', ok: false, ms: 0, partials: 0, x: 0, y: 0, w: 0, h: 0, crc: 0 };
+  while (r.next()) {
+    switch (r.field) {
+      case 1:
+        v.mode = $.readEnum(r, DisplayRefreshModeNames, 255);
+        break;
+      case 2:
+        v.ok = r.readBool();
+        break;
+      case 3:
+        v.ms = r.readUint(65535);
+        break;
+      case 4:
+        v.partials = r.readUint(255);
+        break;
+      case 5:
+        v.x = r.readUint(65535);
+        break;
+      case 6:
+        v.y = r.readUint(65535);
+        break;
+      case 7:
+        v.w = r.readUint(65535);
+        break;
+      case 8:
+        v.h = r.readUint(65535);
+        break;
+      case 9:
+        v.crc = r.readUint(0xffffffff);
+        break;
+      default:
+        r.skip();
+    }
+  }
+  return $.done(r, v);
+}
+
 /** fr.display.brightness STATE body (property 1; the value is field 1). */
 export interface DisplayBrightnessState {
   /** the backlight level (255 on panels without backlight control) */
@@ -762,13 +1028,100 @@ export function decodeDisplayBrightnessState(bytes: Uint8Array): Decoded<Display
   return $.done(r, v);
 }
 
+/** fr.display.partials STATE body (property 2; the value is field 1). */
+export interface DisplayPartialsState {
+  /** partial refreshes since the last fast or full one */
+  partials: number;
+}
+
+/** Absent fields take their defaults; throws RangeError on a value the field type cannot carry. */
+export function encodeDisplayPartialsState(v: Partial<DisplayPartialsState> = {}): Uint8Array {
+  const w = new Writer();
+  const f1 = $.int(v.partials ?? 0, 0, 255, 'partials');
+  if (f1 !== 0) w.fieldUint(1, f1);
+  return w.finish();
+}
+
+export function decodeDisplayPartialsState(bytes: Uint8Array): Decoded<DisplayPartialsState> {
+  const r = new Reader(bytes);
+  const v: DisplayPartialsState = { partials: 0 };
+  while (r.next()) {
+    switch (r.field) {
+      case 1:
+        v.partials = r.readUint(255);
+        break;
+      default:
+        r.skip();
+    }
+  }
+  return $.done(r, v);
+}
+
+/** fr.display.shown_crc STATE body (property 3; the value is field 1). */
+export interface DisplayShownCrcState {
+  /** CRC-32 of what the glass shows, in the snapshot layout; 0: not known since boot */
+  shown_crc: number;
+}
+
+/** Absent fields take their defaults; throws RangeError on a value the field type cannot carry. */
+export function encodeDisplayShownCrcState(v: Partial<DisplayShownCrcState> = {}): Uint8Array {
+  const w = new Writer();
+  const f1 = $.int(v.shown_crc ?? 0, 0, 0xffffffff, 'shown_crc');
+  if (f1 !== 0) w.fieldUint(1, f1);
+  return w.finish();
+}
+
+export function decodeDisplayShownCrcState(bytes: Uint8Array): Decoded<DisplayShownCrcState> {
+  const r = new Reader(bytes);
+  const v: DisplayShownCrcState = { shown_crc: 0 };
+  while (r.next()) {
+    switch (r.field) {
+      case 1:
+        v.shown_crc = r.readUint(0xffffffff);
+        break;
+      default:
+        r.skip();
+    }
+  }
+  return $.done(r, v);
+}
+
+/** fr.display.refresh_ms STATE body (property 4; the value is field 1). */
+export interface DisplayRefreshMsState {
+  /** how long the last refresh took (ms) */
+  refresh_ms: number;
+}
+
+/** Absent fields take their defaults; throws RangeError on a value the field type cannot carry. */
+export function encodeDisplayRefreshMsState(v: Partial<DisplayRefreshMsState> = {}): Uint8Array {
+  const w = new Writer();
+  const f1 = $.int(v.refresh_ms ?? 0, 0, 65535, 'refresh_ms');
+  if (f1 !== 0) w.fieldUint(1, f1);
+  return w.finish();
+}
+
+export function decodeDisplayRefreshMsState(bytes: Uint8Array): Decoded<DisplayRefreshMsState> {
+  const r = new Reader(bytes);
+  const v: DisplayRefreshMsState = { refresh_ms: 0 };
+  while (r.next()) {
+    switch (r.field) {
+      case 1:
+        v.refresh_ms = r.readUint(65535);
+        break;
+      default:
+        r.skip();
+    }
+  }
+  return $.done(r, v);
+}
+
 /** fr.display: A pixel panel with drawing primitives everywhere and LVGL layouts where the panel's driver says so (trait ui). */
 export const DISPLAY_CAP: $.CapInfo = {
   id: 0x0003,
   name: 'fr.display',
-  version: { major: 1, minor: 2 },
+  version: { major: 1, minor: 3 },
   section: 'standard',
-  traits: { fields: [{ name: 'width' }, { name: 'height' }, { name: 'color', members: DisplayColorFormat }, { name: 'ui' }, { name: 'touch' }, { name: 'round' }], maxSize: 17, encode: encodeDisplayTraits, decode: decodeDisplayTraits },
+  traits: { fields: [{ name: 'width' }, { name: 'height' }, { name: 'color', members: DisplayColorFormat }, { name: 'ui' }, { name: 'touch' }, { name: 'round' }, { name: 'epaper' }], maxSize: 19, encode: encodeDisplayTraits, decode: decodeDisplayTraits },
   commands: [
     { id: 1, name: 'clear', delivery: 'reliable', idempotent: true, visibility: 'public', args: { fields: [{ name: 'color' }], maxSize: 6, encode: encodeDisplayClearArgs, decode: decodeDisplayClearArgs }, result: null },
     { id: 2, name: 'text', delivery: 'reliable', idempotent: false, visibility: 'public', args: { fields: [{ name: 'x' }, { name: 'y' }, { name: 'text' }, { name: 'color' }, { name: 'bg' }, { name: 'size', range: [1, 4] }], maxSize: 89, encode: encodeDisplayTextArgs, decode: decodeDisplayTextArgs }, result: null },
@@ -778,11 +1131,18 @@ export const DISPLAY_CAP: $.CapInfo = {
     { id: 6, name: 'ui_set', delivery: 'reliable', idempotent: false, visibility: 'public', args: { fields: [{ name: 'id' }, { name: 'text' }, { name: 'value' }, { name: 'color' }, { name: 'visible' }, { name: 'fields', range: [0, 15] }], maxSize: 101, encode: encodeDisplayUiSetArgs, decode: decodeDisplayUiSetArgs }, result: null },
     { id: 7, name: 'snapshot', delivery: 'reliable', idempotent: false, visibility: 'test', bulk: true, args: $.EMPTY_CODEC, result: { fields: [{ name: 'crc' }, { name: 'width' }, { name: 'height' }, { name: 'format', members: DisplayColorFormat }, { name: 'bytes' }], maxSize: 23, encode: encodeDisplaySnapshotResult, decode: decodeDisplaySnapshotResult } },
     { id: 8, name: 'snapshot_read', delivery: 'reliable', idempotent: false, visibility: 'test', bulk: true, args: { fields: [{ name: 'offset' }, { name: 'len', range: [1, 1024] }], maxSize: 10, encode: encodeDisplaySnapshotReadArgs, decode: decodeDisplaySnapshotReadArgs }, result: { fields: [{ name: 'data', json: 'bytes' }], maxSize: 1027, encode: encodeDisplaySnapshotReadResult, decode: decodeDisplaySnapshotReadResult } },
+    { id: 9, name: 'bitmap', delivery: 'reliable', idempotent: false, visibility: 'public', bulk: true, args: { fields: [{ name: 'x' }, { name: 'y' }, { name: 'w' }, { name: 'h' }, { name: 'data', json: 'bytes' }, { name: 'color' }, { name: 'bg' }], maxSize: 1231, encode: encodeDisplayBitmapArgs, decode: decodeDisplayBitmapArgs }, result: null },
+    { id: 10, name: 'refresh', delivery: 'reliable', idempotent: false, visibility: 'public', args: { fields: [{ name: 'mode', members: DisplayRefreshMode }], maxSize: 3, encode: encodeDisplayRefreshArgs, decode: decodeDisplayRefreshArgs }, result: { fields: [{ name: 'mode', members: DisplayRefreshMode }, { name: 'changed' }], maxSize: 5, encode: encodeDisplayRefreshResult, decode: decodeDisplayRefreshResult } },
+    { id: 11, name: 'hold', delivery: 'reliable', idempotent: true, visibility: 'public', args: { fields: [{ name: 'ms', range: [0, 10000] }], maxSize: 4, encode: encodeDisplayHoldArgs, decode: decodeDisplayHoldArgs }, result: null },
   ],
   events: [
     { id: 1, name: 'ui', priority: 'normal', requires: { trait: 'ui' }, codec: { fields: [{ name: 'id' }, { name: 'kind', members: DisplayUiEventKind }, { name: 'value' }], maxSize: 27, encode: encodeDisplayUi, decode: decodeDisplayUi } },
+    { id: 2, name: 'refreshed', priority: 'normal', requires: { trait: 'epaper' }, codec: { fields: [{ name: 'mode', members: DisplayRefreshMode }, { name: 'ok' }, { name: 'ms' }, { name: 'partials' }, { name: 'x' }, { name: 'y' }, { name: 'w' }, { name: 'h' }, { name: 'crc' }], maxSize: 34, encode: encodeDisplayRefreshed, decode: decodeDisplayRefreshed } },
   ],
   properties: [
     { id: 1, name: 'brightness', codec: { fields: [{ name: 'brightness' }], maxSize: 3, encode: encodeDisplayBrightnessState, decode: decodeDisplayBrightnessState } },
+    { id: 2, name: 'partials', requires: { trait: 'epaper' }, codec: { fields: [{ name: 'partials' }], maxSize: 3, encode: encodeDisplayPartialsState, decode: decodeDisplayPartialsState } },
+    { id: 3, name: 'shown_crc', requires: { trait: 'epaper' }, codec: { fields: [{ name: 'shown_crc' }], maxSize: 6, encode: encodeDisplayShownCrcState, decode: decodeDisplayShownCrcState } },
+    { id: 4, name: 'refresh_ms', requires: { trait: 'epaper' }, codec: { fields: [{ name: 'refresh_ms' }], maxSize: 4, encode: encodeDisplayRefreshMsState, decode: decodeDisplayRefreshMsState } },
   ],
 };

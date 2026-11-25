@@ -1,0 +1,32 @@
+profile: c6e-paper
+board: esp32c6-supermini
+app: node
+net: { link_profile: default }
+# Design epaper-e1 D7: a Waveshare 4.2inch e-Paper Module V2 (Rev2.2; 400 x 300, black and white, an SSD1683; its BS
+# resistor at 0: 4-line SPI) on an ESP32-C6 Super Mini (hardware/wiring/epaper-c6): CLK GPIO19, DIN GPIO18 and CS
+# GPIO14 on the right row, DC GPIO3, RST GPIO2 and BUSY GPIO1 on the left, VCC from 3V3. No strapping pin; GPIO20 stays
+# the board's T-LAT test pin. The frames (15,000 B each, a third in debug builds) are static. The config is the
+# bench's (design §10, 2026-11-24, the owner's choices): on this glass traces stayed very faint up to 60 partials and a
+# fast clean (1.7 s) cleared them, so full_every 60 with clean fast; keeping the high voltage on after a partial makes
+# it 0.362 s against 0.403 s, so burst_ms 1000; boot_clear false (the glass keeps its picture across a reboot).
+caps:
+  boot:   { cap: fr.button,  driver: button_gpio, bind: buttons.boot }
+  status: { cap: fr.led,     driver: led_ws2812,  bind: leds.rgb, config: { max_brightness: 32 } }
+  paper:  { cap: fr.display, driver: ssd1683_spi,
+            bind: { sclk: gpio.19, mosi: gpio.18, cs: gpio.14, dc: gpio.3, rst: gpio.2, busy: gpio.1 },
+            config: { full_every: 60, clean: fast, burst_ms: 1000, boot_clear: false } }
+  # Design face-f1 D9, D16: a DS3231 module (ZS-042) on SDA GPIO6, SCL GPIO7 and its SQW/INT on GPIO5, a wake pin of the
+  # C6's deep sleep (LP IO 0-7), for power save. GPIO4 and 5 are strapping pins only with non-default eFuses (the board
+  # manifest); both idle high (pulled up), as they would anyway.
+  rtc:    { cap: fr.rtc,     driver: ds3231_i2c,  bind: { sda: gpio.6, scl: gpio.7, sqw: gpio.5 } }
+  # Design face-f1 D18, D19: three buttons in a row, each to GND, as the owner wired them (2026-11-25): left on GPIO22,
+  # the middle (the centre key) on GPIO21, right on GPIO4; and a passive buzzer (S to GPIO23, - to GND) for the face's
+  # clicks and chimes. Not GPIO12 and 13: those are the USB data lines. Of the three only GPIO4 is a deep-sleep wake
+  # pin: in power save the right key wakes the node, then all three work (the centre held 5 s leaves).
+  key:    { cap: fr.button,  driver: button_pin,  bind: gpio.21 }
+  left:   { cap: fr.button,  driver: button_pin,  bind: gpio.22 }
+  right:  { cap: fr.button,  driver: button_pin,  bind: gpio.4 }
+  buzzer: { cap: fr.buzzer,  driver: ledc_buzzer, bind: gpio.23 }
+  # The Fractonica clock face on the panel (design face-f1): the wave and four corners, moving every Preon by default.
+  face:   { cap: fr.face,    driver: fractonica_face,
+            config: { display: paper, button: key, rtc: rtc, left: left, right: right, buzzer: buzzer } }

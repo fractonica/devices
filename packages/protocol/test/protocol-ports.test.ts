@@ -6,11 +6,12 @@ import { describe, expect, it } from 'vitest';
 import { z } from 'zod';
 
 import { findOp, OPS, PORT_STATES, PortInfoSchema, PortPolicyResultSchema, REGISTRY_HASH } from '../src/index.ts';
+import { beforeRtc } from './before-rtc.ts';
 
 const hashOf = (ops: readonly { name: string; input: z.ZodType }[]) =>
   createHash('sha256').update(JSON.stringify(ops.map((o) => [o.name, z.toJSONSchema(o.name === 'hub_doctor' && !ops.some((x) => x.name === 'hub_doctor_fix') ? z.object({}) : o.name === 'device_provision' && !ops.some((x) => x.name === 'device_enroll') ? (o.input as z.ZodObject).omit({ for_hub: true }) : o.input) /* hub_doctor had no input before the dashboard's health; device_provision no for_hub before device_enroll (protocol-for-hub.test.ts) */]))).digest('hex').slice(0, 12);
 /** The registry before the time ops (protocol-time.test.ts) came after the port ops. */
-const beforeTime = OPS.filter((o) => !o.name.startsWith('time_') && o.name !== 'hub_doctor_fix' && o.name !== 'device_enroll' && !/^device_(hubs_set|hubs_get|share)$|^network_join$|^network_admit$|^hub_(name_set|peers)$|^haptic_tap$/.test(o.name));
+const beforeTime = beforeRtc(OPS).filter((o) => !o.name.startsWith('time_') && o.name !== 'hub_doctor_fix' && o.name !== 'device_enroll' && !/^device_(hubs_set|hubs_get|share)$|^network_join$|^network_admit$|^hub_(name_set|peers)$|^haptic_tap$|^display_(image|html|text|refresh)$/.test(o.name));
 
 describe('port policy ops', () => {
   it('adds three ops on `fr ports lend|ignore|claim <port>` and moves REGISTRY_HASH', () => {

@@ -11,8 +11,8 @@
 # src/nvs_settings.cpp is hal::Settings in NVS (fr/platform/nvs_settings.hpp), its writes on fr_worker.
 # src/services/battery_service.cpp and haptic_service.cpp (design power-p1 D2-D7) are fr.battery over hal::PowerCell
 # and hal::Settings, and fr.haptic over hal::HapticOutput drawing from an fr.battery; both IDF-free.
-# src/services/storage_service.cpp and clock_service.cpp (design lcd-clock-c1 D5-D8) are fr.storage over hal::FileStore
-# and fr.clock over hal::Rtc; both IDF-free. src/services/stepper_service.cpp (design stepper-s1 D10-D12) is fr.stepper
+# src/services/storage_service.cpp and rtc_service.cpp (design lcd-clock-c1 D5-D8) are fr.storage over hal::FileStore
+# and fr.rtc over hal::Rtc; both IDF-free. src/services/stepper_service.cpp (design stepper-s1 D10-D12) is fr.stepper
 # over hal::Stepper and hal::Settings, IDF-free; its motion core is header-only (fr/motion), the step ISR the driver's.
 # src/services/buzzer_service.cpp (design buzzer-b1 D5, D6) is fr.buzzer over hal::ToneOutput, IDF-free.
 idf_component_register(SRCS "src/adc1.cpp"
@@ -23,9 +23,12 @@ idf_component_register(SRCS "src/adc1.cpp"
                             "src/audio_rt_esp.cpp"
                             "src/core.cpp"
                             "src/display/crc32.cpp"
+                            "src/display/epaper_backend.cpp"
                             "src/display/font5x7.cpp"
                             "src/display/mono_backend.cpp"
+                            "src/display/mono_canvas.cpp"
                             "src/esp_core.cpp"
+                            "src/esp_power.cpp"
                             "src/esp_worker.cpp"
                             "src/gpio_isr.cpp"
                             "src/i2c_bus.cpp"
@@ -38,11 +41,12 @@ idf_component_register(SRCS "src/adc1.cpp"
                             "src/services/button_service.cpp"
                             "src/services/buzzer_service.cpp"
                             "src/services/camera_service.cpp"
-                            "src/services/clock_service.cpp"
+                            "src/services/rtc_service.cpp"
                             "src/services/csi_record.cpp"
                             "src/services/csi_service.cpp"
                             "src/services/descriptor.cpp"
                             "src/services/display_service.cpp"
+                            "src/services/face_service.cpp"
                             "src/services/fixture_service.cpp"
                             "src/services/haptic_service.cpp"
                             "src/services/led_service.cpp"
@@ -56,6 +60,7 @@ idf_component_register(SRCS "src/adc1.cpp"
                             "src/spi_bus.cpp"
                             "src/stream/stream.cpp"
                             "src/test_pin.cpp"
+                            "src/time/wall_clock.cpp"
                        INCLUDE_DIRS "include"
                        # Public: the generated capability classes (and fr_caps' FR_TEST_HOOKS definition,
                        # which changes their vtables) reach every component that includes fr_core.

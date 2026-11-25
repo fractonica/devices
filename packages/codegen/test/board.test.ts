@@ -435,7 +435,7 @@ describe('validation', () => {
       y.caps.status.bind = 'leds.status';
     });
     expect(messages(dir)).toEqual([
-      "unknown driver 'button_touch' (known: adc_audio, adc_oneshot, button_gpio, cst816_i2c, drv8833_stepper, ds3231_i2c, dvp_camera, espnow_tx, fixture_gpio, fixture_ws2812_rx, gc9a01_spi, haptic_ledc, haptic_sdm, hx711_gpio, i2s_amp, i2s_mic, led_gpio, led_ws2812, ledc_buzzer, sdmmc_card, sdspi_card, ssd1306_i2c, st7789_spi, tp4056, tp5000, wifi_csi)",
+      "unknown driver 'button_touch' (known: adc_audio, adc_oneshot, button_gpio, button_pin, cst816_i2c, drv8833_stepper, ds3231_i2c, dvp_camera, espnow_tx, fixture_gpio, fixture_ws2812_rx, fractonica_face, gc9a01_spi, haptic_ledc, haptic_sdm, hx711_gpio, i2s_amp, i2s_mic, led_gpio, led_ws2812, ledc_buzzer, sdmmc_card, sdspi_card, ssd1306_i2c, ssd1683_spi, st7789_spi, tp4056, tp5000, wifi_csi)",
       "driver led_ws2812 does not accept leds.status of kind 'gpio' (accepts: ws2812)",
     ]);
   });
@@ -463,7 +463,7 @@ describe('validation', () => {
     expect(messages(dir)).toEqual([
       "instance name 'node' is reserved (spec 03 §3.6)",
       "instance name 'Status' must be snake_case, at most 31 characters",
-      'fr.ota has no service in this framework yet (services: fr.button, fr.led, fr.fixture, fr.analog_in, fr.display, fr.touch, fr.audio_in, fr.audio_out, fr.csi, fr.radio_tx, fr.camera, fr.scale, fr.battery, fr.haptic, fr.storage, fr.clock, fr.stepper, fr.buzzer)',
+      'fr.ota has no service in this framework yet (services: fr.button, fr.led, fr.fixture, fr.analog_in, fr.display, fr.touch, fr.audio_in, fr.audio_out, fr.csi, fr.radio_tx, fr.camera, fr.scale, fr.battery, fr.haptic, fr.storage, fr.rtc, fr.face, fr.stepper, fr.buzzer)',
       'board esp32c6-supermini has no entry leds.nope',
     ]);
   });
@@ -579,6 +579,7 @@ describe('driver manifests', () => {
       'adc_audio',
       'adc_oneshot',
       'button_gpio',
+      'button_pin',
       'cst816_i2c',
       'drv8833_stepper',
       'ds3231_i2c',
@@ -586,6 +587,7 @@ describe('driver manifests', () => {
       'espnow_tx',
       'fixture_gpio',
       'fixture_ws2812_rx',
+      'fractonica_face',
       'gc9a01_spi',
       'haptic_ledc',
       'haptic_sdm',
@@ -598,6 +600,7 @@ describe('driver manifests', () => {
       'sdmmc_card',
       'sdspi_card',
       'ssd1306_i2c',
+      'ssd1683_spi',
       'st7789_spi',
       'tp4056',
       'tp5000',
@@ -1398,7 +1401,7 @@ describe('displays, touch and the Touch-LCD-2 (design m2-c5-display D9)', () => 
     expect(sdk).toContain('CONFIG_FR_CORE_TASK_STACK=16384\n');
     const hpp = file(r, 'fr_board/include/fr/board.hpp');
     expect(hpp).toContain('#include "fr/services/display_service.hpp"\n#include "fr/services/radio_tx_service.hpp"\n#include "fr/services/touch_service.hpp"');
-    expect(hpp).toContain('inline constexpr size_t kPanelCount = 1;\ninline constexpr Panel kPanels[] = {\n    {2, "lcd", 240, 320, 0, true, true, 3},\n};');
+    expect(hpp).toContain('inline constexpr size_t kPanelCount = 1;\ninline constexpr Panel kPanels[] = {\n    {2, "lcd", 240, 320, 0, true, true, 3, false},\n};');
     expect(hpp).toContain('inline constexpr Battery kBattery{5, 3000, 3400};');
     const cpp = file(r, 'fr_board/fr_board.cpp');
     expect(cpp).toContain('    c.kind = fr::drv::St7789Spi::Kind::st7789t3;\n');
@@ -1421,7 +1424,7 @@ describe('displays, touch and the Touch-LCD-2 (design m2-c5-display D9)', () => 
     expect(s3l.instances.lcd.pins).toEqual([10, 13, 12, 11, 9, 14]);
     expect(s3l.instances.lcd.driverConfig).toMatchObject({ kind: 'st7789', column_offset: 35, row_offset: 0, idle_high: 0 });
     expect(file(s3l, 'sdkconfig.board')).toContain('CONFIG_SPIRAM_MODE_OCT=y');
-    expect(file(s3l, 'fr_board/include/fr/board.hpp')).toContain('    {3, "lcd", 170, 320, 0, true, true, 0},');
+    expect(file(s3l, 'fr_board/include/fr/board.hpp')).toContain('    {3, "lcd", 170, 320, 0, true, true, 0, false},');
     expect(file(s3l, 'fr_board/fr_board.cpp')).not.toContain('bind_touch');
     const c3 = committed('c3o-pad');
     expect(c3.manifest.caps[2]).toMatchObject({ name: 'oled', port: 3, traits: { width: 72, height: 40, color: 'mono1', ui: false, touch: false } });
@@ -1429,7 +1432,7 @@ describe('displays, touch and the Touch-LCD-2 (design m2-c5-display D9)', () => 
     expect(file(c3, 'sdkconfig.board')).not.toContain('SPIRAM');
     expect(file(c3, 'sdkconfig.board')).toContain('CONFIG_FR_CORE_TASK_STACK=16384\n');
     expect(file(committed('c6-pad'), 'sdkconfig.board')).not.toContain('CORE_TASK_STACK');
-    expect(file(c3, 'fr_board/include/fr/board.hpp')).toContain('    {3, "oled", 72, 40, 0, false, false, 0},');
+    expect(file(c3, 'fr_board/include/fr/board.hpp')).toContain('    {3, "oled", 72, 40, 0, false, false, 0, false},');
     // ui: false is fr_core's 1-bit MonoBackend: no fr_ui (design m2-c5-display D3).
     const c3cpp = file(c3, 'fr_board/fr_board.cpp');
     expect(c3cpp).toContain('fr::drv::Ssd1306I2c driver{kDriverConfig};\nfr::display::MonoBackend backend;\nfr::DisplayService service{driver, backend, kConfig};');
@@ -1482,7 +1485,7 @@ describe('displays, touch and the Touch-LCD-2 (design m2-c5-display D9)', () => 
     });
     const r = gen(dir, 's3l-pad', false);
     expect(lcd(r)).toMatchObject({ config: { rotation: 'r180' }, traits: { width: 170, height: 320 } });
-    expect(file(r, 'fr_board/include/fr/board.hpp')).toContain('    {3, "lcd", 170, 320, 2, true, true, 0},');
+    expect(file(r, 'fr_board/include/fr/board.hpp')).toContain('    {3, "lcd", 170, 320, 2, true, true, 0, false},');
     edit(dir, S3L_BOARD, (y) => {
       y.displays.lcd.rotation = 45;
     });
@@ -1508,7 +1511,7 @@ describe('displays, touch and the Touch-LCD-2 (design m2-c5-display D9)', () => 
     const r = gen(dir, S3T, false);
     expect(r.manifest.caps.map((c) => [c.name, c.traits])).toEqual([
       ['boot', { long_press: true, multi_press_max: 2 }],
-      ['lcd', { width: 240, height: 320, color: 'rgb565', ui: true, touch: false, round: false }],
+      ['lcd', { width: 240, height: 320, color: 'rgb565', ui: true, touch: false, round: false, epaper: false }],
       ['touch', { width: 0, height: 0, display: 0 }],
       ['tx', {}],
     ]);
@@ -2351,7 +2354,7 @@ describe('LCD-1 and CLOCK-1: the C6-LCD-1.47, its shared SPI2 and a DS3231 (desi
       ['status', 2, 'fr.led', 'led_ws2812'],
       ['screen', 3, 'fr.display', 'st7789_spi'],
       ['card', 4, 'fr.storage', 'sdspi_card'],
-      ['clock', 5, 'fr.clock', 'ds3231_i2c'],
+      ['clock', 5, 'fr.rtc', 'ds3231_i2c'],
     ]);
     // The panel brings the bus up with the card's MISO; both claim SCLK/MOSI/MISO as shared bus lines.
     expect(r.instances.screen.driverConfig).toMatchObject({ sclk: 7, mosi: 6, miso: 5, cs: 14, dc: 15, rst: 21, backlight: 22, width: 172, height: 320, column_offset: 34 });
@@ -2359,7 +2362,7 @@ describe('LCD-1 and CLOCK-1: the C6-LCD-1.47, its shared SPI2 and a DS3231 (desi
     // on the same bus, so the hold is allowed though 'card' claims it.
     expect(r.instances.screen.driverConfig.idle_high).toBe(2 ** 4);
     expect(r.instances.card.driverConfig).toEqual({ cs: 4, sclk: 7, mosi: 6, miso: 5, speed_khz: 20000 });
-    expect(r.instances.clock.driverConfig).toEqual({ sda: 18, scl: 19, khz: 100 });
+    expect(r.instances.clock.driverConfig).toEqual({ sda: 18, scl: 19, khz: 100, sqw: -1 });
     expect(r.manifest.caps[2]).toMatchObject({ config: { max_brightness: 128 }, traits: { width: 172, height: 320 } });
     expect(r.manifest.caps[3]).toMatchObject({ traits: { removable: true, card_detect: false } });
     expect(r.manifest.caps[4]).toMatchObject({ traits: { has_temperature: true, resolution_ms: 1000 } });

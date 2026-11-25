@@ -1,5 +1,5 @@
 // Human rendering of the LCD-1 / CLOCK-1 ops (design lcd-clock-c1 D9): `fr storage info|ls|rm|mkdir`, the storage jobs
-// (`fr storage get|put|bench`) as one summary line after the job's head, `fr clock read|sync|set|aging`, and `fr clock
+// (`fr storage get|put|bench`) as one summary line after the job's head, `fr rtc read|sync|set|aging`, and `fr rtc
 // drift` (a clock job). render.ts dispatches here.
 
 type Row = Record<string, unknown>;
@@ -79,7 +79,7 @@ const signedMs = (v: unknown) => (isNum(v) ? `${v > 0 ? '+' : ''}${v} ms` : '-')
 export function renderClockRead(r: Row): string {
   const parts = [
     `${who(r)}: ${String(r.iso)}`,
-    r.valid === true ? 'valid' : r.osf === true ? 'NOT valid (it lost power: run fr clock sync)' : 'NOT valid (never set: run fr clock sync)',
+    r.valid === true ? 'valid' : r.osf === true ? 'NOT valid (it lost power: run fr rtc sync)' : 'NOT valid (never set: run fr rtc sync)',
     isNum(r.error_ms) ? `${signedMs(r.error_ms)} against the Mac${isNum(r.uncertainty_ms) ? ` (±${r.uncertainty_ms} ms)` : ''}` : 'offset unknown (link clock not synced yet)',
     isNum(r.temp_c) ? `${r.temp_c.toFixed(2)} °C` : null,
     isNum(r.aging) && r.aging !== 0 ? `aging ${r.aging}` : null,
@@ -106,7 +106,7 @@ export function renderClockDrift(r: Row): string {
   return [
     `${who(r)}: ${Math.abs(r.ppm).toFixed(2)} ppm ${fast} (${isNum(r.s_per_day) ? Math.abs(r.s_per_day).toFixed(3) : '-'} s a day)`,
     `${String(r.samples)} samples over ${String(r.span_s)} s, residual ${isNum(r.residual_ms) ? r.residual_ms : '-'} ms`,
-    isNum(r.aging_suggest) && r.aging_suggest !== r.aging ? `fr clock aging ${String(r.alias ?? r.device)} ${r.aging_suggest} would cancel it` : null,
+    isNum(r.aging_suggest) && r.aging_suggest !== r.aging ? `fr rtc aging ${String(r.alias ?? r.device)} ${r.aging_suggest} would cancel it` : null,
     r.reason === 'stopped' ? 'stopped' : null,
   ]
     .filter(Boolean)
@@ -123,12 +123,12 @@ export function storageClockRenderer(op: string): ((r: Row) => string) | null {
       return renderStoragePath('removed');
     case 'storage_mkdir':
       return renderStoragePath('made');
-    case 'clock_read':
+    case 'rtc_read':
       return renderClockRead;
-    case 'clock_sync':
-    case 'clock_set':
+    case 'rtc_sync':
+    case 'rtc_set':
       return renderClockSet;
-    case 'clock_aging':
+    case 'rtc_aging':
       return renderClockAging;
     default:
       return null;

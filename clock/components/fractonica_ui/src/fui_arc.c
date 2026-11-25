@@ -191,9 +191,14 @@ static void pen_plot(mono_pen_t *pen, int x, int y)
     if (pen->have < 2) {
         pen->have++;
     }
-    if ((!pen->dotted || pen->count % 3u == 0) &&
-        x >= c->clip.x0 && x < c->clip.x1 && y >= c->clip.y0 && y < c->clip.y1) {
-        fui_px_set(pen->c, x, y, pen->color);
+    if (!pen->dotted || pen->count % (unsigned)(c->dash_on + c->dash_off) < c->dash_on) {
+        if (c->pen <= 1) {
+            if (x >= c->clip.x0 && x < c->clip.x1 && y >= c->clip.y0 && y < c->clip.y1) {
+                fui_px_set(pen->c, x, y, pen->color);
+            }
+        } else {
+            fui_i_stamp(pen->c, x, y, pen->color); /* the canvas's wider pen */
+        }
     }
     pen->count++;
 }
@@ -279,11 +284,12 @@ static void mono_piece(mono_pen_t *pen, const fui_arc_t *arc, uint32_t wedge, ui
     }
 }
 
-static void arc_mono(fui_canvas_t *c, const fui_arc_t *arc, fui_color_t color, int dotted, uint8_t *phase)
+static void arc_mono(fui_canvas_t *c, const fui_arc_t *given, fui_color_t color, int dotted, uint8_t *phase)
 {
     mono_pen_t pen;
+    fui_arc_t moved = *given, *arc = &moved;
     uint32_t a = arc->start;
-    int32_t left = arc->sweep, reach = arc->r + 2 * FUI_FX_ONE, total, done = 0;
+    int32_t left = arc->sweep, reach = arc->r + 2 * FUI_FX_ONE + (c->pen > 1 ? FUI_FX(c->pen) : 0), total, done = 0;
     int dir = 1;
     uint32_t to;
 
@@ -297,6 +303,9 @@ static void arc_mono(fui_canvas_t *c, const fui_arc_t *arc, fui_color_t color, i
     if (left == 0 || arc->r <= 0 || arc->r >= FUI_I_MAX_REACH) {
         return;
     }
+    /* an even pen's squares sit half a pixel right and down of the path */
+    moved.cx -= FUI_I_PEN_SHIFT(c);
+    moved.cy -= FUI_I_PEN_SHIFT(c);
     pen.c = c;
     pen.color = color;
     pen.dotted = dotted;
@@ -330,7 +339,7 @@ static void arc_mono(fui_canvas_t *c, const fui_arc_t *arc, fui_color_t color, i
         done += step;
     }
     if (phase) {
-        *phase = (uint8_t)(pen.count % 3u);
+        *phase = (uint8_t)(pen.count % (unsigned)(c->dash_on + c->dash_off));
     }
 }
 

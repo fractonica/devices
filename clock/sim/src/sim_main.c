@@ -1,7 +1,7 @@
 /*
  * sim_main.c - the host simulator: any face / screen / mode / instant to PNG.
  *
- *   fractonica-sim --face round240|rect240|rect240x320|mono
+ *   fractonica-sim --face round240|rect240|rect240x320|mono|mono400x300
  *                  --screen now|scales|lens|sun|stamp
  *                  --mode pure|earth
  *                  --t <unix seconds> | none        default: SPEC vector A
@@ -10,7 +10,10 @@
  *                  --page <n>                       then show page n of the card (from 1;
  *                                                   past the last: the last)
  *                  --utc-offset <seconds>           EARTH mode's fixed offset
- *                  --scale <n>                      default 2 (colour), 4 (one-bit)
+ *                  --step none|helion|theta|preon|kappa|flavon|<level>
+ *                                                   the face moves once a cycle of it
+ *                                                   (fui_ui_set_step; default none)
+ *                  --scale <n>                      default 2 (colour, 400 x 300), 4 (128 x 64)
  *                  --band <rows>                    render through a band canvas
  *                  --lines                          also print the text lines of the page
  *                  --out file.png
@@ -32,9 +35,11 @@
 static int usage(void)
 {
     fprintf(stderr,
-            "usage: fractonica-sim [--face round240|rect240|rect240x320|mono] [--screen now|scales|lens|sun|stamp]\n"
+            "usage: fractonica-sim [--face round240|rect240|rect240x320|mono|mono400x300]\n"
+            "                      [--screen now|scales|lens|sun|stamp]\n"
             "                      [--mode pure|earth] [--t <unix seconds>|none] [--focus 0..13]\n"
             "                      [--events \"N P S L W<ms>\"] [--page n] [--utc-offset <s>] [--scale n] [--band rows]\n"
+            "                      [--step none|helion|theta|preon|kappa|flavon]\n"
             "                      [--lines] --out file.png\n"
             "       fractonica-sim --info | --bench\n");
     return 2;
@@ -155,6 +160,11 @@ int main(int argc, char **argv)
             page = atoi(value);
         } else if (strcmp(arg, "--utc-offset") == 0) {
             config.utc_offset_s = atoi(value);
+        } else if (strcmp(arg, "--step") == 0) {
+            int step = sim_parse_step(value);
+
+            if (step < 0) return usage();
+            config.step = (uint8_t)step;
         } else if (strcmp(arg, "--scale") == 0) {
             scale = atoi(value);
         } else if (strcmp(arg, "--band") == 0) {
@@ -169,7 +179,7 @@ int main(int argc, char **argv)
         return usage();
     }
     if (scale <= 0) {
-        scale = fui_face_info(config.face)->mono ? 4 : 2;
+        scale = config.face == FUI_FACE_MONO128 ? 4 : 2;
     }
 
     fui_ui_init(&ui, &config);
@@ -203,6 +213,12 @@ int main(int argc, char **argv)
            ui.focus, ui.lens_level, ui.page + 1, fui_ui_pages(&ui),
            text[0] ? text : (t == FRC_TIME_NONE ? "time not set" : "out of catalogue"),
            (long long)f->sleep_us, (unsigned long long)sim_frame_hash(&frame));
+    if (ui.step != FUI_STEP_NONE && ui.t != FRC_TIME_NONE && ui.status == FUI_STATUS_OK &&
+        frc_date_at(&FRC_SAROS_141, ui.t, &date) == FRC_OK) {
+        /* what the face shows: the start of the step's running cycle */
+        frc_format_date(&date, FRC_DATE_LETTERS, FRC_UNIT_BLINK, text, sizeof text);
+        printf("  step %d: the face shows %s, next moves in %lld us\n", ui.step, text, (long long)f->sleep_us);
+    }
     if (lines) {
         fui_ui_lines(&ui, print_line, NULL);
     }

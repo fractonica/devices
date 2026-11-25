@@ -51,6 +51,12 @@ public:
     Status melody(const cap::BuzzerMelodyArgs &args) override;
     Status stop() override;
     Status set_volume(const cap::BuzzerSetVolumeArgs &args) override;
+    /**
+     * For a service on the node (design face-f1 D19: the face's clicks and chimes): tone and melody as above, but the
+     * node's own sound, so the hub's silence never ends it (done comes as for any sound).
+     */
+    Status tone_local(const cap::BuzzerToneArgs &args);
+    Status melody_local(const cap::BuzzerMelodyArgs &args);
 
     bool playing() const override { return playing_; }
     uint8_t volume() const override { return volume_; }
@@ -114,6 +120,7 @@ private:
     cap::BuzzerSound sound_ = cap::BuzzerSound::tone;
     uint8_t level_ = 50;
     bool hub_ = false;  // a hub session existed at the start: its silence ends the sound
+    bool local_ = false;  // the sound being started is a service's own (tone_local, melody_local)
     uint16_t hub_epoch_ = 0;
 
     // what the driver was last told (hz 0 and duty 0: silent)

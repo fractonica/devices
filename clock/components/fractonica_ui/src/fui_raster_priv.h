@@ -41,4 +41,32 @@ static inline unsigned fui_i_cover(int32_t d, int32_t hw)
 /** A one-pixel Bresenham line between two pixels, both ends inked, clipped. */
 void fui_i_line_px(fui_canvas_t *c, int x0, int y0, int x1, int y1, fui_color_t color);
 
+/**
+ * One pixel of a one-bit path, with the canvas's pen: a pen x pen square,
+ * from (x - (pen - 1) / 2, y - (pen - 1) / 2), clipped. An even pen's square
+ * sits half a pixel right of and below the path's pixel: the callers move
+ * the path's geometry half a pixel up and left for it (FUI_I_PEN_SHIFT).
+ */
+static inline void fui_i_stamp(fui_canvas_t *c, int x, int y, fui_color_t color)
+{
+    int w = c->pen, x0 = x - (w - 1) / 2, y0 = y - (w - 1) / 2, px, py;
+
+    for (py = y0; py < y0 + w; py++) {
+        if (py < c->clip.y0 || py >= c->clip.y1) {
+            continue;
+        }
+        for (px = x0; px < x0 + w; px++) {
+            if (px >= c->clip.x0 && px < c->clip.x1) {
+                fui_px_set(c, px, py, color);
+            }
+        }
+    }
+}
+
+/** A one-bit line between two pixels with the canvas's pen (fui_i_stamp). */
+void fui_i_line_pen(fui_canvas_t *c, int x0, int y0, int x1, int y1, fui_color_t color);
+
+/** Q8 pixels a path is moved up and left for an even pen (0 for an odd one). */
+#define FUI_I_PEN_SHIFT(c) (((c)->pen & 1u) ? 0 : 128)
+
 #endif /* FUI_RASTER_PRIV_H */

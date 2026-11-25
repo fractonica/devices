@@ -9,6 +9,7 @@
 #include "fr/base.hpp"
 #include "fr/core/core.hpp"
 #include "fr/display/backend.hpp"
+#include "fr/display/epaper_backend.hpp"
 #include "fr/hal/display.hpp"
 #include "fr/services/touch_service.hpp"
 
@@ -30,7 +31,22 @@ namespace fr {
  *
  * snapshot and snapshot_read (test hooks) answer the backend's; a read hands back at most `len` bytes of the frame
  * snapshot froze.
+ *
+ * E-paper (trait epaper, the backend's; design epaper-e1 D2): bitmap goes to the backend on every panel (mono draws
+ * it, LVGL answers UNSUPPORTED); refresh and hold answer UNSUPPORTED where epaper is false. The backend reports each
+ * refresh on the core task: `refreshed` is emitted and partials, shown_crc and refresh_ms are reported when they
+ * changed.
  */
+/** Design face-f1 D7: told when a hub client draws on the panel (the face then lets the screen go). */
+class ScreenListener
+{
+public:
+    virtual void on_client_drew() = 0;
+
+protected:
+    ~ScreenListener() = default;
+};
+
 class DisplayService final : public cap::Display, private TouchListener
 {
 public:
@@ -38,6 +54,18 @@ public:
 
     /** Before init(): `touch` covers this panel; its touches reach the backend (trait touch). */
     void bind_touch(TouchService &touch);
+
+    // Design face-f1 D7: a face drawing on this panel from the node.
+    /** Called after each drawing command from the hub (clear, text, fill_rect, bitmap, ui_load, ui_set). */
+    void set_screen_listener(ScreenListener *l) { screen_ = l; }
+    /** The backend's frame within `box`, painted by `fn` (display::Backend::paint). */
+    Status paint(const display::Box &box, display::PaintFn fn);
+    /** The panel's size after rotation, valid after init(). */
+    uint16_t width() const { return panel_.width(); }
+    uint16_t height() const { return panel_.height(); }
+    bool ready() const { return ready_; }
+    /** The e-paper backend (power save's carry, adopt_glass and sleep), nullptr on other panels. */
+    display::EpaperBackend *epaper_backend();
 
     Status init(Core &core);
     hal::Selftest selftest();
@@ -48,11 +76,17 @@ public:
     Status set_brightness(const cap::DisplaySetBrightnessArgs &args) override;
     std::expected<cap::DisplayUiLoadResult, Err> ui_load(const cap::DisplayUiLoadArgs &args) override;
     Status ui_set(const cap::DisplayUiSetArgs &args) override;
+    Status bitmap(const cap::DisplayBitmapArgs &args) override;
+    std::expected<cap::DisplayRefreshResult, Err> refresh(const cap::DisplayRefreshArgs &args) override;
+    Status hold(const cap::DisplayHoldArgs &args) override;
 #if FR_TEST_HOOKS
     std::expected<cap::DisplaySnapshotResult, Err> snapshot() override;
     std::expected<cap::DisplaySnapshotReadResult, Err> snapshot_read(const cap::DisplaySnapshotReadArgs &args) override;
 #endif
     uint8_t brightness() const override { return brightness_; }
+    uint8_t partials() const override { return backend_.partials(); }
+    uint32_t shown_crc() const override { return backend_.shown_crc(); }
+    uint16_t refresh_ms() const override { return backend_.refresh_ms(); }
     /**
      * The level the backlight is driven at for property level `level` under config max_brightness (design lcd-clock-c1
      * D4): level x max / 255, rounded; max 255 drives `level` unchanged, so every panel without a cap behaves as before.
@@ -80,17 +114,32 @@ private:
     };
 
     void on_touch(uint16_t x, uint16_t y, bool pressed) override;
+    /** A drawing command from the hub went through: the listener lets the screen go. */
+    Status drew(Status st)
+    {
+        if (st && screen_ != nullptr) {
+            screen_->on_client_drew();
+        }
+        return st;
+    }
     void on_ui(const cap::DisplayUi &e);
+    /** An e-paper refresh ended (core task): the event, and the properties that changed. */
+    void on_refreshed(const cap::DisplayRefreshed &e);
     hal::Rotation rotation() const { return static_cast<hal::Rotation>(cfg_.rotation); }
 
     hal::Display &panel_;
     display::Backend &backend_;
+    ScreenListener *screen_ = nullptr;
     cap::DisplayConfig cfg_;
     Core *core_ = nullptr;
     bool ready_ = false;
     bool touch_ = false;
     uint8_t brightness_;
     std::atomic<uint32_t> ui_dropped_{0};  // any task
+    // The e-paper properties as last reported.
+    uint8_t reported_partials_ = 0;
+    uint32_t reported_crc_ = 0;
+    uint16_t reported_ms_ = 0;
 #if FR_TEST_HOOKS
     uint8_t read_buf_[1024] = {};  // snapshot_read's chunk (len <= 1024)
 #endif

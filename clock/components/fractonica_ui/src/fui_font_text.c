@@ -22,7 +22,7 @@ static const uint16_t CODEPOINTS[145] = {
     0x2295, 0x25CB, 0x25FB, 0x2609, 0x2B20,
 };
 
-/* width, then one byte per row (bit 7 = leftmost column) */
+/* width, then one byte per row (bit 7 = leftmost column); 0 wide: absent */
 static const uint8_t GLYPHS[145 * 11] = {
     3, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, /* U+0020 */
     1, 0x00, 0x80, 0x80, 0x80, 0x80, 0x80, 0x00, 0x80, 0x00, 0x00, /* U+0021 ! */
@@ -179,4 +179,6 @@ const fui_font_t fui_font_text = {
     1, /* first row of a capital */
     8, /* first row below the baseline */
     5, /* width of the missing-glyph box */
+    11, /* bytes per glyph record */
+    0, /* a bitmap font */
 };

@@ -11,7 +11,8 @@
 // (design m2-c5-display D1, D4, D9) adds fr.display and fr.touch (their services, traits from the board entry and
 // the profile, a touch bound to its panel by port), pins a driver takes from its own board entry's reserved group,
 // optional driver pins (null: not wired), a board entry's display rotation, and the profile's `psram: on`; a panel's
-// renderer (its display::Backend) follows its driver's `traits: ui` (fr_ui's LvglBackend, else fr_core's MonoBackend).
+// renderer (its display::Backend) follows its driver's `traits: ui` (fr_ui's LvglBackend, else fr_core's MonoBackend),
+// or `traits: epaper` (fr_core's EpaperBackend with its two static frames; design epaper-e1 D6).
 // A1 (design audio-a1 D1, D2, D6, D7) adds fr.audio_in and fr.audio_out (their services and rates), the multi-pin bare
 // bind (`bind: { bclk: gpio.41, ws: gpio.42, din: gpio.2 }`, each pin a driver field `from: bind.<key>`), and the I2S
 // controllers: a driver field of type i2s_port (auto or a number, resolved here), the board's `resources.i2s`, and
@@ -55,6 +56,11 @@ import {
 export interface ServiceFacts {
   /** The HAL contract its driver must implement. */
   implements: string;
+  /**
+   * Contracts derived from `implements` that a driver may name instead (design epaper-e1 D5: hal.Epaper is a
+   * hal.Display with an e-paper controller's steps): the service takes the driver as the base contract.
+   */
+  alsoImplements?: readonly string[];
   service: string;
   /** The fr_core header that declares it. */
   header: string;
@@ -80,11 +86,19 @@ export interface ServiceFacts {
    */
   settings?: string;
   /**
-   * Another instance the service draws on (design power-p1 D6: fr.haptic's supply, an fr.battery): its config entry
-   * `config` names that instance (empty: none), which must be one of capability `cap`; the glue calls
-   * `service.<method>(<that instance's service>)` before init.
+   * Other instances the service draws on (design power-p1 D6: fr.haptic's supply, an fr.battery; design face-f1 D8:
+   * fr.face's display, button and rtc): each config entry `config` names that instance (empty: none, unless
+   * `required`), which must be one of capability `cap`; the glue calls `service.<method>(<that instance's service>)`
+   * before init.
    */
-  peer?: { config: string; cap: string; method: string };
+  peers?: readonly PeerFacts[];
+}
+
+export interface PeerFacts {
+  config: string;
+  cap: string;
+  method: string;
+  required?: boolean;
 }
 
 /**
@@ -157,6 +171,7 @@ export const SERVICES: Readonly<Record<string, ServiceFacts>> = {
   // width and height from the board entry after rotation, touch from the profile (bindTouch).
   'fr.display': {
     implements: 'hal.Display',
+    alsoImplements: ['hal.Epaper'],
     service: 'fr::DisplayService',
     header: 'fr/services/display_service.hpp',
     timers: 1,
@@ -217,13 +232,13 @@ export const SERVICES: Readonly<Record<string, ServiceFacts>> = {
     },
   },
   // Design power-p1 D6, D7: one timer (the program's steps and the 10 ms compensation); pwm from driver.yaml `traits:`;
-  // config `supply` names the fr.battery instance it draws from (ServiceFacts.peer).
+  // config `supply` names the fr.battery instance it draws from (ServiceFacts.peers).
   'fr.haptic': {
     implements: 'hal.HapticOutput',
     service: 'fr::HapticService',
     header: 'fr/services/haptic_service.hpp',
     timers: 1,
-    peer: { config: 'supply', cap: 'fr.battery', method: 'bind_supply' },
+    peers: [{ config: 'supply', cap: 'fr.battery', method: 'bind_supply' }],
   },
   // Design lcd-clock-c1 D5, D6: one timer (the free-space refresh and the remount after a removal); the card's file I/O
   // runs in dispatch, one chunk per command. removable and card_detect come from driver.yaml `traits:` and the entry.
@@ -239,7 +254,26 @@ export const SERVICES: Readonly<Record<string, ServiceFacts>> = {
   },
   // Design lcd-clock-c1 D7, D8: one timer (the seconds poll, faster near the rollover; the reports; inject's hold);
   // has_temperature and resolution_ms from driver.yaml `traits:`.
-  'fr.clock': { implements: 'hal.Rtc', service: 'fr::ClockService', header: 'fr/services/clock_service.hpp', timers: 1 },
+  'fr.rtc': { implements: 'hal.Rtc', service: 'fr::RtcService', header: 'fr/services/rtc_service.hpp', timers: 1 },
+  // Design face-f1 D5-D8: one timer (the face's updates, the button's 5 s hold, the settings' save, power save's
+  // window); the clock library behind hal::Face in the fractonica_face driver; mode, focus, step, the UTC offset, chime
+  // and clicks in NVS namespace fr_face. Its panel, button, RTC, left and right keys (D18) and buzzer (D19) are peers;
+  // bindFace checks the panel and the keys and derives the traits.
+  'fr.face': {
+    implements: 'hal.Face',
+    service: 'fr::FaceService',
+    header: 'fr/services/face_service.hpp',
+    timers: 1,
+    settings: 'fr_face',
+    peers: [
+      { config: 'display', cap: 'fr.display', method: 'bind_display', required: true },
+      { config: 'button', cap: 'fr.button', method: 'bind_button' },
+      { config: 'rtc', cap: 'fr.rtc', method: 'bind_rtc' },
+      { config: 'left', cap: 'fr.button', method: 'bind_left' },
+      { config: 'right', cap: 'fr.button', method: 'bind_right' },
+      { config: 'buzzer', cap: 'fr.buzzer', method: 'bind_buzzer' },
+    ],
+  },
   // Design stepper-s1 D10, D11: one timer (the 20 ms poll while moving, the settle, the idle release, a jog's seconds,
   // the hub-silence check); the steps themselves on the driver's own gptimer ISR. The settings kept in NVS namespace
   // fr_stepper. microstep says whether the driver drives PWM (driver.yaml `traits:`).
@@ -262,9 +296,15 @@ export const SENSOR_IDS: Readonly<Record<string, number>> = { ov2640: 1 };
 /** The HIL fixture's capability: its lines' `drive` decides the power-up glitch rule (design m2-c1-hil D5). */
 const FIXTURE_CAP = 'fr.fixture';
 
+/** Whether `driver` implements what `service` takes: its contract, or one derived from it (alsoImplements). */
+function servesAs(driver: { implements: string }, service: ServiceFacts | undefined): boolean {
+  return service !== undefined && (driver.implements === service.implements || (service.alsoImplements ?? []).includes(driver.implements));
+}
+
 /** fr.display and fr.touch (design m2-c5-display D4, D9): a touch instance names its panel's port in config `display`. */
 const DISPLAY_CAP = 'fr.display';
 const TOUCH_CAP = 'fr.touch';
+const FACE_CAP = 'fr.face';
 
 /**
  * Reserved pin groups a board entry owns (design m2-c5-display D9): a driver bound to `displays.<name>` may claim the
@@ -288,12 +328,22 @@ interface DisplayBackend {
 }
 const LVGL_BACKEND: DisplayBackend = { cls: 'fr::ui::LvglBackend', header: 'fr/ui/lvgl_backend.hpp', component: 'fr_ui' };
 const MONO_BACKEND: DisplayBackend = { cls: 'fr::display::MonoBackend', header: 'fr/display/mono_backend.hpp' };
+/** Design epaper-e1 D6: an e-paper panel's two frames and refresh policy; the glue gives it static frames. */
+const EPAPER_BACKEND: DisplayBackend = { cls: 'fr::display::EpaperBackend', header: 'fr/display/epaper_backend.hpp' };
 
 function displayBackend(i: ResolvedInstance): DisplayBackend | undefined {
   if (i.cap.name !== DISPLAY_CAP) {
     return undefined;
   }
+  if (i.traits.epaper === true) {
+    return EPAPER_BACKEND;
+  }
   return i.traits.ui === true ? LVGL_BACKEND : MONO_BACKEND;
+}
+
+/** Bytes of one 1-bit frame of a panel after rotation (design epaper-e1 D6): rows of whole bytes. */
+function monoFrameBytes(i: ResolvedInstance): number {
+  return Math.ceil(Number(i.traits.width) / 8) * Number(i.traits.height);
 }
 
 /** A board entry's display `rotation` in degrees (design m2-c5-display D1): fr.display's default `rotation`. */
@@ -784,6 +834,12 @@ const RawDriver = z.strictObject({
    * component path and the composition root's PRIV_REQUIRES with it.
    */
   uses: z.array(ident).optional(),
+  /**
+   * Component directories outside hardware/drivers, relative to the repository (design face-f1 D5: fractonica_face's
+   * clock/components/fractonica and clock/components/fractonica_ui): on the build's component path only for profiles
+   * that bind the driver.
+   */
+  component_dirs: z.array(z.string().regex(/^[A-Za-z0-9_./-]+$/).refine((d) => !d.split('/').includes('..'), 'no ..')).optional(),
 });
 export type DriverManifest = z.infer<typeof RawDriver>;
 
@@ -1808,8 +1864,8 @@ function resolveInstances(sourceDir: string, inp: Inputs, model: Model, issues: 
       continue;
     }
     const df = driverFile(driver.id);
-    if (service && driver.implements !== service.implements) {
-      bad([...at, 'driver'], `driver ${driver.id} implements ${driver.implements}, but ${c.cap} needs ${service.implements}`);
+    if (service && !servesAs(driver, service)) {
+      bad([...at, 'driver'], `driver ${driver.id} implements ${driver.implements}, but ${c.cap} needs ${[service.implements, ...(service.alsoImplements ?? [])].join(' or ')}`);
     }
     if (!driver.targets.includes(board.idf_target)) {
       bad([...at, 'driver'], `driver ${driver.id} does not support ${board.idf_target} (targets: ${driver.targets.join(', ')})`);
@@ -2030,7 +2086,7 @@ function resolveInstances(sourceDir: string, inp: Inputs, model: Model, issues: 
       traits[t.name] = t.default ?? zeroValue(t);
     }
     // A driver for another contract is reported above; its traits would only repeat that.
-    const ownTraits = service !== undefined && driver.implements === service.implements ? driver.traits : undefined;
+    const ownTraits = servesAs(driver, service) ? driver.traits : undefined;
     for (const [key, value] of Object.entries(ownTraits ?? {})) {
       const t = cap?.traits.find((x) => x.name === key);
       const p = !cap ? null : !t ? `${cap.name} has no trait '${key}'` : checkCapValue(t, value);
@@ -2047,7 +2103,7 @@ function resolveInstances(sourceDir: string, inp: Inputs, model: Model, issues: 
     }
     // A fixture line's drive, decode and pull must be ones its driver takes (design m2-c1-hil D4). The
     // instance is still well formed, so its pins are checked below as well.
-    if (c.cap === FIXTURE_CAP && cap && driver.implements === service?.implements) {
+    if (c.cap === FIXTURE_CAP && cap && servesAs(driver, service)) {
       for (const [key, message] of fixtureLineProblems(driver.id, Object.fromEntries(capConfig.map((x) => [x.entry.name, x.value])))) {
         issues.add(pf, settings[key] !== undefined ? [...at, 'config', key] : [...at, 'driver'], message);
       }
@@ -2327,35 +2383,107 @@ function bindTouch(profile: string, insts: ResolvedInstance[], issues: Issues): 
 function bindPeers(profile: string, insts: ResolvedInstance[], issues: Issues): void {
   const pf = profileFile(profile);
   for (const i of insts) {
-    const peer = i.service.peer;
-    if (!peer) {
-      continue;
-    }
-    const name = String(i.capConfig.find((c) => c.entry.name === peer.config)?.value ?? '');
-    if (name === '') {
-      // A solenoid with no supply has no protection and no compensation (design power-p1 review m6).
-      if (i.cap.name === 'fr.haptic' && i.capConfig.find((c) => c.entry.name === 'kind')?.value === 'solenoid') {
-        issues.warnings.push(`${i.name}: a solenoid with no ${peer.config}: nothing refuses or cuts it on a low cell`);
-      }
-      continue;
-    }
-    const other = insts.find((x) => x.name === name);
-    const at = ['caps', i.name, 'config', peer.config];
-    if (!other || other.cap.name !== peer.cap) {
+    for (const peer of i.service.peers ?? []) {
+      const name = String(i.capConfig.find((c) => c.entry.name === peer.config)?.value ?? '');
+      const at = ['caps', i.name, 'config', peer.config];
       const of = insts.filter((x) => x.cap.name === peer.cap).map((x) => x.name);
-      issues.add(pf, at, `${other ? `'${name}' is an ${other.cap.name} instance` : `no instance '${name}' in this profile`}; ${peer.config} names an ${peer.cap} instance (${of.join(', ') || 'none in this profile'})`);
+      if (name === '') {
+        if (peer.required) {
+          issues.add(pf, at, `${peer.config} must name an ${peer.cap} instance (${of.join(', ') || 'none in this profile'})`);
+        }
+        // A solenoid with no supply has no protection and no compensation (design power-p1 review m6).
+        if (i.cap.name === 'fr.haptic' && i.capConfig.find((c) => c.entry.name === 'kind')?.value === 'solenoid') {
+          issues.warnings.push(`${i.name}: a solenoid with no ${peer.config}: nothing refuses or cuts it on a low cell`);
+        }
+        continue;
+      }
+      const other = insts.find((x) => x.name === name);
+      if (!other || other.cap.name !== peer.cap) {
+        issues.add(pf, at, `${other ? `'${name}' is an ${other.cap.name} instance` : `no instance '${name}' in this profile`}; ${peer.config} names an ${peer.cap} instance (${of.join(', ') || 'none in this profile'})`);
+      }
     }
   }
 }
 
-/** The instance a service's peer names (bindPeers checked it), or undefined. */
-function peerOf(i: ResolvedInstance, insts: readonly ResolvedInstance[]): ResolvedInstance | undefined {
-  const peer = i.service.peer;
-  if (!peer) {
-    return undefined;
+/** The instances a service's peers name (bindPeers checked them), each with its PeerFacts. */
+function peersOf(i: ResolvedInstance, insts: readonly ResolvedInstance[]): { peer: PeerFacts; inst: ResolvedInstance }[] {
+  const out: { peer: PeerFacts; inst: ResolvedInstance }[] = [];
+  for (const peer of i.service.peers ?? []) {
+    const name = String(i.capConfig.find((c) => c.entry.name === peer.config)?.value ?? '');
+    const inst = insts.find((x) => x.name === name && x.cap.name === peer.cap);
+    if (inst) {
+      out.push({ peer, inst });
+    }
   }
-  const name = String(i.capConfig.find((c) => c.entry.name === peer.config)?.value ?? '');
-  return insts.find((x) => x.name === name && x.cap.name === peer.cap);
+  return out;
+}
+
+/** GPIOs that can wake each target from deep sleep (design face-f1 D16: the C6's LP IOs 0-7, ext1). */
+export const DEEP_SLEEP_WAKE_PINS: Readonly<Record<string, readonly number[]>> = { esp32c6: [0, 1, 2, 3, 4, 5, 6, 7] };
+
+/** A driver Config field's pin, or -1 (absent, null, or not a pin). */
+function pinOf(i: ResolvedInstance, field: string): number {
+  const v = i.driverConfig.find((c) => c.name === field)?.value;
+  return typeof v === 'number' && v >= 0 ? v : -1;
+}
+
+/** What the glue hands a face for power save (FaceService::SleepPins), or null when it cannot sleep. */
+interface FaceSleep {
+  wakeLow: number[];
+  hold: number[];
+  keys: number[];  // the face's keys on wake pins (design face-f1 D18: any of them wakes it)
+  keepBytes: number;
+}
+
+/**
+ * fr.face (design face-f1 D3, D8, D16, D18): its display is an e-paper panel the clock library has a face for (400 x 300,
+ * one bit, landscape); the traits take that panel's size; can_sleep when it has a centre button (whose 5 s hold leaves
+ * power save), at least one of its keys (centre, left, right) can wake the target from deep sleep, and so can its
+ * RTC's alarm pin. Returns the glue's power-save facts by face name.
+ */
+function bindFace(profile: string, insts: ResolvedInstance[], target: string, issues: Issues): Map<string, FaceSleep> {
+  const pf = profileFile(profile);
+  const out = new Map<string, FaceSleep>();
+  for (const f of insts.filter((i) => i.cap.name === FACE_CAP)) {
+    const peers = peersOf(f, insts);
+    const panel = peers.find((p) => p.peer.config === 'display')?.inst;
+    const button = peers.find((p) => p.peer.config === 'button')?.inst;
+    const rtc = peers.find((p) => p.peer.config === 'rtc')?.inst;
+    // D18: a button has one listener, so each key is its own instance.
+    const keys = peers.filter((p) => p.peer.cap === 'fr.button');
+    for (const [n, k] of keys.entries()) {
+      const twin = keys.slice(0, n).find((o) => o.inst === k.inst);
+      if (twin) {
+        issues.add(pf, ['caps', f.name, 'config', k.peer.config], `'${k.inst.name}' is already the face's ${twin.peer.config}; each key is its own fr.button instance`);
+      }
+    }
+    if (!panel) {
+      continue;  // bindPeers said why
+    }
+    const at = ['caps', f.name, 'config', 'display'];
+    if (panel.traits.epaper !== true || panel.traits.color !== 'mono1' || panel.traits.width !== 400 || panel.traits.height !== 300) {
+      issues.add(pf, at, `${panel.name} is ${panel.traits.width} x ${panel.traits.height} ${String(panel.traits.color)}${panel.traits.epaper === true ? ' e-paper' : ''}; the clock library has a face for a 400 x 300 one-bit e-paper panel only`);
+      continue;
+    }
+    f.traits.width = panel.traits.width;
+    f.traits.height = panel.traits.height;
+    const wake = DEEP_SLEEP_WAKE_PINS[target] ?? [];
+    const keyPins = keys.map((k) => pinOf(k.inst, 'gpio')).filter((p) => p >= 0);
+    const wakeKeys = keyPins.filter((p) => wake.includes(p));
+    const sqw = rtc ? pinOf(rtc, 'sqw') : -1;
+    const canSleep = button !== undefined && wakeKeys.length > 0 && sqw >= 0 && wake.includes(sqw);
+    f.traits.can_sleep = canSleep;
+    if (button && rtc && !canSleep) {
+      issues.warnings.push(
+        `${f.name}: no power save: one of its keys (GPIO ${keyPins.join(', ')}) and the RTC's sqw (GPIO ${sqw < 0 ? 'none' : sqw}) must be deep-sleep wake pins of ${target} (${wake.join(', ') || 'none known'})`,
+      );
+    }
+    if (canSleep) {
+      const hold = ['rst', 'cs', 'dc'].map((k) => pinOf(panel, k)).filter((p) => p >= 0);
+      out.set(f.name, { wakeLow: [...wakeKeys, sqw], hold, keys: wakeKeys, keepBytes: monoFrameBytes(panel) });
+    }
+  }
+  return out;
 }
 
 /**
@@ -2607,12 +2735,13 @@ function emitPanels(insts: ResolvedInstance[]): string[] {
     '    bool rgb565;  // trait color rgb565; false: mono1',
     '    bool ui;  // trait ui: LVGL layouts',
     '    uint8_t touch_port;  // the fr.touch instance bound to it (trait touch); 0: none',
+    '    bool epaper;  // trait epaper: EpaperBackend (design epaper-e1 D6)',
     '};',
     `inline constexpr size_t kPanelCount = ${panels.length};`,
     'inline constexpr Panel kPanels[] = {',
     ...panels.map(
       (p) =>
-        `    {${p.port}, "${p.name}", ${Number(p.traits.width)}, ${Number(p.traits.height)}, ${quarter(p)}, ${p.traits.color === 'rgb565'}, ${p.traits.ui === true}, ${touchOf(p)}},`,
+        `    {${p.port}, "${p.name}", ${Number(p.traits.width)}, ${Number(p.traits.height)}, ${quarter(p)}, ${p.traits.color === 'rgb565'}, ${p.traits.ui === true}, ${touchOf(p)}, ${p.traits.epaper === true}},`,
     ),
     '};',
     '',
@@ -2681,7 +2810,7 @@ function emitBoardHpp(inp: Inputs, insts: ResolvedInstance[]): string {
   ].join('\n');
 }
 
-function emitBoardCpp(inp: Inputs, insts: ResolvedInstance[], driverIds: string[]): string {
+function emitBoardCpp(inp: Inputs, insts: ResolvedInstance[], driverIds: string[], faceSleep: ReadonlyMap<string, FaceSleep> = new Map()): string {
   const inputs = [boardFile(inp.board.id), ...driverIds.map(driverFile)];
   const lines: string[] = [
     header(inp.profile.profile),
@@ -2694,6 +2823,7 @@ function emitBoardCpp(inp: Inputs, insts: ResolvedInstance[], driverIds: string[
     ...driverIds.map((d) => `#include "fr/drv/${d}.hpp"`),
     ...[...new Set(insts.map((i) => displayBackend(i)?.header).filter((h): h is string => h !== undefined))].sort().map((h) => `#include "${h}"`),
     ...(insts.some((i) => i.service.settings) ? ['#include "fr/platform/nvs_settings.hpp"'] : []),
+    ...(faceSleep.size > 0 ? ['#include "esp_attr.h"', '#include "fr/core.hpp"'] : []),
     '',
     'namespace fr::board {',
     '',
@@ -2736,7 +2866,21 @@ function emitBoardCpp(inp: Inputs, insts: ResolvedInstance[], driverIds: string[
     }
     const backend = displayBackend(i);
     lines.push(`${i.driver.class} driver{kDriverConfig};`);
-    if (backend) {
+    if (backend === EPAPER_BACKEND) {
+      // Design epaper-e1 D6: the frame drawn and the frame the glass shows, static (no heap), sized for the panel
+      // after rotation; a third, the frame snapshot freezes, only where the build has test hooks.
+      const bytes = monoFrameBytes(i);
+      lines.push(
+        `alignas(4) uint8_t frame_buf[${bytes}];`,
+        `alignas(4) uint8_t shown_buf[${bytes}];`,
+        '#if FR_TEST_HOOKS',
+        `alignas(4) uint8_t frozen_buf[${bytes}];`,
+        `${backend.cls} backend{driver, {frame_buf, shown_buf, frozen_buf}};`,
+        '#else',
+        `${backend.cls} backend{driver, {frame_buf, shown_buf, {}}};`,
+        '#endif',
+      );
+    } else if (backend) {
       // Design m2-c5-display D3: the panel's renderer, which the service draws through.
       lines.push(`${backend.cls} backend;`);
     }
@@ -2757,6 +2901,11 @@ function emitBoardCpp(inp: Inputs, insts: ResolvedInstance[], driverIds: string[
       ...(hasConfig ? ['kConfig'] : []),
     ];
     lines.push(`${i.service.service} service{${args.join(', ')}};`, '');
+    const sleep = faceSleep.get(i.name);
+    if (sleep) {
+      // Design face-f1 D15: the glass and the ghost budget across a deep sleep, in LP memory (kept while it sleeps).
+      lines.push(`alignas(8) RTC_NOINIT_ATTR uint8_t keep_buf[sizeof(fr::FaceService::KeepHeader) + ${sleep.keepBytes}];`, '');
+    }
     lines.push(`}  // namespace ${ns}`, '');
   }
   if (insts.length > 0) {
@@ -2790,11 +2939,20 @@ function emitBoardCpp(inp: Inputs, insts: ResolvedInstance[], driverIds: string[
         lines.push(`    inst_${panel.name}::service.bind_touch(inst_${t.name}::service);`);
       }
     }
-    // Design power-p1 D6: a service's peer (fr.haptic's supply) before init.
+    // Design power-p1 D6, face-f1 D8: a service's peers (fr.haptic's supply; fr.face's display, keys, rtc, buzzer) before
+    // init.
     for (const i of insts) {
-      const p = peerOf(i, insts);
-      if (p && i.service.peer) {
-        lines.push(`    inst_${i.name}::service.${i.service.peer.method}(inst_${p.name}::service);`);
+      for (const { peer, inst } of peersOf(i, insts)) {
+        lines.push(`    inst_${i.name}::service.${peer.method}(inst_${inst.name}::service);`);
+      }
+      // Design face-f1 D13-D16: power save's platform, its pins and the LP memory that keeps the glass.
+      const sleep = faceSleep.get(i.name);
+      if (sleep) {
+        const mask = (pins: number[]) => `0x${pins.reduce((m, p) => m | (1n << BigInt(p)), 0n).toString(16)}ull`;
+        lines.push(
+          `    inst_${i.name}::service.bind_sleep(fr::core::sleep(), {.wake_low = ${mask(sleep.wakeLow)}, .hold = ${mask(sleep.hold)}, .keys = ${mask(sleep.keys)}});`,
+          `    inst_${i.name}::service.bind_keep(inst_${i.name}::keep_buf);`,
+        );
       }
     }
     insts.forEach((i, n) => lines.push(`    s_init[${n}] = inst_${i.name}::service.init(core);`));
@@ -2811,8 +2969,11 @@ function emitBoardCpp(inp: Inputs, insts: ResolvedInstance[], driverIds: string[
   return lines.join('\n');
 }
 
-function emitComponentsCmake(profile: string, sourceDir: string, driverIds: string[]): string {
-  const dirs = driverIds.map((d) => join(sourceDir, 'hardware', 'drivers', d).split('\\').join('/'));
+function emitComponentsCmake(profile: string, sourceDir: string, driverIds: string[], extraDirs: readonly string[] = []): string {
+  const dirs = [
+    ...driverIds.map((d) => join(sourceDir, 'hardware', 'drivers', d).split('\\').join('/')),
+    ...extraDirs.map((d) => join(sourceDir, d).split('\\').join('/')),
+  ];
   return [
     `# ${GENERATED} from ${profileFile(profile)}. Do not edit.`,
     '# Included by the app CMakeLists before project(): adds this directory (the fr_board component) and',
@@ -2894,6 +3055,7 @@ export function generateFirmware(opts: FirmwareOptions): FirmwareResult {
   insts.sort((a, b) => a.port - b.port);
   bindTouch(opts.profile, insts, issues);
   bindPeers(opts.profile, insts, issues);
+  const faceSleep = bindFace(opts.profile, insts, inp!.board.idf_target, issues);
   bindI2s(opts.profile, inp!.board, insts, issues);
   bindLedc(opts.profile, inp!.board, insts, issues);
   issues.throwIfAny();
@@ -2903,8 +3065,8 @@ export function generateFirmware(opts: FirmwareOptions): FirmwareResult {
   const files: GeneratedFile[] = [
     { path: 'fr_board/CMakeLists.txt', content: emitComponentCmake(opts.profile, insts) },
     { path: 'fr_board/include/fr/board.hpp', content: emitBoardHpp(inp!, insts) },
-    { path: 'fr_board/fr_board.cpp', content: emitBoardCpp(inp!, insts, driverIds) },
-    { path: 'components.cmake', content: emitComponentsCmake(opts.profile, sourceDir, driverIds) },
+    { path: 'fr_board/fr_board.cpp', content: emitBoardCpp(inp!, insts, driverIds, faceSleep) },
+    { path: 'components.cmake', content: emitComponentsCmake(opts.profile, sourceDir, driverIds, [...new Set(insts.flatMap((i) => i.driver.component_dirs ?? []))]) },
     { path: 'sdkconfig.board', content: renderFragment(inp!, driverLines) },
     ...(opts.fault ? [{ path: FAULT_LAYER, content: renderFaultLayer(opts.fault) }] : []),
     { path: 'fr_manifest.json', content: `${JSON.stringify(manifest, null, 2)}\n` },

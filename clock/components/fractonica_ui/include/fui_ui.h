@@ -54,6 +54,39 @@
  *   PURE   only Fractonica: no date, hour, zone, hertz, metre, per cent.
  *   EARTH  adds the Gregorian / SI translation, every one led by the Earth
  *          sign, at the fixed UTC offset of the configuration.
+ *
+ * THE STEP (fui_ui_set_step, fui_config_t.step; for a panel that should move
+ * seldom, such as e-paper, where every change is a partial refresh). With a
+ * step level L (the Helion, theta, the Preon, kappa or the Flavon) every
+ * screen shows the instant the running cycle of L BEGAN (frc_cycle_at's
+ * start) and the frame asks to wake at its END: the face changes exactly on
+ * each boundary of L and at no other time, except that input and the brief
+ * labels (the level's name, the mode's) still redraw at once and clear on
+ * time. Readings go down to L's unit and no finer: at the Preon the count
+ * "34η 29ι" and the countdown in whole Preons; at the Flavon "34η 29ι 21λ"
+ * and "6ι 44λ"; kappa and theta, which are not units, read down to the
+ * Preon and the Helion; the paper face's corners end at the Preon. The
+ * civil time of EARTH shows minutes ("⊕ 14:00")
+ * at every step coarser than the Flavon. FUI_STEP_NONE (0, the default) is
+ * the behaviour of every face without a step: unchanged.
+ *
+ * THE 400 x 300 PAPER FACE (FUI_FACE_MONO400X300). One bit, black ink on
+ * white paper: its default theme, fui_theme_paper, paints the ground with
+ * SET bits and every ink with CLEAR bits, which a panel whose memory holds
+ * 1 = white (the Waveshare 4.2" e-paper) shows as black on white. Give
+ * fui_ui_draw a FUI_FMT_MONO_ROW canvas of 400 x 300 over that memory (50
+ * bytes a row, bit 7 = the leftmost pixel, 15,000 bytes; or a band of whole
+ * rows); pass .theme = &fui_theme_mono for a panel whose 1 is black. NOW
+ * (the owner's layout): the WAVE alone in the middle, the focused level's
+ * two nested levels round an inner circle with the two glyphs, as large as
+ * its room (one-bit rules: elapsed solid, to come dotted 1 on / 2 off, now a
+ * block); in the corners the Nuclide "ε#5" (top left), the
+ * Helion "34η" (top right), the Preon "29ι" (bottom right), and the Pentad's
+ * mark (a pentagon round its numeral; bottom left), all in the monoline
+ * stroke font fui_font_line (28 px capitals, a 3 px pen); EARTH adds the
+ * civil time at the bottom centre in it (14 px, 1 px pen). Lines are 2 px
+ * (arcs, the inner circle; to come dotted 2 on / 3 off), the glyphs' strokes
+ * 3 px. The cards use the whole panel.
  */
 #ifndef FUI_UI_H
 #define FUI_UI_H
@@ -73,7 +106,9 @@ typedef enum fui_face {
     FUI_FACE_RECT240     = 1, /* 240 x 240 colour (ST7789): instrument + reading rows    */
     FUI_FACE_RECT240X320 = 2, /* 240 x 320 colour (ST7789): the same with more rows      */
     FUI_FACE_MONO128     = 3, /* 128 x 64 one-bit (SSD1306)                              */
-    FUI_FACE_COUNT       = 4
+    FUI_FACE_MONO400X300 = 4, /* 400 x 300 one-bit e-paper (Waveshare 4.2"): the wave and
+                                 four corners, black on white (see THE 400 x 300 ...) */
+    FUI_FACE_COUNT       = 5
 } fui_face_t;
 
 typedef enum fui_screen {
@@ -112,6 +147,16 @@ typedef enum fui_status {
 #define FUI_NAME_MS  2500u
 #define FUI_TOAST_MS 1500u
 
+/** The levels a face may step by (see THE STEP above): the level's number. */
+typedef enum fui_step {
+    FUI_STEP_NONE   = 0,  /* no step: the face moves as the clock does (default)   */
+    FUI_STEP_HELION = 6,  /* 5.052 h                                                */
+    FUI_STEP_THETA  = 7,  /* 33.7 min                                               */
+    FUI_STEP_PREON  = 8,  /* 8.421 min                                              */
+    FUI_STEP_KAPPA  = 9,  /* 1.684 min                                              */
+    FUI_STEP_FLAVON = 10  /* 7.773 s                                                */
+} fui_step_t;
+
 typedef struct fui_face_info {
     int16_t width, height;
     uint8_t mono;  /* 1: one-bit canvas (FUI_FMT_MONO_*), 0: RGB565 */
@@ -124,12 +169,16 @@ const fui_face_info_t *fui_face_info(fui_face_t face);
 typedef struct fui_config {
     fui_face_t             face;
     const frc_catalogue_t *catalogue;    /* NULL: &FRC_SAROS_141                          */
-    const fui_theme_t     *theme;        /* NULL: Astrolabe, or the one-bit theme         */
+    const fui_theme_t     *theme;        /* NULL: Astrolabe on colour, fui_theme_paper on
+                                            FUI_FACE_MONO400X300, fui_theme_mono on the
+                                            other one-bit face                            */
     int32_t                utc_offset_s; /* EARTH mode's fixed offset (ruling 6)          */
     uint32_t               min_frame_us; /* shortest time between two wakes; 0: 100 ms on
                                             colour (10 fps), 50 ms on one-bit             */
     fui_mode_t             mode;         /* start-up mode                                 */
     uint8_t                focus;        /* start-up focus, 0..FUI_FOCUS_MAX              */
+    uint8_t                step;         /* fui_step_t; 0 (FUI_STEP_NONE): no step. Any
+                                            other value is taken as no step               */
 } fui_config_t;
 
 /** What fui_ui_update tells the UI task. */
@@ -192,6 +241,7 @@ typedef struct fui_ring {
     fui_fx_t    cx, cy, radius;
     fui_fx_t    reach_in;  /* nearest and farthest the arcs drawn (both levels) come */
     fui_fx_t    reach_out; /* to the centre: the bezel and the counter rings keep clear */
+    fui_fx_t    goal;      /* the reach it was sized to (the paper face); 0: R fixed */
     fui_arc16_t arc[FUI_RING_CHILDREN + FUI_RING_GRAND];
 } fui_ring_t;
 
@@ -214,10 +264,12 @@ typedef struct fui_ui {
     uint8_t                toast;       /* 1 while the mode word is shown             */
     uint8_t                invalid;     /* 1: the next update redraws everything      */
     uint8_t                status;      /* fui_status_t at `t`                        */
+    uint8_t                step;        /* fui_step_t                                 */
     uint32_t               scales_since_ms;
     uint32_t               toast_since_ms;
     /* the frame being shown */
-    frc_time_t             t;           /* instant of the texts                       */
+    frc_time_t             t;           /* instant of the texts (with a step: the start
+                                           of the step's running cycle)               */
     frc_time_t             ring_next;   /* when the rings / glyphs next change        */
     frc_time_t             text_next;   /* when the live text lines are next checked  */
     uint32_t               scene;       /* hash of everything but the time            */
@@ -234,8 +286,9 @@ typedef struct fui_ui {
 /* API                                                                        */
 /* ------------------------------------------------------------------------- */
 
-/** Start on NOW with the configured mode and focus. Never fails: a bad face
- *  or focus falls back to FUI_FACE_ROUND240 / FUI_FOCUS_DEFAULT. */
+/** Start on NOW with the configured mode, focus and step. Never fails: a bad
+ *  face, focus or step falls back to FUI_FACE_ROUND240 / FUI_FOCUS_DEFAULT /
+ *  FUI_STEP_NONE. */
 void fui_ui_init(fui_ui_t *ui, const fui_config_t *config);
 
 /**
@@ -254,7 +307,9 @@ const fui_frame_t *fui_ui_update(fui_ui_t *ui, frc_time_t now, uint32_t now_ms);
 /**
  * Draw the current frame's dirty rectangle into `canvas` (cleared to the
  * ground first). The canvas may be the whole face or a band of it
- * (fui_canvas_set_origin); the format must match fui_face_info().mono.
+ * (fui_canvas_set_origin); the format must match fui_face_info().mono (one
+ * bit: FUI_FMT_MONO_PAGE or FUI_FMT_MONO_ROW, the same picture in either;
+ * which bit value is ink is the theme's: see THE 400 x 300 PAPER FACE).
  */
 void fui_ui_draw(const fui_ui_t *ui, fui_canvas_t *canvas);
 
@@ -267,6 +322,17 @@ void fui_ui_set_mode(fui_ui_t *ui, fui_mode_t mode);
 void fui_ui_set_focus(fui_ui_t *ui, uint8_t level);
 void fui_ui_set_screen(fui_ui_t *ui, fui_screen_t screen);
 void fui_ui_set_utc_offset(fui_ui_t *ui, int32_t utc_offset_s);
+
+/**
+ * THE STEP (see the top of this file): from the next update on, every screen
+ * shows the instant the running cycle of level `level` began, and the frame
+ * wakes at that cycle's end (fui_frame_t.next_wake == frc_cycle_at(...).end,
+ * unless a brief label ends sooner). Levels: FUI_STEP_HELION 6, _THETA 7,
+ * _PREON 8, _KAPPA 9, _FLAVON 10, or FUI_STEP_NONE (0) for none. The next
+ * update redraws the whole face.
+ * @return 1 when set; 0 for any other value (the step is left as it was).
+ */
+int fui_ui_set_step(fui_ui_t *ui, int level);
 
 /** Pages of the card being shown (1 on NOW and SCALES). The page shown is
  *  ui->page, 0-based. */

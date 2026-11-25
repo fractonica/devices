@@ -1,14 +1,19 @@
 // Fakes for the fr.display and fr.touch services (design m2-c5-display D3, D4): a panel that records what it is
-// flushed, a touch source the test drives, and a backend that records what DisplayService hands it.
+// flushed, a touch source the test drives, and a backend that records what DisplayService hands it; and an e-paper
+// controller (design epaper-e1 D5) with its two RAMs and a glass that a refresh changes as the real one does.
 #pragma once
 
+#include <algorithm>
 #include <cstdint>
+#include <functional>
 #include <span>
 #include <string>
+#include <utility>
 #include <vector>
 
 #include "fr/display/backend.hpp"
 #include "fr/hal/display.hpp"
+#include "fr/hal/epaper.hpp"
 #include "fr/hal/touch.hpp"
 
 namespace frt {
@@ -167,6 +172,208 @@ public:
     std::vector<std::string> log;
     fr::display::UiEventSink sink;
     uint16_t width = 0, height = 0, flush_ms = 0;
+};
+
+/**
+ * An e-paper controller the test plays (design epaper-e1 D5): its `next` and `prev` RAMs as written, the steps it was
+ * asked for, BUSY set by start() and dropped by finish(), and the glass. A full or fast refresh shows `next` everywhere;
+ * a partial drives only the pixels where `next` differs from `prev`, so a backend that leaves `prev` stale leaves a
+ * wrong picture on the glass. Native geometry; 1 is white.
+ */
+class FakeEpaper final : public fr::hal::Epaper
+{
+public:
+    struct WriteRec {
+        Plane plane;
+        uint16_t x, y, w, h;
+        size_t bytes = 0;
+    };
+
+    explicit FakeEpaper(uint16_t w = 400, uint16_t h = 300) : w_(w), h_(h)
+    {
+        next.assign(stride() * h_, 0);
+        prev.assign(stride() * h_, 0);
+        glass.assign(stride() * h_, 0);
+    }
+
+    size_t stride() const { return (w_ + 7u) / 8u; }
+
+    fr::Status init(fr::Core &, fr::hal::Rotation r) override
+    {
+        ++inits;
+        if (fail_init) {
+            return std::unexpected(fr::Err::failed);
+        }
+        rotation_ = r;
+        return {};
+    }
+    uint16_t native_width() const override { return w_; }
+    uint16_t native_height() const override { return h_; }
+    fr::hal::Rotation rotation() const override { return rotation_; }
+    fr::hal::Selftest selftest() override { return {answered_, "fake e-paper"}; }
+
+    void on_idle(IdleSink sink) override { idle = sink; }
+    bool answered() const override { return answered_; }
+    fr::Status hold_reset(bool asserted) override
+    {
+        log.push_back(asserted ? "rst low" : "rst high");
+        if (asserted) {
+            asleep = false;
+            busy_ = false;
+            if (reset_clears_ram) {
+                std::fill(next.begin(), next.end(), uint8_t{0x5A});
+                std::fill(prev.begin(), prev.end(), uint8_t{0xA5});
+            }
+        }
+        return {};
+    }
+    fr::Status configure() override
+    {
+        log.push_back("configure");
+        return {};
+    }
+    fr::Status write_begin(Plane plane, uint16_t x, uint16_t y, uint16_t w, uint16_t h) override
+    {
+        if (x % 8 != 0 || w % 8 != 0 || w == 0 || h == 0 || x + w > w_ || y + h > h_) {
+            ++bad_windows;
+            return std::unexpected(fr::Err::invalid_args);
+        }
+        writes.push_back({plane, x, y, w, h, 0});
+        log.push_back(std::string(plane == Plane::next ? "next " : "prev ") + std::to_string(x) + "," + std::to_string(y) +
+                      " " + std::to_string(w) + "x" + std::to_string(h));
+        pos_ = 0;
+        return {};
+    }
+    fr::Status write(std::span<const uint8_t> bytes) override
+    {
+        if (fail_writes) {
+            return std::unexpected(fr::Err::failed);
+        }
+        WriteRec &wr = writes.back();
+        std::vector<uint8_t> &ram = wr.plane == Plane::next ? next : prev;
+        const size_t w8 = wr.w / 8u;
+        for (uint8_t b : bytes) {
+            const size_t row = wr.y + pos_ / w8;
+            const size_t col = wr.x / 8u + pos_ % w8;
+            if (row < h_) {
+                ram[row * stride() + col] = b;
+            }
+            ++pos_;
+        }
+        wr.bytes += bytes.size();
+        ++chunks;
+        if (on_write) {
+            on_write(chunks);  // e.g. a command landing between two chunks
+        }
+        return {};
+    }
+    fr::Status start(Op op) override
+    {
+        ops.push_back(op);
+        log.push_back(std::string("start ") + name(op));
+        answered_ = false;
+        busy_ = !absent;
+        running_ = op;
+        return {};
+    }
+    fr::Status sleep() override
+    {
+        log.push_back("sleep");
+        asleep = true;
+        busy_ = true;  // BUSY stays high in deep sleep
+        return {};
+    }
+    bool busy() const override { return busy_; }
+
+    /** BUSY falls at `at`: the step ends, and a refresh changes the glass. */
+    void finish(fr::TimeUs at)
+    {
+        if (!busy_ || asleep) {
+            return;
+        }
+        busy_ = false;
+        answered_ = true;
+        apply(running_);
+        if (idle) {
+            idle(at);
+        }
+    }
+    /** The step ends but its edge is lost: BUSY low, nobody told. */
+    void finish_silently()
+    {
+        busy_ = false;
+        answered_ = true;
+        apply(running_);
+    }
+
+    bool glass_pixel(int x, int y) const { return ((glass[static_cast<size_t>(y) * stride() + x / 8] >> (7 - x % 8)) & 1u) != 0; }
+
+    static const char *name(Op op)
+    {
+        switch (op) {
+        case Op::full:
+            return "full";
+        case Op::fast:
+            return "fast";
+        case Op::partial:
+            return "partial";
+        case Op::partial_hold:
+            return "partial_hold";
+        case Op::power_off:
+            return "power_off";
+        case Op::soft_reset:
+            return "soft_reset";
+        }
+        return "?";
+    }
+
+    std::vector<uint8_t> next, prev, glass;
+    std::vector<WriteRec> writes;
+    std::vector<Op> ops;
+    std::vector<std::string> log;
+    IdleSink idle;
+    std::function<void(int)> on_write;  // after each chunk, with the count so far
+    bool absent = false;           // BUSY never rises: start() leaves it low and nothing answers
+    bool fail_init = false;
+    bool fail_writes = false;
+    bool reset_clears_ram = true;  // a reset leaves both RAMs holding junk
+    bool ping_pong = true;         // the RAMs trade places after each partial, as the real controller's do
+    bool asleep = false;
+    int inits = 0;
+    int bad_windows = 0;
+    int chunks = 0;
+
+private:
+    void apply(Op op)
+    {
+        switch (op) {
+        case Op::full:
+        case Op::fast:
+            glass = next;
+            return;
+        case Op::partial:
+        case Op::partial_hold:
+            for (size_t i = 0; i < glass.size(); ++i) {
+                const uint8_t moved = static_cast<uint8_t>(next[i] ^ prev[i]);
+                glass[i] = static_cast<uint8_t>((glass[i] & ~moved) | (next[i] & moved));
+            }
+            if (ping_pong) {
+                // The real SSD1683 on the Waveshare 4.2" V2 (seen on paper-c6, design face-f1 §17): after a partial
+                // the two RAMs trade places, so the next "new" RAM holds the picture from two refreshes back.
+                std::swap(next, prev);
+            }
+            return;
+        default:
+            return;
+        }
+    }
+
+    uint16_t w_, h_;
+    fr::hal::Rotation rotation_ = fr::hal::Rotation::r0;
+    bool busy_ = false;
+    bool answered_ = false;
+    Op running_ = Op::soft_reset;
+    size_t pos_ = 0;
 };
 
 }  // namespace frt

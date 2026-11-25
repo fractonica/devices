@@ -312,7 +312,7 @@ function renderJob(job: Job): string {
     return [head, renderStorageJob(job.result as Row)].join('\n'); // fr storage get | put | bench (design lcd-clock-c1 D9)
   }
   if (job.kind === 'clock' && job.result && typeof job.result === 'object') {
-    return [head, renderClockDrift(job.result as Row)].join('\n'); // fr clock drift (design lcd-clock-c1 D8)
+    return [head, renderClockDrift(job.result as Row)].join('\n'); // fr rtc drift (design lcd-clock-c1 D8)
   }
   if (job.kind === 'cell' && job.result && typeof job.result === 'object') {
     return [head, renderCellTest(job.result as Row)].join('\n'); // fr cell test (design power-p1 D10)

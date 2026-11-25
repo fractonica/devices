@@ -1,0 +1,15 @@
+schema: fractonica/part@1
+id: esp32c6-supermini-board
+name: ESP32-C6 Super Mini
+category: board
+summary: Thumb-sized ESP32-C6 board (4 MB flash, USB-C on USB-Serial-JTAG), an RGB LED on GPIO8, a status LED on GPIO15, BOOT on GPIO9.
+specs:
+  free_pins: GPIO0–3, 14, 18–23 (21–23 on pads, not the headers)
+  strapping: GPIO4, 5, 8, 9, 15
+  test_pin: GPIO20 (the T-LAT latency pin)
+pins:
+  - { name: left, desc: "TX(16) RX(17) 0 1 2 3 4 5 6 7 (USB up)" }
+  - { name: right, desc: "5V GND 3V3 20 19 18 15 14 9 8" }
+notes:
+  - "Board manifest: hardware/boards/esp32c6-supermini.board.yaml (headers: espboards.dev, mischianti.org; confidence M)."
+  - "Its 3V3 pin is the board's regulator output: a few tens of mA for modules is fine."

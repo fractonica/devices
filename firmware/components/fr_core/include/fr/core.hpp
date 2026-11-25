@@ -15,6 +15,7 @@
 #include "fr/core/core.hpp"
 #include "fr/core/port.hpp"
 #include "fr/hal/selftest.hpp"
+#include "fr/hal/sleep.hpp"
 #include "fr/id.h"
 
 namespace fr::core {
@@ -42,6 +43,13 @@ Core &start();
  * hub. Valid after start(); fr::board::attach takes it before any service's init().
  */
 cap::Sink &sink();
+
+/** Design face-f1 D13-D15: power save's platform (src/esp_power.cpp): wake causes, the offline flag, deep sleep. */
+hal::Sleep &sleep();
+/** This boot runs with no network (power save's NVS flag): no Wi-Fi, ESP-NOW, TCP or UDP link is started. */
+bool offline();
+/** BYE (`sleep` or `reboot`) on every hub session, then the restart once the answers have left. */
+void restart_soon(bool sleeping);
 
 /**
  * Registers the ports (fr.node on 0, the board's instances, fr.diag on 241), attaches every capability

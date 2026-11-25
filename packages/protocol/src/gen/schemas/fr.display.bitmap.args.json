@@ -1,0 +1,60 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:fractonica:schema:fr.display.bitmap.args",
+  "title": "fr.display.bitmap arguments",
+  "description": "A rectangle of 1-bit pixels at (x, y): rows of ceil(w / 8) bytes, MSB first (the snapshot layout); a 1 takes `color`, a 0 `bg`, so with the defaults the bits are the frame's own (1 light). Clipped to the screen; INVALID_ARGS when data is not exactly ceil(w / 8) x h bytes. Mono panels (e-paper, the C3 OLED); UNSUPPORTED on LVGL panels. BULK: TCP or serial, never over a gateway.",
+  "type": "object",
+  "properties": {
+    "x": {
+      "type": "integer",
+      "minimum": -32768,
+      "maximum": 32767,
+      "description": "(px)"
+    },
+    "y": {
+      "type": "integer",
+      "minimum": -32768,
+      "maximum": 32767,
+      "description": "(px)"
+    },
+    "w": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 65535,
+      "description": "(px)"
+    },
+    "h": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 65535,
+      "description": "(px)"
+    },
+    "data": {
+      "type": "string",
+      "pattern": "^([0-9a-fA-F]{2}){0,1200}$",
+      "contentEncoding": "base16",
+      "description": "(<= 1200 bytes)"
+    },
+    "color": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 4294967295,
+      "default": 16777215
+    },
+    "bg": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 4294967295
+    }
+  },
+  "additionalProperties": false,
+  "examples": [
+    {
+      "x": 0,
+      "y": 0,
+      "w": 8,
+      "h": 2,
+      "data": "8001"
+    }
+  ]
+}

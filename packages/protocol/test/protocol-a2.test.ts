@@ -8,6 +8,7 @@ import { z } from 'zod';
 
 import { AUDIO_MONITOR_DEFAULT_S, AUDIO_MONITOR_END_REASONS, AUDIO_MONITOR_MAX_S, AudioMonitorSchema, findOp, OPS, REGISTRY_HASH, REGISTRY_INPUTS_HASH } from '../src/index.ts';
 import { AUDIO_IN_CAP, AudioInMonitorEndReason } from '@fractonica/protocol/gen';
+import { beforeRtc } from './before-rtc.ts';
 
 const hashOf = (ops: readonly { name: string; input: z.ZodType }[]) =>
   createHash('sha256')
@@ -17,7 +18,7 @@ const hashOf = (ops: readonly { name: string; input: z.ZodType }[]) =>
 
 describe('A2 ops (design audio-a2 D5)', () => {
   it('adds audio_monitor as a mutate job on `audio monitor <device>`, and moves REGISTRY_HASH once', () => {
-    expect(OPS.filter((o) => o.name !== 'network_list' && !/^(csi|camera|scale|battery|cell|haptic|wiring|part|storage|clock|app|time)_|^device_adopt$|^port_(lend|ignore|claim)$|^hub_doctor_fix$|^device_enroll$|^device_(hubs_set|hubs_get|share)$|^network_join$|^network_admit$|^hub_(name_set|peers)$/.test(o.name))).toHaveLength(52); // CSI-1 adds three (protocol-csi.test.ts), CAM-1 seven (protocol-camera.test.ts)
+    expect(beforeRtc(OPS).filter((o) => o.name !== 'network_list' && !/^(csi|camera|scale|battery|cell|haptic|wiring|part|storage|clock|app|time)_|^device_adopt$|^port_(lend|ignore|claim)$|^hub_doctor_fix$|^device_enroll$|^device_(hubs_set|hubs_get|share)$|^network_join$|^network_admit$|^hub_(name_set|peers)$|^display_(image|html|text|refresh)$/.test(o.name))).toHaveLength(52); // CSI-1 adds three (protocol-csi.test.ts), CAM-1 seven (protocol-camera.test.ts)
     expect(findOp('audio_monitor')).toMatchObject({ kind: 'job', tier: 'mutate', cli: { path: ['audio', 'monitor'], positional: ['device'] } });
     expect(findOp('audio_monitor')!.summary.length).toBeLessThan(1000);
     // A1's was 445e6697686c and A2's ee5dc36bb005; CSI-1 changed ops in place (protocol-csi.test.ts pins today's).

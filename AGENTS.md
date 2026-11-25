@@ -129,7 +129,7 @@ The dashboard (`packages/dashboard`, stage 4) is drawn in the site's Astrolabe l
 - **The device page** is four sub-pages in one frame (`pages/device/frame.tsx`: INSTRUMENTS · ACTIVITY · FACTS ·
   ENGINEERING) plus one page per instrument (`page-lens.tsx`, `/devices/$id/$instance`). An instrument is drawn by its
   capability's panel from the registry `pages/device/panels.ts` (`Lens`, `Headline`, `Quick?`, `covers?`):
-  `panels/camera/*`, `panels/led.tsx`, `panels/display.tsx`, `panels/stepper.tsx`, `panels/buzzer.tsx`, `panels/haptic.tsx` (with `state/haptic.ts`), else `panels/generic.tsx`. A new purpose-built panel goes
+  `panels/camera/*`, `panels/led.tsx`, `panels/display.tsx` (an e-paper panel adds `pages/device/epaper.tsx` with `state/epaper.ts`), `panels/stepper.tsx`, `panels/buzzer.tsx`, `panels/haptic.tsx` (with `state/haptic.ts`), else `panels/generic.tsx`. A new purpose-built panel goes
   there; `CapPanelProps` is built only by `usePanelProps`. Words and units of a capability's members live in
   `state/cap-words.ts` (a test fails on a `_x10`/`_ms`/`_mb`/… member it does not cover); a command whose field only the
   hub can issue (`state/hub-issued.ts`) is never a form, it renders `HubRuns`. No button under `pages/device` says
@@ -145,6 +145,8 @@ node --conditions=@fractonica/source tools/dash-dev.ts --url-file /tmp/hub.url  
 #   add --camera for a fake ESP32-CAM (cam-esp32: live frames, a card; --no-card empties the slot; SIGUSR2 takes it offline and back)
 #   add --stepper for a fake stepper board (stepper-c3: c3s-stepper's motor moving in time and its buzzer playing in time, done events; SIGUSR1 raises a driver fault;
 #     its haptics too: the LIC `cap`, the solenoid `kick` and the vibration motor `buzz` (tools/fake-haptic.ts); SIGUSR2 drains the LIC to 3.0 V)
+#   add --epaper for a fake e-paper board (paper-c6: c6e-paper's 400 x 300 `paper`, refreshes in the vendor's times, the ghost budget,
+#     refreshed events, tools/fake-epaper.ts; SIGUSR1 also makes its next refresh time out). display_text and display_html need a Chrome.
 node tools/dash-shoot.mjs --url "$(cat /tmp/hub.url)" --out <dir> /=hub /devices=devices   # PNGs at 1440 and 390
 ```
 
@@ -172,7 +174,10 @@ The review's findings still open (the clock on the framework, a setup command wi
 stages 5 and 6. Stage 2 (port policy, crash handling, `hub.db` growth, MCP safety, `fr` from anywhere), stage 3 (the
 temporal core in the CLI and hub: `packages/time`, `fr time`, the `time_*` ops, `time.threshold` events, the SDK's
 `HubError`) and stage 4 (the dashboard in the site's language) are done. Left for stage 5 with the clock: pushing time
-to devices (`time_push`), devices reporting their core version, `fr clock` → `fr rtc`, a scheduler on thresholds, and
-the dashboard's face mirror (`pages/device/face.tsx`, for an `fr.face` instance). The docs under `docs/spec` and
+to devices (`time_push`: since FACE-1 a node takes the hub's time from WELCOME, BEACON and TIME on its own, design
+face-f1 D1), devices reporting their core version, a scheduler on thresholds, and a drawn face mirror. FACE-1 did
+`fr clock` → `fr rtc` (`fr clock` stays an alias), `fr.face` (the clock on the e-paper panel, with power save, three
+keys and a buzzer's clicks and chimes) and the dashboard's face block (`pages/device/face.tsx`); verified on paper-c6
+with a camera on the glass (design face-f1 §13.1, §17, D20). Power save itself is untried on the board. The docs under `docs/spec` and
 `docs/design` still cite `docs/research`, `docs/spikes` and `hosts/`, which are not in this repository (they stay in
 the archived `fractonica/hardware`); the docs rewrite is stage 6.

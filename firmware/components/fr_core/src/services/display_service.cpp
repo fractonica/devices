@@ -24,6 +24,7 @@ Status DisplayService::init(Core &core)
     if (auto st = panel_.init(core, rotation()); !st) {
         return st;
     }
+    backend_.set_refresh_sink([this](const cap::DisplayRefreshed &e) { on_refreshed(e); });
     if (auto st = backend_.init(panel_, cfg_, core, [this](const cap::DisplayUi &e) { on_ui(e); }); !st) {
         return st;
     }
@@ -46,7 +47,22 @@ cap::DisplayTraits DisplayService::traits() const
                                                                  : cap::DisplayColorFormat::mono1,
             .ui = backend_.ui(),
             .touch = touch_,
-            .round = panel_.round()};
+            .round = panel_.round(),
+            .epaper = backend_.epaper()};
+}
+
+Status DisplayService::paint(const display::Box &box, display::PaintFn fn)
+{
+    if (!ready_) {
+        return std::unexpected(Err::failed);
+    }
+    return backend_.paint(box, fn);
+}
+
+display::EpaperBackend *DisplayService::epaper_backend()
+{
+    // Only EpaperBackend says epaper() (no RTTI in the firmware).
+    return backend_.epaper() ? static_cast<display::EpaperBackend *>(&backend_) : nullptr;
 }
 
 Status DisplayService::clear(const cap::DisplayClearArgs &args)
@@ -54,7 +70,7 @@ Status DisplayService::clear(const cap::DisplayClearArgs &args)
     if (!ready_) {
         return std::unexpected(Err::failed);
     }
-    return backend_.clear(args.color & 0xFFFFFF);
+    return drew(backend_.clear(args.color & 0xFFFFFF));
 }
 
 Status DisplayService::text(const cap::DisplayTextArgs &args)
@@ -62,7 +78,7 @@ Status DisplayService::text(const cap::DisplayTextArgs &args)
     if (!ready_) {
         return std::unexpected(Err::failed);
     }
-    return backend_.text(args);
+    return drew(backend_.text(args));
 }
 
 Status DisplayService::fill_rect(const cap::DisplayFillRectArgs &args)
@@ -70,7 +86,7 @@ Status DisplayService::fill_rect(const cap::DisplayFillRectArgs &args)
     if (!ready_) {
         return std::unexpected(Err::failed);
     }
-    return backend_.fill_rect(args);
+    return drew(backend_.fill_rect(args));
 }
 
 Status DisplayService::set_brightness(const cap::DisplaySetBrightnessArgs &args)
@@ -99,6 +115,7 @@ std::expected<cap::DisplayUiLoadResult, Err> DisplayService::ui_load(const cap::
     if (!n) {
         return std::unexpected(n.error());
     }
+    (void)drew({});
     return cap::DisplayUiLoadResult{.widgets = *n};
 }
 
@@ -110,7 +127,57 @@ Status DisplayService::ui_set(const cap::DisplayUiSetArgs &args)
     if (!ready_) {
         return std::unexpected(Err::failed);
     }
-    return backend_.ui_set(args);
+    return drew(backend_.ui_set(args));
+}
+
+Status DisplayService::bitmap(const cap::DisplayBitmapArgs &args)
+{
+    if (backend_.ui()) {
+        return std::unexpected(Err::unsupported);  // LVGL panels: not this round (design epaper-e1 D2)
+    }
+    if (!ready_) {
+        return std::unexpected(Err::failed);
+    }
+    return drew(backend_.bitmap(args));
+}
+
+std::expected<cap::DisplayRefreshResult, Err> DisplayService::refresh(const cap::DisplayRefreshArgs &args)
+{
+    if (!backend_.epaper()) {
+        return std::unexpected(Err::unsupported);
+    }
+    if (!ready_) {
+        return std::unexpected(Err::failed);
+    }
+    return backend_.refresh(args.mode);
+}
+
+Status DisplayService::hold(const cap::DisplayHoldArgs &args)
+{
+    if (!backend_.epaper()) {
+        return std::unexpected(Err::unsupported);
+    }
+    if (!ready_) {
+        return std::unexpected(Err::failed);
+    }
+    return backend_.hold(args.ms);
+}
+
+void DisplayService::on_refreshed(const cap::DisplayRefreshed &e)
+{
+    emit_refreshed(e);
+    if (e.partials != reported_partials_) {
+        reported_partials_ = e.partials;
+        report_partials(e.partials);
+    }
+    if (const uint32_t crc = backend_.shown_crc(); crc != reported_crc_) {
+        reported_crc_ = crc;
+        report_shown_crc(crc);
+    }
+    if (const uint16_t ms = backend_.refresh_ms(); ms != reported_ms_) {
+        reported_ms_ = ms;
+        report_refresh_ms(ms);
+    }
 }
 
 #if FR_TEST_HOOKS

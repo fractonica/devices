@@ -1,11 +1,11 @@
 ---
 name: storage-clock
-description: Use a Fractonica board's micro-SD card (fr.storage) and real-time clock (fr.clock, a DS3231) through the hub - list, copy files to and from the card, measure the card's speed, read the clock against the Mac, set it to the second boundary, measure its drift and trim it - and run the T-LCDC6 gate on the Waveshare ESP32-C6-LCD-1.47 (lcd-c6). Use when asked to put a file on or get one off a board's SD card, check the card works or how fast it is, read or set a board's clock, check why its time is off, or verify the LCD board.
+description: Use a Fractonica board's micro-SD card (fr.storage) and real-time clock (fr.rtc, a DS3231) through the hub - list, copy files to and from the card, measure the card's speed, read the clock against the Mac, set it to the second boundary, measure its drift and trim it - and run the T-LCDC6 gate on the Waveshare ESP32-C6-LCD-1.47 (lcd-c6). Use when asked to put a file on or get one off a board's SD card, check the card works or how fast it is, read or set a board's clock, check why its time is off, or verify the LCD board.
 ---
 
 # Fractonica card and clock
 
-A board's card is an `fr.storage` instance (usually `card`): a FAT micro-SD the board mounts itself. A board's real-time clock is an `fr.clock` instance (usually `clock`): a DS3231 that keeps time through power cuts on its coin cell. `capability_list {device}` or `device_get` `router.instances` shows them. On the bench that is **lcd-c6** (profile `c6l-lcd`: the Waveshare ESP32-C6-LCD-1.47 with its ST7789 172x320 panel as `screen` (backlight capped at 50 %), its TF slot as `card` on the panel's SPI bus, a DS3231 on GPIO18 (SDA) / GPIO19 (SCL) as `clock`, BOOT as `boot`). Design: docs/design/lcd-clock-c1.md; wiring: the hub's bench app, guide `clock-lcd-c6`.
+A board's card is an `fr.storage` instance (usually `card`): a FAT micro-SD the board mounts itself. A board's real-time clock is an `fr.rtc` instance (usually `clock`): a DS3231 that keeps time through power cuts on its coin cell. `capability_list {device}` or `device_get` `router.instances` shows them. On the bench that is **lcd-c6** (profile `c6l-lcd`: the Waveshare ESP32-C6-LCD-1.47 with its ST7789 172x320 panel as `screen` (backlight capped at 50 %), its TF slot as `card` on the panel's SPI bus, a DS3231 on GPIO18 (SDA) / GPIO19 (SCL) as `clock`, BOOT as `boot`). Design: docs/design/lcd-clock-c1.md; wiring: the hub's bench app, guide `clock-lcd-c6`.
 
 
 ## Shared rules
@@ -31,9 +31,9 @@ A board's card is an `fr.storage` instance (usually `card`): a FAT micro-SD the 
 
 ## The clock
 
-- **Read it:** `clock_read` (`fr clock read lcd-c6`): the time (UTC), `valid` (set, and never lost power since: false after the coin cell ran flat or was out with the power off, `osf` says which), the chip's temperature, the aging trim, and `error_ms`: when the RTC's current second began against the Mac's clock, measured through the link's clock sync (negative: the RTC is ahead), with its ± in `uncertainty_ms`.
-- **Set it:** `clock_sync` (`fr clock sync lcd-c6`) sets it from the Mac's clock to the second boundary (the hub aims the next whole second at least 0.6 s ahead; the DS3231's 1 Hz chain restarts on the write). DEVICE_BUSY right after the board comes online: the link's clock is not synced yet, try again a few seconds later. `clock_set {device, iso}` sets a given time (ISO 8601 with a zone; whole seconds; 2000-2099).
-- **Drift:** `clock_drift {device, minutes}` (a job; `fr clock drift lcd-c6 60`) samples error_ms every 10 s and fits a line: ppm (positive: fast), seconds a day, and `aging_suggest`. A DS3231 is about ±2 ppm, so a figure needs tens of minutes; a few minutes only shows sync jitter. `clock_aging {device, offset}` (`fr clock aging lcd-c6 12`) applies a trim (positive slows, about 0.1 ppm a step). Set it only from a drift of 30 minutes or more, and say what you set.
+- **Read it:** `rtc_read` (`fr rtc read lcd-c6`): the time (UTC), `valid` (set, and never lost power since: false after the coin cell ran flat or was out with the power off, `osf` says which), the chip's temperature, the aging trim, and `error_ms`: when the RTC's current second began against the Mac's clock, measured through the link's clock sync (negative: the RTC is ahead), with its ± in `uncertainty_ms`.
+- **Set it:** `rtc_sync` (`fr rtc sync lcd-c6`) sets it from the Mac's clock to the second boundary (the hub aims the next whole second at least 0.6 s ahead; the DS3231's 1 Hz chain restarts on the write). DEVICE_BUSY right after the board comes online: the link's clock is not synced yet, try again a few seconds later. `rtc_set {device, iso}` sets a given time (ISO 8601 with a zone; whole seconds; 2000-2099).
+- **Drift:** `rtc_drift {device, minutes}` (a job; `fr rtc drift lcd-c6 60`) samples error_ms every 10 s and fits a line: ppm (positive: fast), seconds a day, and `aging_suggest`. A DS3231 is about ±2 ppm, so a figure needs tens of minutes; a few minutes only shows sync jitter. `rtc_aging {device, offset}` (`fr rtc aging lcd-c6 12`) applies a trim (positive slows, about 0.1 ppm a step). Set it only from a drift of 30 minutes or more, and say what you set.
 - With `seed_system_time` (the default) the board sets its own clock from a valid RTC at boot, so its logs and files carry real time before the hub is heard.
 
 ## The gate

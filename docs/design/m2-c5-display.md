@@ -18,6 +18,10 @@
 > - **Smaller items:** one shared GPIO ISR-service installer (the boot error "already installed"); one I2C bus per pin pair; touch as an atomic latest point plus a queue marker (a full queue dropped a release); `fr.display` commands `bulk: true` in YAML (D1); one renderer source list for the hub and the CLI.
 > - **The spec edits** of §11 were folded into the spec on 2026-10-28; see 11 §11.6 ("M2-C5 result").
 
+> **Since EPAPER-1** ([design epaper-e1](epaper-e1.md)): `fr.display` 1.3 adds e-paper panels (trait `epaper`,
+> `bitmap`, `refresh`, `hold`, `refreshed`; `EpaperBackend`, `hal::Epaper`, `ssd1683_spi`) and the hub's picture ops
+> (`display_image`, `display_html`, `display_text`, `display_refresh`); `MonoBackend` gained `bitmap`.
+
 **Source of truth**
 - Spec: 07 §7.2–§7.5, §7.7–§7.8 (capability YAML, ids, payload budget, services, drivers), 09 §9.4 (`input_simulate`), §9.7 (diag), 10 §10.5 (T-DISPLAY), 11 §11.6 (the M2-C5 row), 04 (boards).
 - `research/hal-capabilities-sdk.md` (the `fr.display` draft); `firmware/apps/hwprobe/main/hwprobe.c` (the SSD1306B init that works on the C3 OLED).

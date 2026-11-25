@@ -5,7 +5,7 @@
 // tools/display/README.md):
 //
 //   fr_display_render --width W --height H --format rgb565|mono1 --rotation 0..3 --ui 0|1
-//                     --script <file.jsonl | -> --out <file.png> [--round 0|1] [--window [--scale N]]
+//                     --script <file.jsonl | -> --out <file.png> [--round 0|1] [--epaper 0|1] [--window [--scale N]]
 //
 //   W, H      the panel's pixels after rotation (the profile's kPanels entry / fr.display traits), 1..4096.
 //   rotation  quarter turns (kPanels' rotation); the panel's native size is H x W for 1 and 3.
@@ -20,6 +20,8 @@
 //   out       the PNG: the frozen frame (snapshot + snapshot_read), encoded as the hub encodes a board's snapshot.
 //   round     1: trait round (design scale-round-c1 D5): the PNG and the window paint the pixels off the inscribed
 //             circle dim grey (rgb565 0x4208), as the glass shows them (not at all). crc stays the whole frame's.
+//   epaper    1: trait epaper (design epaper-e1 D12): fr_core's EpaperBackend over an instant controller; the PNG is
+//             the frame drawn, as the board's snapshot. No window.
 //   window    after the script, an SDL2 window (Homebrew SDL2) where the mouse is the finger; ui events print live as
 //             {"event": {"id", "kind", "value"}} lines; closing it (or Esc) writes the PNG of the last frame.
 //
@@ -95,7 +97,7 @@ int main(int argc, char **argv)
     bool have[6] = {};  // width height format rotation ui script/out
     const char *usage =
         "usage: fr_display_render --width W --height H --format rgb565|mono1 --rotation 0..3 --ui 0|1 "
-        "--script <file.jsonl|-> --out <file.png> [--round 0|1] [--window [--scale N]]";
+        "--script <file.jsonl|-> --out <file.png> [--round 0|1] [--epaper 0|1] [--window [--scale N]]";
     for (int i = 1; i < argc; ++i) {
         const std::string_view a = argv[i];
         if (a == "--window") {
@@ -139,6 +141,11 @@ int main(int argc, char **argv)
                 return fail(kExitUsage, "INVALID_ARGS", "--round must be 0 or 1");
             }
             geo.round = n == 1;
+        } else if (a == "--epaper") {
+            if (!parse_uint(v, 0, 1, n)) {
+                return fail(kExitUsage, "INVALID_ARGS", "--epaper must be 0 or 1");
+            }
+            geo.epaper = n == 1;
         } else if (a == "--script") {
             script = v;
         } else if (a == "--out") {
@@ -150,6 +157,9 @@ int main(int argc, char **argv)
         } else {
             return fail(kExitUsage, "INVALID_ARGS", "unknown option " + std::string(a) + "; " + usage);
         }
+    }
+    if (window && geo.epaper) {
+        return fail(kExitUsage, "INVALID_ARGS", "--window is not for e-paper panels: render a PNG (--out) instead");
     }
     have[5] = !script.empty() && !out.empty();
     for (bool h : have) {

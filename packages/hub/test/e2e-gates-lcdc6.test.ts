@@ -96,7 +96,7 @@ describe('the verdicts', () => {
     expect(clockVerdict({ ...base, a: clock({ temp_c: 85 }) }).reasons[0]).toMatch(/85 °C/);
     expect(clockVerdict({ ...base, a: clock({ error_ms: null }) }).reasons[0]).toMatch(/no error_ms/);
     const lost = clockVerdict({ ...base, afterReboot: clock({ valid: false }), reset: 'completed', backS: null });
-    expect(lost.reasons).toEqual(['no node.boot within 40 s', 'clock_read after the reboot: not valid']);
+    expect(lost.reasons).toEqual(['no node.boot within 40 s', 'rtc_read after the reboot: not valid']);
   });
 
   it('share and the gate run', () => {
@@ -110,9 +110,9 @@ describe('the verdicts', () => {
   });
 
   it('the DUT', () => {
-    const ok = { device_id: 'a085e30009ac', alias: 'lcd-c6', presence: 'online', router: { instances: [{ name: 'card', cap: 'fr.storage' }, { name: 'clock', cap: 'fr.clock' }] } };
+    const ok = { device_id: 'a085e30009ac', alias: 'lcd-c6', presence: 'online', router: { instances: [{ name: 'card', cap: 'fr.storage' }, { name: 'clock', cap: 'fr.rtc' }] } };
     expect(dutProblems(ok)).toEqual([]);
-    expect(dutProblems({ ...ok, presence: 'offline', router: { instances: [{ name: 'card', cap: 'fr.storage' }] } })).toEqual(['lcd-c6 is offline', 'lcd-c6 has no fr.clock instance (device_get router.instances)']);
+    expect(dutProblems({ ...ok, presence: 'offline', router: { instances: [{ name: 'card', cap: 'fr.storage' }] } })).toEqual(['lcd-c6 is offline', 'lcd-c6 has no fr.rtc instance (device_get router.instances)']);
     expect(dutProblems({ ...ok, role: 'fixture' })[0]).toMatch(/HIL fixture/);
   });
 });

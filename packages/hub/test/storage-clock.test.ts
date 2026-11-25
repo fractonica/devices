@@ -1,6 +1,6 @@
 // LCD-1 / CLOCK-1 hub stream (design lcd-clock-c1 D8, D9): the pure pieces (the bench pattern and its comparison, the
-// second-boundary arithmetic of clock_sync and clock_read, the drift fit and the aging step), then every storage and
-// clock op against a FakeNode with c6l-lcd's `card` (fr.storage 0x000F) and `clock` (fr.clock 0x0010): a card in
+// second-boundary arithmetic of rtc_sync and rtc_read, the drift fit and the aging step), then every storage and
+// clock op against a FakeNode with c6l-lcd's `card` (fr.storage 0x000F) and `clock` (fr.rtc 0x0010): a card in
 // memory (chunk limits, BUSY, NOT_FOUND, paging), a file there and back, the bench with and without a corrupted read,
 // and an RTC whose seconds the fake keeps on the Mac's clock (or a fast one).
 
@@ -49,7 +49,7 @@ describe('pure pieces', () => {
     expect(defaultCardPath('/Users/x/notes.txt')).toBe('/notes.txt');
   });
 
-  it('clock_sync aims the next wall second at least 0.6 s ahead and maps it through hub µs to the node', () => {
+  it('rtc_sync aims the next wall second at least 0.6 s ahead and maps it through hub µs to the node', () => {
     // Wall 1,000,000.250 s; the hub's µs run 3 ms behind the wall; the node's clock is hub µs − 1e12 + 5e6.
     const wall = 1_000_000_250_000;
     const hub = wall - 3000;
@@ -269,21 +269,21 @@ async function board(): Promise<Board> {
     const s = Math.floor(b.rtc.rtcMsAt(wall) / 1000);
     const began = b.rtc.wallMsOf(s);
     const rollover = Math.round(node.nodeNowUs() - (wall - began) * 1000);
-    return { fields: enc('fr.clock', 'result', 'read', { unix: s, valid: true, osf: false, temp_c10: 245, aging: b.rtc.aging, offset_ms: 0, rollover_us: String(rollover), injected: false }) };
+    return { fields: enc('fr.rtc', 'result', 'read', { unix: s, valid: true, osf: false, temp_c10: 245, aging: b.rtc.aging, offset_ms: 0, rollover_us: String(rollover), injected: false }) };
   });
   node.handlers.set(`${PORT.clock}/${CL.set}`, (args) => {
     rtc.setAt.push(node.nodeNowUs());
-    const a = dec('fr.clock', 'set', args);
+    const a = dec('fr.rtc', 'set', args);
     rtc.sets.push(a);
     if (!rtc.dropWrites) {
       // The board answers at once and writes at the target; `set` fires only for a write that landed.
       const delayMs = Math.max(0, (Number(a.at_us) - node.nodeNowUs()) / 1000);
-      setTimeout(() => node.event(PORT.clock, 2, enc('fr.clock', 'event', 'set', { unix: a.unix, by: a.by })), Number(a.at_us) === 0 ? 5 : delayMs);
+      setTimeout(() => node.event(PORT.clock, 2, enc('fr.rtc', 'event', 'set', { unix: a.unix, by: a.by })), Number(a.at_us) === 0 ? 5 : delayMs);
     }
     return undefined;
   });
   node.handlers.set(`${PORT.clock}/${CL.set_aging}`, (args) => {
-    rtc.aging = Number(dec('fr.clock', 'set_aging', args).offset);
+    rtc.aging = Number(dec('fr.rtc', 'set_aging', args).offset);
     return undefined;
   });
   await node.connected(r.events);
@@ -314,7 +314,7 @@ describe('storage ops against a fake card (D9)', { timeout: 20_000 }, () => {
     await expect(call(b, 'storage_rm', { device: 'lcd-c6', path: '/nope' })).rejects.toMatchObject({ code: 'NOT_FOUND' });
     await expect(call(b, 'storage_ls', { device: 'lcd-c6', path: '/nope' })).rejects.toMatchObject({ code: 'NOT_FOUND' });
     await expect(call(b, 'storage_rm', { device: 'lcd-c6', path: '/' })).rejects.toMatchObject({ code: 'INVALID_ARGS' });
-    await expect(call(b, 'storage_info', { device: 'lcd-c6', instance: 'clock' })).rejects.toMatchObject({ code: 'INVALID_ARGS', message: expect.stringContaining('fr.clock, not fr.storage') });
+    await expect(call(b, 'storage_info', { device: 'lcd-c6', instance: 'clock' })).rejects.toMatchObject({ code: 'INVALID_ARGS', message: expect.stringContaining('fr.rtc, not fr.storage') });
   });
 
   it('a file there and back: put in chunks (the last short), get it identical; a smaller board chunk is found; BUSY is waited out', async () => {
@@ -369,14 +369,14 @@ describe('clock ops against a fake RTC (D8)', { timeout: 20_000 }, () => {
   it('read: the time, valid, temperature, and an error_ms near 0 for an RTC in step with the Mac', async () => {
     const b = await board();
     await synced(b);
-    const r = (await call(b, 'clock_read', { device: 'lcd-c6' })) as ClockRead;
+    const r = (await call(b, 'rtc_read', { device: 'lcd-c6' })) as ClockRead;
     expect(r).toMatchObject({ device: DEV, instance: 'clock', valid: true, osf: false, temp_c: 24.5, aging: 0, injected: false });
     expect(Math.abs(r.unix - Math.floor(Date.now() / 1000))).toBeLessThanOrEqual(1);
     expect(r.iso).toBe(isoOf(r.unix));
     expect(Math.abs(r.error_ms!)).toBeLessThan(25);
     b.rtc.rtcMsAt = (w) => w + 1500; // 1.5 s ahead
     b.rtc.wallMsOf = (s) => s * 1000 - 1500;
-    const ahead = (await call(b, 'clock_read', { device: 'lcd-c6' })) as ClockRead;
+    const ahead = (await call(b, 'rtc_read', { device: 'lcd-c6' })) as ClockRead;
     expect(ahead.error_ms).toBeLessThan(-1450);
     expect(ahead.error_ms).toBeGreaterThan(-1550);
   });
@@ -384,7 +384,7 @@ describe('clock ops against a fake RTC (D8)', { timeout: 20_000 }, () => {
   it('sync aims the next whole wall second through the link clock; set takes an ISO time; aging is sent', async () => {
     const b = await board();
     await synced(b);
-    const s = (await call(b, 'clock_sync', { device: 'lcd-c6' })) as ClockSet;
+    const s = (await call(b, 'rtc_sync', { device: 'lcd-c6' })) as ClockSet;
     const sent = b.rtc.sets[0];
     expect(sent).toMatchObject({ unix: s.unix, by: 'sync' });
     expect(s.lead_ms).toBeGreaterThanOrEqual(600);
@@ -395,12 +395,12 @@ describe('clock ops against a fake RTC (D8)', { timeout: 20_000 }, () => {
     const aheadMs = (atUs - b.rtc.setAt[0]) / 1000;
     expect(aheadMs).toBeGreaterThan(s.lead_ms - 100);
     expect(aheadMs).toBeLessThan(s.lead_ms + 5);
-    const set = (await call(b, 'clock_set', { device: 'lcd-c6', iso: '2026-11-05T17:00:00+03:00' })) as ClockSet;
+    const set = (await call(b, 'rtc_set', { device: 'lcd-c6', iso: '2026-11-05T17:00:00+03:00' })) as ClockSet;
     expect(set).toMatchObject({ unix: Date.UTC(2026, 10, 5, 14) / 1000, iso: '2026-11-05T14:00:00Z', at_us: 0, by: 'command' });
     expect(b.rtc.sets[1]).toMatchObject({ unix: Date.UTC(2026, 10, 5, 14) / 1000, by: 'command' });
-    await expect(call(b, 'clock_set', { device: 'lcd-c6', iso: '2026-11-05 14:00' })).rejects.toMatchObject({ code: 'INVALID_ARGS' });
-    await expect(call(b, 'clock_set', { device: 'lcd-c6', iso: '2101-01-01T00:00:00Z' })).rejects.toMatchObject({ code: 'INVALID_ARGS' });
-    expect(await call(b, 'clock_aging', { device: 'lcd-c6', offset: -7 })).toMatchObject({ offset: -7 });
+    await expect(call(b, 'rtc_set', { device: 'lcd-c6', iso: '2026-11-05 14:00' })).rejects.toMatchObject({ code: 'INVALID_ARGS' });
+    await expect(call(b, 'rtc_set', { device: 'lcd-c6', iso: '2101-01-01T00:00:00Z' })).rejects.toMatchObject({ code: 'INVALID_ARGS' });
+    expect(await call(b, 'rtc_aging', { device: 'lcd-c6', offset: -7 })).toMatchObject({ offset: -7 });
     expect(b.rtc.aging).toBe(-7);
   });
 
@@ -411,7 +411,7 @@ describe('clock ops against a fake RTC (D8)', { timeout: 20_000 }, () => {
     // A read after the set shows a second before the one asked (the write never landed).
     b.rtc.rtcMsAt = (w) => w - 3_600_000;
     b.rtc.wallMsOf = (s) => s * 1000 + 3_600_000;
-    await expect(call(b, 'clock_set', { device: 'lcd-c6', iso: '2030-01-01T00:00:00Z' })).rejects.toMatchObject({ code: 'DELIVERY_FAILED' });
+    await expect(call(b, 'rtc_set', { device: 'lcd-c6', iso: '2030-01-01T00:00:00Z' })).rejects.toMatchObject({ code: 'DELIVERY_FAILED' });
   });
 
   it('sync is DEVICE_BUSY while the link clock is not synced', async () => {
@@ -422,7 +422,7 @@ describe('clock ops against a fake RTC (D8)', { timeout: 20_000 }, () => {
     node.answerTime = false;
     node.describeAs(CAPS);
     await node.connected(r.events);
-    await expect(Promise.resolve().then(() => HANDLERS.clock_sync({ device: 'lcd-c6' } as never, r.hub))).rejects.toMatchObject({ code: 'DEVICE_BUSY' });
+    await expect(Promise.resolve().then(() => HANDLERS.rtc_sync({ device: 'lcd-c6' } as never, r.hub))).rejects.toMatchObject({ code: 'DEVICE_BUSY' });
   });
 
   it('drift: samples a fast RTC, fits a positive ppm and suggests a positive aging step', async () => {
@@ -434,7 +434,7 @@ describe('clock ops against a fake RTC (D8)', { timeout: 20_000 }, () => {
     b.rtc.rtcMsAt = (w) => t0 + (w - t0) * k;
     b.rtc.wallMsOf = (s) => t0 + (s * 1000 - t0) / k;
     setClockTiming(40); // a "second" of interval is 40 ms
-    const d = await job(b, 'clock_drift', { device: 'lcd-c6', minutes: 1, interval_s: 1 });
+    const d = await job(b, 'rtc_drift', { device: 'lcd-c6', minutes: 1, interval_s: 1 });
     expect(d.status, JSON.stringify(d.error)).toBe('completed');
     const r = d.result as ClockDrift;
     expect(r.samples).toBeGreaterThan(20);

@@ -7,6 +7,7 @@ import { describe, expect, it } from 'vitest';
 import { z } from 'zod';
 
 import { findOp, JOB_KINDS, OPS, REGISTRY_HASH, REGISTRY_INPUTS_HASH, SCALE_MAX_KNOWN_G, ScaleStatusSchema, ScaleWatchSchema } from '../src/index.ts';
+import { beforeRtc } from './before-rtc.ts';
 
 const hashOf = (ops: readonly { name: string; input: z.ZodType }[]) =>
   createHash('sha256')
@@ -18,7 +19,7 @@ const SCALE_OP_NAMES = ['scale_status', 'scale_read', 'scale_tare', 'scale_calib
 
 describe('SCALE-1 ops (design scale-round-c1 D10)', () => {
   it('adds six scale ops on the CLI paths of D10 and moves REGISTRY_HASH once', () => {
-    const scale1 = OPS.filter((o) => !/^(battery|cell|haptic|wiring|part|storage|clock|app|time)_|^device_adopt$|^port_(lend|ignore|claim)$|^hub_doctor_fix$|^device_enroll$|^device_(hubs_set|hubs_get|share)$|^network_join$|^network_admit$|^hub_(name_set|peers)$/.test(o.name)); // POWER-1 adds fourteen (protocol-power.test.ts)
+    const scale1 = beforeRtc(OPS).filter((o) => !/^(battery|cell|haptic|wiring|part|storage|clock|app|time)_|^device_adopt$|^port_(lend|ignore|claim)$|^hub_doctor_fix$|^device_enroll$|^device_(hubs_set|hubs_get|share)$|^network_join$|^network_admit$|^hub_(name_set|peers)$|^display_(image|html|text|refresh)$/.test(o.name)); // POWER-1 adds fourteen (protocol-power.test.ts)
     expect(scale1).toHaveLength(68);
     expect(scale1.slice(-6).map((o) => o.name)).toEqual(SCALE_OP_NAMES);
     expect(findOp('scale_status')).toMatchObject({ kind: 'query', tier: 'read', cli: { path: ['scale', 'status'], positional: ['device'] } });

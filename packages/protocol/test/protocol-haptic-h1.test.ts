@@ -5,6 +5,7 @@ import { describe, expect, it } from 'vitest';
 
 import { findOp, HAPTIC_KIND_DEFAULTS, hapticLongestTap, hapticTrainFits, OPS, REGISTRY_HASH, REGISTRY_INPUTS_HASH } from '../src/index.ts';
 import { CATALOG } from '../src/gen/catalog.ts';
+import { beforeRtc } from './before-rtc.ts';
 
 describe('HAPTIC-1 ops and fr.haptic 1.1', () => {
   it('adds haptic_tap after haptic_stop, on `fr haptic tap <device>`, and moves REGISTRY_HASH', () => {
@@ -12,9 +13,11 @@ describe('HAPTIC-1 ops and fr.haptic 1.1', () => {
     expect(names.indexOf('haptic_tap')).toBe(names.indexOf('haptic_stop') + 1);
     expect(findOp('haptic_tap')).toMatchObject({ target: 'device', kind: 'command', tier: 'mutate', cli: { path: ['haptic', 'tap'], positional: ['device'] } });
     expect(findOp('haptic_tap')!.summary.length).toBeLessThan(1000);
-    expect(OPS).toHaveLength(132);
-    expect(REGISTRY_INPUTS_HASH).toBe('0ade067d465c');
-    expect(REGISTRY_HASH).toBe('3697879f7c01');
+    expect(beforeRtc(OPS).filter((o) => !/^display_(image|html|text|refresh)$/.test(o.name))).toHaveLength(132); // EPAPER-1 adds four (protocol-epaper-e1.test.ts)
+    // HAPTIC-1's REGISTRY_INPUTS_HASH was 0ade067d465c and its REGISTRY_HASH 3697879f7c01; EPAPER-1 moved both
+    // (protocol-epaper-e1.test.ts pins the current ones).
+    expect(REGISTRY_INPUTS_HASH).not.toBe('0ade067d465c');
+    expect(REGISTRY_HASH).not.toBe('3697879f7c01');
   });
 
   it('checks the inputs: a period or a rate, the tap, the count, the accent', () => {

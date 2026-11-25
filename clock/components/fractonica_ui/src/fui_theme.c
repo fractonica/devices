@@ -26,3 +26,8 @@ const fui_theme_t fui_theme_astrolabe = {
 const fui_theme_t fui_theme_mono = {
     0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1
 };
+
+/* Black ink (clear bits) on white paper (set bits). */
+const fui_theme_t fui_theme_paper = {
+    1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
+};

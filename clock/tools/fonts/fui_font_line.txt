@@ -1,0 +1,106 @@
+; fui_font_line - the monoline numeral face of the 400 x 300 paper face's
+; corners, Pentad numeral and Earth time (the owner's choice, 2026-11-24):
+; geometric strokes in the spirit of the reading face (DESIGN.md S3), drawn
+; with the one-bit pen the wave's glyphs use (scale + 1 px: 3 px at 2 px per dot, 28 px capitals; at
+; 1 px per dot, the Earth time, a 1 px pen).
+; Hand drawn here; tools/genfont.py writes components/fractonica_ui/src/
+; fui_font_line.c (never edit the .c).
+;
+; A STROKE font ("!kind strokes"). A glyph is "@ <code point> w=<width>" and
+; its drawing commands, coordinates in dots of the cell (fractions allowed,
+; kept to a quarter dot):
+;   L x0 y0 x1 y1 ...     a polyline
+;   A cx cy rx ry a0 a1   an elliptical arc, degrees from 3 o'clock, positive
+;                         clockwise (y down); a1 < a0 runs backwards
+; The cell is 20 rows: capitals and digits fill rows 2..15 (the strokes'
+; middles stay 0.75 dot inside, half the pen at 2 px per dot), x-height from
+; row 6.75, descenders to 19.25. A SUBSET: only what those slots write
+; (digits, '#', ':', the space, the numerals I and V, the unit letters
+; ε η ι λ, the Earth sign); anything else draws as the missing-glyph box, and
+; sim/tests/test_ui.c "paper fonts" holds the coverage.
+
+!name fui_font_line
+!kind strokes
+!height 20
+!top 2
+!baseline 16
+!box 6
+!subset 1
+
+@ ' ' w=4
+
+@ '#' w=8
+L 2.75 3.5 2.25 14.5
+L 5.75 3.5 5.25 14.5
+L 0.75 7 7.25 7
+L 0.75 11 7.25 11
+
+@ '0' w=8
+A 4 9 3.25 6.25 0 360
+
+@ '1' w=8
+L 1.75 5 4.75 2.75 4.75 15.25
+
+@ '2' w=8
+A 4 6 3.25 3.25 190 380
+L 7.05 7.1 0.75 15.25 7.25 15.25
+
+@ '3' w=8
+A 3.9 5.875 3 3.125 200 450
+A 4 12.125 3.25 3.125 270 520
+
+@ '4' w=8
+L 5.75 15.25 5.75 2.75 0.75 11.25 7.25 11.25
+
+@ '5' w=8
+L 6.75 2.75 1.5 2.75 1.5 9.1
+A 4 11.75 3.25 3.5 222 520
+
+@ '6' w=8
+A 4 11.5 3.25 3.75 0 360
+L 5.75 2.75 1.1 10.25
+
+@ '7' w=8
+L 0.75 2.75 7.25 2.75 2.75 15.25
+
+@ '8' w=8
+A 4 5.75 2.75 3 0 360
+A 4 12.125 3.25 3.125 0 360
+
+@ '9' w=8
+A 4 6.5 3.25 3.75 0 360
+L 6.9 7.75 2.25 15.25
+
+@ ':' w=2
+L 1 6.5 1 6.75
+L 1 13 1 13.25
+
+@ 'I' w=4
+L 0.75 2.75 3.25 2.75
+L 2 2.75 2 15.25
+L 0.75 15.25 3.25 15.25
+
+@ 'V' w=7
+L 0.75 2.75 3.5 15.25 6.25 2.75
+
+@ U+03B5 w=7
+A 4.25 9 2.75 2.25 -40 -270
+A 4.25 13.25 3 2 -90 -320
+
+@ U+03B7 w=8
+L 1 6.75 1 15.25
+A 4 9.5 3 2.75 180 360
+L 7 9.5 7 19.25
+
+@ U+03B9 w=4
+L 1.5 6.75 1.5 13.5
+A 3.25 13.5 1.75 1.75 180 90
+
+@ U+03BB w=8
+L 1.25 2.75 7.25 15.25
+L 0.75 15.25 4.25 8
+
+@ U+2295 w=9
+A 4.5 9 4 4 0 360
+L 0.5 9 8.5 9
+L 4.5 5 4.5 13

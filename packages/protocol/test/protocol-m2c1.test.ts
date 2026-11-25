@@ -27,6 +27,7 @@ import {
   TestReportSchema,
 } from '@fractonica/protocol';
 import { Role } from '@fractonica/protocol/gen';
+import { beforeRtc } from './before-rtc.ts';
 
 const input = (name: string) => findOp(name)!.input;
 const ok = (name: string, v: unknown) => input(name).safeParse(v).success;
@@ -199,7 +200,7 @@ describe('REGISTRY_HASH (§3)', () => {
     expect(OP_NAMES).toEqual(expect.arrayContaining(['bench_get', 'test_report']));
     // 46 at M2-C1; M2-C5 adds display_snapshot and display_render (protocol-m2c5.test.ts), A1 the audio_ ops, CSI-1
     // network_list and the csi_ ops.
-    expect(OPS.filter((o) => !/^(display|audio|csi|camera|scale|battery|cell|haptic|wiring|part|storage|clock|app|time)_|^device_adopt$|^port_(lend|ignore|claim)$|^hub_doctor_fix$|^device_enroll$|^device_(hubs_set|hubs_get|share)$|^network_join$|^network_admit$|^hub_(name_set|peers)$/.test(o.name) && o.name !== 'network_list')).toHaveLength(46);
+    expect(beforeRtc(OPS).filter((o) => !/^(display|audio|csi|camera|scale|battery|cell|haptic|wiring|part|storage|clock|app|time)_|^device_adopt$|^port_(lend|ignore|claim)$|^hub_doctor_fix$|^device_enroll$|^device_(hubs_set|hubs_get|share)$|^network_join$|^network_admit$|^hub_(name_set|peers)$|^display_(image|html|text|refresh)$/.test(o.name) && o.name !== 'network_list')).toHaveLength(46);
     expect(hashOf(OPS)).toBe(REGISTRY_INPUTS_HASH);
     expect(REGISTRY_HASH).not.toBe('8805351bae42'); // M1's
     for (const name of ['bench_get', 'test_report']) {

@@ -355,10 +355,10 @@
     {
       "id": 3,
       "name": "fr.display",
-      "version": "1.2",
+      "version": "1.3",
       "section": "standard",
       "summary": "A pixel panel with drawing primitives everywhere and LVGL layouts where the panel's driver says so (trait ui).",
-      "doc": "Colours are 0xRRGGBB on the wire; a mono panel (color mono1) lights a pixel whose colour is at least 50 % luminance.\nCommands are queued to the renderer and never draw inside dispatch; the panel is flushed at most every flush_ms.\nPrimitives (clear, text, fill_rect) work on every panel. ui_load and ui_set answer UNSUPPORTED where `ui` is false\n(the C3 OLED's built-in 1-bit renderer); on LVGL panels a layout replaces the screen and primitives sent after it\ndraw on top. snapshot and snapshot_read read back the framebuffer as drawn (test builds), so an agent sees the real\nscreen and compares it with the desktop render of the same commands (T-DISPLAY).\n",
+      "doc": "Colours are 0xRRGGBB on the wire; a mono panel (color mono1) lights a pixel whose colour is at least 50 % luminance.\nCommands are queued to the renderer and never draw inside dispatch; the panel is flushed at most every flush_ms.\nPrimitives (clear, text, fill_rect) work on every panel. ui_load and ui_set answer UNSUPPORTED where `ui` is false\n(the C3 OLED's built-in 1-bit renderer); on LVGL panels a layout replaces the screen and primitives sent after it\ndraw on top. snapshot and snapshot_read read back the framebuffer as drawn (test builds), so an agent sees the real\nscreen and compares it with the desktop render of the same commands (T-DISPLAY).\nAn e-paper panel (trait epaper; design epaper-e1) keeps two 1-bit frames, what has been drawn and what the glass\nshows, and refreshes only the area where they differ: settle_ms after the last drawing command, at once on\n`refresh`, never during a `hold`. A refresh is partial (only changed pixels move, about 0.4 s), fast or full (the\nwhole screen flashes; ghosts are cleared); full_every automatic partials are followed by a `clean` refresh.\n`bitmap` takes 1-bit pixels drawn elsewhere (the hub renders images and HTML), on every mono panel.\n",
       "types": {
         "ColorFormat": {
           "mono1": 0,
@@ -389,6 +389,12 @@
           "pressed": 1,
           "released": 2,
           "value_changed": 3
+        },
+        "RefreshMode": {
+          "auto": 0,
+          "partial": 1,
+          "fast": 2,
+          "full": 3
         }
       },
       "messages": {
@@ -537,6 +543,11 @@
           "name": "round",
           "id": 6,
           "type": "bool"
+        },
+        {
+          "name": "epaper",
+          "id": 7,
+          "type": "bool"
         }
       ],
       "config": [
@@ -571,7 +582,71 @@
             1000
           ],
           "unit": "ms",
-          "doc": "coalescing period: the panel is flushed at most this often (50 Hz)"
+          "doc": "coalescing period: the panel is flushed at most this often (50 Hz); on e-paper the shortest time between the starts of two refreshes"
+        },
+        {
+          "name": "settle_ms",
+          "type": "u16",
+          "default": 60,
+          "range": [
+            0,
+            1000
+          ],
+          "unit": "ms",
+          "doc": "e-paper: an automatic refresh starts this long after the last drawing command"
+        },
+        {
+          "name": "full_every",
+          "type": "u8",
+          "default": 5,
+          "range": [
+            0,
+            100
+          ],
+          "doc": "e-paper: automatic partial refreshes before an automatic clean one (the vendor says 5); 0 never cleans automatically"
+        },
+        {
+          "name": "clean",
+          "type": "RefreshMode",
+          "default": "full",
+          "doc": "e-paper: the refresh that cleans ghosts, full or fast"
+        },
+        {
+          "name": "clean_hours",
+          "type": "u8",
+          "default": 24,
+          "range": [
+            0,
+            168
+          ],
+          "doc": "e-paper: a clean refresh when the glass has had none for this long, even with nothing new (the vendor's 24 h rule); 0 off"
+        },
+        {
+          "name": "burst_ms",
+          "type": "u16",
+          "default": 1000,
+          "range": [
+            0,
+            5000
+          ],
+          "unit": "ms",
+          "doc": "e-paper: the high voltage stays on this long after a partial, so a partial that follows starts sooner; 0 powers it down after every refresh"
+        },
+        {
+          "name": "sleep_s",
+          "type": "u16",
+          "default": 10,
+          "range": [
+            0,
+            3600
+          ],
+          "doc": "e-paper: deep sleep after this many seconds without a refresh; 0 never"
+        },
+        {
+          "name": "boot_clear",
+          "type": "bool",
+          "default": false,
+          "doc": "e-paper: a full refresh to white at boot; false keeps the glass's picture across a reboot"
         }
       ],
       "properties": [
@@ -580,6 +655,34 @@
           "id": 1,
           "type": "u8",
           "doc": "the backlight level (255 on panels without backlight control)"
+        },
+        {
+          "name": "partials",
+          "id": 2,
+          "type": "u8",
+          "requires": {
+            "trait": "epaper"
+          },
+          "doc": "partial refreshes since the last fast or full one"
+        },
+        {
+          "name": "shown_crc",
+          "id": 3,
+          "type": "u32",
+          "requires": {
+            "trait": "epaper"
+          },
+          "doc": "CRC-32 of what the glass shows, in the snapshot layout; 0: not known since boot"
+        },
+        {
+          "name": "refresh_ms",
+          "id": 4,
+          "type": "u16",
+          "requires": {
+            "trait": "epaper"
+          },
+          "unit": "ms",
+          "doc": "how long the last refresh took"
         }
       ],
       "commands": [
@@ -905,6 +1008,127 @@
               "max": 1024
             }
           ]
+        },
+        {
+          "name": "bitmap",
+          "id": 9,
+          "delivery": "reliable",
+          "idempotent": false,
+          "visibility": "public",
+          "bulk": true,
+          "doc": "A rectangle of 1-bit pixels at (x, y): rows of ceil(w / 8) bytes, MSB first (the snapshot layout); a 1 takes `color`, a 0 `bg`, so with the defaults the bits are the frame's own (1 light). Clipped to the screen; INVALID_ARGS when data is not exactly ceil(w / 8) x h bytes. Mono panels (e-paper, the C3 OLED); UNSUPPORTED on LVGL panels. BULK: TCP or serial, never over a gateway.",
+          "fields": [
+            {
+              "name": "x",
+              "id": 1,
+              "type": "i16",
+              "unit": "px"
+            },
+            {
+              "name": "y",
+              "id": 2,
+              "type": "i16",
+              "unit": "px"
+            },
+            {
+              "name": "w",
+              "id": 3,
+              "type": "u16",
+              "unit": "px"
+            },
+            {
+              "name": "h",
+              "id": 4,
+              "type": "u16",
+              "unit": "px"
+            },
+            {
+              "name": "data",
+              "id": 5,
+              "type": "bytes",
+              "max": 1200
+            },
+            {
+              "name": "color",
+              "id": 6,
+              "type": "rgb",
+              "default": 16777215
+            },
+            {
+              "name": "bg",
+              "id": 7,
+              "type": "rgb"
+            }
+          ],
+          "examples": [
+            {
+              "x": 0,
+              "y": 0,
+              "w": 8,
+              "h": 2,
+              "data": "8001"
+            }
+          ]
+        },
+        {
+          "name": "refresh",
+          "id": 10,
+          "delivery": "reliable",
+          "idempotent": false,
+          "visibility": "public",
+          "doc": "E-paper: refresh now in `mode` (auto: partial, or full when the glass is not known, or the `clean` mode when the ghost budget is spent; an explicit partial runs past the budget; fast and full redraw the whole screen even with nothing new). RESULT: the mode that will run and whether the frame differs from the glass; `refreshed` follows (none when nothing changed and the mode is auto or partial). One refresh may wait while another runs; it takes the strongest mode asked. UNSUPPORTED where trait epaper is false.",
+          "fields": [
+            {
+              "name": "mode",
+              "id": 1,
+              "type": "RefreshMode"
+            }
+          ],
+          "result": [
+            {
+              "name": "mode",
+              "id": 1,
+              "type": "RefreshMode"
+            },
+            {
+              "name": "changed",
+              "id": 2,
+              "type": "bool"
+            }
+          ],
+          "examples": [
+            {
+              "mode": "auto"
+            },
+            {
+              "mode": "full"
+            }
+          ]
+        },
+        {
+          "name": "hold",
+          "id": 11,
+          "delivery": "reliable",
+          "idempotent": true,
+          "visibility": "public",
+          "doc": "E-paper: no automatic refresh for `ms` or until `refresh`; 0 releases. A client drawing many pieces holds, draws, then refreshes once; if it stops half-way the hold runs out. UNSUPPORTED where trait epaper is false.",
+          "fields": [
+            {
+              "name": "ms",
+              "id": 1,
+              "type": "u16",
+              "range": [
+                0,
+                10000
+              ],
+              "unit": "ms"
+            }
+          ],
+          "examples": [
+            {
+              "ms": 5000
+            }
+          ]
         }
       ],
       "events": [
@@ -932,6 +1156,67 @@
               "name": "value",
               "id": 3,
               "type": "i32"
+            }
+          ]
+        },
+        {
+          "name": "refreshed",
+          "id": 2,
+          "priority": "normal",
+          "requires": {
+            "trait": "epaper"
+          },
+          "doc": "An e-paper refresh ended. x, y, w, h: the area that changed (the whole screen for fast and full); ok false when the panel did not finish in time (the next refresh is full); crc: what the glass shows now (shown_crc).",
+          "fields": [
+            {
+              "name": "mode",
+              "id": 1,
+              "type": "RefreshMode"
+            },
+            {
+              "name": "ok",
+              "id": 2,
+              "type": "bool"
+            },
+            {
+              "name": "ms",
+              "id": 3,
+              "type": "u16",
+              "unit": "ms"
+            },
+            {
+              "name": "partials",
+              "id": 4,
+              "type": "u8"
+            },
+            {
+              "name": "x",
+              "id": 5,
+              "type": "u16",
+              "unit": "px"
+            },
+            {
+              "name": "y",
+              "id": 6,
+              "type": "u16",
+              "unit": "px"
+            },
+            {
+              "name": "w",
+              "id": 7,
+              "type": "u16",
+              "unit": "px"
+            },
+            {
+              "name": "h",
+              "id": 8,
+              "type": "u16",
+              "unit": "px"
+            },
+            {
+              "name": "crc",
+              "id": 9,
+              "type": "u32"
             }
           ]
         }
@@ -4137,7 +4422,7 @@
     },
     {
       "id": 16,
-      "name": "fr.clock",
+      "name": "fr.rtc",
       "version": "1.0",
       "section": "standard",
       "summary": "A battery-backed real-time clock (DS3231) - its time, set from the hub to the second boundary, its temperature, oscillator-stop detection and aging trim.",
@@ -4213,7 +4498,7 @@
           "id": 4,
           "type": "i32",
           "unit": "ms",
-          "doc": "reported 0 by the node: the hub computes the offset from read's unix and rollover_us (clock_read)"
+          "doc": "reported 0 by the node: the hub computes the offset from read's unix and rollover_us (rtc_read)"
         }
       ],
       "commands": [
@@ -5479,6 +5764,354 @@
           ]
         }
       ]
+    },
+    {
+      "id": 20,
+      "name": "fr.face",
+      "version": "1.0",
+      "section": "standard",
+      "summary": "The Fractonica clock face, drawn by the node on one of its fr.display panels; optionally a power-save mode that sleeps between redraws on an RTC's time.",
+      "doc": "Design face-f1 D2-D17. The node draws the clock itself (the clock library over the core); only an instant crosses\nthe wire. The face is bound to an fr.display instance (config `display`), and optionally to an fr.button (`button`,\nits one button: click next, double click select, a hold of 0.6-5 s long, a hold of 5 s power save on or off) and an\nfr.rtc (`rtc`). It moves on `step`: it shows the instant at the start of the running cycle of that level and wakes\nat its end, and its reading goes no finer. At boot the face has the screen; a hub client drawing on the panel takes\nit (`shown` false) until `show`, or a press of the face's button. The time comes from the node's wall clock: the\nhub's (WELCOME, BEACON, TIME), an RTC's below it; the face waits `wait_time_s` after boot before it says the time is\nnot set. mode, focus, step, utc_offset_min and power_save are kept in NVS across reboots.\nPower save (D13-D18, needs `button`, one of its keys on a wake pin, and an `rtc` whose alarm pin is a wake pin): the node sets the RTC\nfrom the wall clock, leaves the network (no Wi-Fi, ESP-NOW or hub link from then on) and deep-sleeps between\nredraws, woken by the RTC's alarm at each step or by the button; holding the button 5 s leaves it. `set\n{power_save: true}` is the last command the hub gets answered: the node restarts into power save after the answer.\nThree keys (D18): with `left` or `right` bound (fr.button instances), a press of left is prev and of right next (at\nthe press), and the centre `button` turns the screen: a release before 0.6 s select, 0.6-5 s long, a 5 s hold power\nsave. Sounds (D19, on an fr.buzzer, config `buzzer`): a click at every key press (`clicks`), and a chime when the face\nmoves onto a cycle that begins a period of `chime` or longer: one note for a Preon, two for a theta, three for a\nHelion, four for anything longer. chime and clicks are kept in NVS too.\n",
+      "types": {
+        "Mode": {
+          "pure": 0,
+          "earth": 1
+        },
+        "Screen": {
+          "now": 0,
+          "scales": 1,
+          "lens": 2,
+          "sun": 3,
+          "stamp": 4
+        },
+        "Input": {
+          "next": 0,
+          "prev": 1,
+          "select": 2,
+          "long": 3
+        },
+        "Step": {
+          "helion": 0,
+          "theta": 1,
+          "preon": 2,
+          "kappa": 3,
+          "flavon": 4
+        },
+        "TimeSource": {
+          "none": 0,
+          "carried": 1,
+          "rtc": 2,
+          "hub": 3
+        },
+        "Chime": {
+          "off": 0,
+          "helion": 1,
+          "theta": 2,
+          "preon": 3
+        }
+      },
+      "traits": [
+        {
+          "name": "width",
+          "id": 1,
+          "type": "u16",
+          "doc": "the face's size in pixels (the bound panel's)"
+        },
+        {
+          "name": "height",
+          "id": 2,
+          "type": "u16"
+        },
+        {
+          "name": "can_sleep",
+          "id": 3,
+          "type": "bool",
+          "doc": "power save is possible: a button and an RTC alarm on wake pins"
+        }
+      ],
+      "config": [
+        {
+          "name": "display",
+          "type": "string",
+          "max": 16,
+          "doc": "the fr.display instance the face draws on (codegen checks it names one)"
+        },
+        {
+          "name": "button",
+          "type": "string",
+          "max": 16,
+          "doc": "the fr.button instance that drives it; empty = none"
+        },
+        {
+          "name": "rtc",
+          "type": "string",
+          "max": 16,
+          "doc": "the fr.rtc instance power save keeps time by; empty = none"
+        },
+        {
+          "name": "left",
+          "type": "string",
+          "max": 16,
+          "doc": "the fr.button instance that is prev (D18); empty = none"
+        },
+        {
+          "name": "right",
+          "type": "string",
+          "max": 16,
+          "doc": "the fr.button instance that is next (D18); empty = none"
+        },
+        {
+          "name": "buzzer",
+          "type": "string",
+          "max": 16,
+          "doc": "the fr.buzzer instance the face clicks and chimes on (D19); empty = silent"
+        },
+        {
+          "name": "mode",
+          "type": "Mode",
+          "default": "pure"
+        },
+        {
+          "name": "focus",
+          "type": "u8",
+          "default": 6,
+          "range": [
+            0,
+            13
+          ],
+          "doc": "the level the instrument focuses (6: the Helion)"
+        },
+        {
+          "name": "step",
+          "type": "Step",
+          "default": "preon"
+        },
+        {
+          "name": "utc_offset_min",
+          "type": "i16",
+          "default": 0,
+          "range": [
+            -720,
+            840
+          ],
+          "unit": "min",
+          "doc": "EARTH mode's fixed offset from UTC"
+        },
+        {
+          "name": "wait_time_s",
+          "type": "u16",
+          "default": 30,
+          "range": [
+            0,
+            600
+          ],
+          "unit": "s",
+          "doc": "how long after boot the face waits for the time before it says it is not set"
+        },
+        {
+          "name": "awake_s",
+          "type": "u16",
+          "default": 30,
+          "range": [
+            5,
+            600
+          ],
+          "unit": "s",
+          "doc": "power save: how long the node stays awake after the last press of the button"
+        },
+        {
+          "name": "chime",
+          "type": "Chime",
+          "default": "preon",
+          "doc": "the shortest period whose start chimes (D19); off: none"
+        },
+        {
+          "name": "clicks",
+          "type": "bool",
+          "default": true,
+          "doc": "a click at every key press (D19)"
+        }
+      ],
+      "properties": [
+        {
+          "name": "mode",
+          "id": 1,
+          "type": "Mode"
+        },
+        {
+          "name": "screen",
+          "id": 2,
+          "type": "Screen"
+        },
+        {
+          "name": "focus",
+          "id": 3,
+          "type": "u8"
+        },
+        {
+          "name": "step",
+          "id": 4,
+          "type": "Step"
+        },
+        {
+          "name": "utc_offset_min",
+          "id": 5,
+          "type": "i16",
+          "unit": "min"
+        },
+        {
+          "name": "shown",
+          "id": 6,
+          "type": "bool",
+          "doc": "the face has the screen"
+        },
+        {
+          "name": "time_valid",
+          "id": 7,
+          "type": "bool",
+          "doc": "the node knows the time"
+        },
+        {
+          "name": "time_source",
+          "id": 8,
+          "type": "TimeSource"
+        },
+        {
+          "name": "power_save",
+          "id": 9,
+          "type": "bool"
+        },
+        {
+          "name": "chime",
+          "id": 10,
+          "type": "Chime"
+        },
+        {
+          "name": "clicks",
+          "id": 11,
+          "type": "bool"
+        }
+      ],
+      "commands": [
+        {
+          "name": "show",
+          "id": 1,
+          "delivery": "reliable",
+          "idempotent": true,
+          "visibility": "public",
+          "doc": "The face takes the screen back (a full redraw).",
+          "fields": []
+        },
+        {
+          "name": "input",
+          "id": 2,
+          "delivery": "reliable",
+          "idempotent": false,
+          "visibility": "public",
+          "doc": "What the face's button would do: next, prev, select or long (the clock's four events).",
+          "fields": [
+            {
+              "name": "event",
+              "id": 1,
+              "type": "Input"
+            }
+          ],
+          "examples": [
+            {
+              "event": "next"
+            },
+            {
+              "event": "select"
+            }
+          ]
+        },
+        {
+          "name": "set",
+          "id": 3,
+          "delivery": "reliable",
+          "idempotent": true,
+          "visibility": "public",
+          "doc": "Any of mode, focus, screen, step, utc_offset_min, chime, clicks, power_save; kept in NVS (screen as now). power_save true: INVALID_ARGS without can_sleep, FAILED while neither the wall clock nor the RTC knows the time; answered, then the node restarts into power save.",
+          "fields": [
+            {
+              "name": "mode",
+              "id": 1,
+              "type": "Mode",
+              "optional": true
+            },
+            {
+              "name": "focus",
+              "id": 2,
+              "type": "u8",
+              "optional": true,
+              "range": [
+                0,
+                13
+              ]
+            },
+            {
+              "name": "screen",
+              "id": 3,
+              "type": "Screen",
+              "optional": true
+            },
+            {
+              "name": "step",
+              "id": 4,
+              "type": "Step",
+              "optional": true
+            },
+            {
+              "name": "utc_offset_min",
+              "id": 5,
+              "type": "i16",
+              "optional": true,
+              "range": [
+                -720,
+                840
+              ],
+              "unit": "min"
+            },
+            {
+              "name": "power_save",
+              "id": 6,
+              "type": "bool",
+              "optional": true
+            },
+            {
+              "name": "chime",
+              "id": 7,
+              "type": "Chime",
+              "optional": true
+            },
+            {
+              "name": "clicks",
+              "id": 8,
+              "type": "bool",
+              "optional": true
+            }
+          ],
+          "examples": [
+            {
+              "mode": "earth"
+            },
+            {
+              "step": "flavon"
+            },
+            {
+              "focus": 8,
+              "step": "preon"
+            },
+            {
+              "chime": "helion"
+            },
+            {
+              "clicks": false
+            }
+          ]
+        }
+      ],
+      "events": []
     },
     {
       "id": 240,

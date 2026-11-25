@@ -95,6 +95,22 @@ Status BuzzerService::beep(const cap::BuzzerBeepArgs &args)
     return start(cap::BuzzerSound::beep, 2, args.count, args.has_volume, args.volume);
 }
 
+Status BuzzerService::tone_local(const cap::BuzzerToneArgs &args)
+{
+    local_ = true;
+    auto st = tone(args);
+    local_ = false;
+    return st;
+}
+
+Status BuzzerService::melody_local(const cap::BuzzerMelodyArgs &args)
+{
+    local_ = true;
+    auto st = melody(args);
+    local_ = false;
+    return st;
+}
+
 Status BuzzerService::melody(const cap::BuzzerMelodyArgs &args)
 {
     if (core_ == nullptr) {
@@ -143,7 +159,8 @@ Status BuzzerService::start(cap::BuzzerSound sound, size_t n, uint16_t repeat, b
     sound_ = sound;
     level_ = has_volume ? volume : volume_;
     const net::LinkInfo li = core::link_info();
-    hub_ = li.hub_session;
+    hub_ = li.hub_session && !local_;  // a service's own sound (face-f1 D19) is not the hub's: its silence leaves it be
+    local_ = false;
     hub_epoch_ = li.hub_epoch;
     if (!write_step()) {
         // The sound never started: the reply says so; nothing plays.

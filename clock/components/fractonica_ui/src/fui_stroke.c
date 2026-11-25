@@ -74,6 +74,17 @@ void fui_draw_segments(fui_canvas_t *c, const fui_seg_t *segs, int count, fui_fx
         count = FUI_SEGS_MAX;
     }
     if (fui_canvas_is_mono(c)) {
+        if (c->pen > 1) {
+            /* the canvas's wider pen (fui_canvas_set_pen); an even one's
+             * squares sit half a pixel right and down: move the path back */
+            int32_t shift = FUI_I_PEN_SHIFT(c) >> 2; /* Q8 -> Q6 */
+
+            for (i = 0; i < count; i++) {
+                fui_i_line_pen(c, (segs[i].x0 - shift) >> 6, (segs[i].y0 - shift) >> 6, (segs[i].x1 - shift) >> 6,
+                               (segs[i].y1 - shift) >> 6, color);
+            }
+            return;
+        }
         for (i = 0; i < count; i++) {
             fui_i_line_px(c, segs[i].x0 >> 6, segs[i].y0 >> 6, segs[i].x1 >> 6, segs[i].y1 >> 6, color);
         }

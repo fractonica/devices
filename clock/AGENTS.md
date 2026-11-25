@@ -44,9 +44,9 @@ you where everything is, how to build and test it, and what you must not break.
    furniture words ("IN", "MADE OF"), choose which of the core's forms a line
    uses, draw, and decide HOW LONG TO SLEEP from what the core returns (never
    what to show). If the core lacks something, add it to section 10 and, only
-   if you cannot proceed, put a stand-in in a new `src/fui_shim.c` (the one
-   shim file; there is none today: every stand-in was replaced by a core call
-   and deleted).
+   if you cannot proceed, put a stand-in in `src/fui_shim.c` (the one shim
+   file; today it holds one stand-in, `fui_shim_format_span_to`, for the
+   step's countdowns: section 10).
 2. **Never edit** `../../core`, `../../design`, `../../reference`, `../../ios`, `../../web`, `../../SPEC.md`.
 3. **No heap after start-up.** `fractonica_ui`, `main/app*.c` (not
    `app_main.c`) and `fhal_button.c` reference no allocator at all (`make
@@ -125,6 +125,8 @@ components/fractonica_ui/        PORTABLE C99 (host + ESP-IDF). The UI library.
   src/fui_ring.c                 the hero ring: cached geometry from frc_arc_child, fill from phases
   src/fui_instrument.c           the colour instrument: counter rings, Sun ring, bezel, alidade, centre
   src/fui_face_mono.c            NOW / SCALES on 128 x 64 one-bit
+  src/fui_face_mono400.c         the corners of the 400 x 300 paper face's NOW (its wave: fui_i_wave, fui_instrument.c)
+  src/fui_shim.c                 stand-ins for what the core lacks (section 10): fui_shim_format_span_to
   src/fui_screen_now.c           rows of text under the instrument (rectangular faces)
   src/fui_screen_lens.c          LENS card            src/fui_screen_sun.c    SUN card
   src/fui_screen_stamp.c         STAMP card, and the "no reading" card
@@ -135,6 +137,8 @@ components/fractonica_ui/        PORTABLE C99 (host + ESP-IDF). The UI library.
   src/fui_glyph.c                glyph + arc conversion
   src/fui_font.c                 decoder, lookup, drawer
   src/fui_font_small.c fui_font_text.c   GENERATED font tables (never edit)
+  src/fui_font_line.c            GENERATED too: the paper face's monoline stroke font, a subset
+                                 (tools/fonts/fui_font_line.txt; packed: 3-byte records + the points, 1.4 kB)
   src/fui_theme.c                the palettes
   CMakeLists.txt                 ESP-IDF component, REQUIRES fractonica
 docs/                            GUIDE.md (the long manual) and its pictures: every face on its screens (`make pictures`; kept);
@@ -168,7 +172,8 @@ tools/
 
 | Looking for | It is in |
 |---|---|
-| what a face draws | `fui_instrument.c` (colour), `fui_face_mono.c` (one-bit), the `fui_screen_*.c` cards; layouts in `fui_paint.c` |
+| what a face draws | `fui_instrument.c` (colour, and the 400 x 300 paper face in one-bit marks), `fui_face_mono.c` (128 x 64), `fui_face_mono400.c` (the paper face's corners; its wave is `fui_i_wave`), the `fui_screen_*.c` cards; layouts in `fui_paint.c` |
+| the step (the face moves once a cycle of a level) | `fui_ui_update` (`fui_ui.c`: the instant shown, the wake); the readings' finest unit: `fui_i_finest_unit`, `fui_i_civil_seconds` (`fui_words.c`) |
 | which face a display gets | `app_main()` in `main/app_main.c` (GC9A01 → round240, ST7789 → rect240 / rect240x320, SSD1306 → mono) |
 | a pin number | `main/Kconfig.projbuild` defaults (per chip), overridden by `sdkconfig` / `configs/*.defaults` |
 | a display's init sequence | `fhal_panel_gc9a01.c`; ESP-IDF's `esp_lcd_panel_st7789.c` / `esp_lcd_panel_ssd1306.c` |
@@ -211,8 +216,9 @@ next Node in 5ι 58λ", then the Sun: count the beads and the lit arcs in the
 picture against it.
 
 ```
-build/fractonica-sim --face round240|rect240|rect240x320|mono
+build/fractonica-sim --face round240|rect240|rect240x320|mono|mono400x300
                      --screen now|scales|lens|sun|stamp   --mode pure|earth
+                     --step none|helion|theta|preon|kappa|flavon   (fui_ui_set_step)
                      --t <unix seconds>|none              (default 1791460800, SPEC vector A)
                      --focus <0..13>  --events "N P S L W500"  --utc-offset <seconds>
                      --scale <n>  --band <rows>  --out file.png
@@ -313,6 +319,31 @@ for (;;) {
   byte first in memory), `FUI_FMT_MONO_PAGE` (the SSD1306's own pages: send the
   buffer as it is), `FUI_FMT_MONO_ROW`. Layouts are documented bit by bit in
   `fui_canvas.h` and held by `tests/test_canvas.c`.
+- **The step** (`fui_ui_set_step(&ui, FUI_STEP_PREON)` or `config.step`;
+  levels 6 Helion, 7 theta, 8 Preon, 9 kappa, 10 Flavon; 0 = none, the
+  default, which every face had before). With a step every screen shows the
+  instant the running cycle of that level BEGAN (`frc_cycle_at(...).start`,
+  kept in `ui->t`) and `fui_frame_t.next_wake` is that cycle's END: the face
+  changes on each boundary and at no other time, except that input redraws
+  at once and the brief labels (2.5 s level name, 1.5 s mode word) come and
+  go on time. Readings end at the step's unit (`fui_i_finest_unit`: kappa
+  reads to the Preon, theta to the Helion): the count's date terms, the
+  stamp, every countdown (cut toward zero by the shim of section 10; under
+  one unit "0ι"); EARTH's civil time has minutes at every step coarser than
+  the Flavon. The countdown is the span FROM THE INSTANT SHOWN: at vector A
+  and the Preon step the face shows 34η 29ι and "END IN 7ι" (29 + 7 = the
+  Helion's 36ι), not the live "6ι 43λ" cut to "6ι". `fui_ui_set_step`
+  returns 0 and changes nothing for any other value.
+- **The paper face** (`FUI_FACE_MONO400X300`, 400 x 300 one bit, made for
+  the framework's Waveshare 4.2" e-paper): give `fui_ui_draw` a
+  `FUI_FMT_MONO_ROW` canvas over the panel's frame (`fui_canvas_init(&c,
+  frame, FUI_FMT_MONO_ROW, 400, 300)`: 50 bytes a row, bit 7 leftmost,
+  15,000 bytes; bands of whole rows work too). Its default theme
+  `fui_theme_paper` grounds with SET bits and inks with CLEAR bits, which a
+  panel whose memory holds 1 = white shows as black on white; pass
+  `.theme = &fui_theme_mono` for a panel whose 1 is black. `test_ui`
+  "paper" holds it: the ground all set, MONO_ROW = MONO_PAGE pixel for
+  pixel, bands = whole, the mono theme's picture its exact inverse.
 - **Stack:** the largest frames of the library (xtensa, `-Os`) are the SUN
   screen 464 bytes, LENS 448, `fui_glyph_draw` 448; the deepest chain from
   `app_step` is 2,304 bytes (`tools/stack-report.py`). Section 8 has the
@@ -392,6 +423,7 @@ faces that is the redraw of every Blink.
 | `FUI_FACE_RECT240` | 240 x 240 RGB565 | the same at 5/7 scale: centre (120, 90), R 40, g 5.7, u = 4 px | reading, countdown, ⊕ row |
 | `FUI_FACE_RECT240X320` | 240 x 320 RGB565 | full size, centre (120, 122) | Pentad + words, reading, countdown, ⊕ row; LENS adds the six other media |
 | `FUI_FACE_MONO128` | 128 x 64 one-bit | carrier R 19 at (31.5, 31.5), first-level arcs, quarter ticks on pixels 9..12 from the centre pixel | beads, odometer u = 10/3, count |
+| `FUI_FACE_MONO400X300` | 400 x 300 one-bit e-paper, black on white (`fui_theme_paper`) | the WAVE alone: the hero's two levels round an inner circle with the glyphs, centre (199.5, 149.5), sized at each focus so its ink reaches 146 px (126 in EARTH), glyphs a whole multiple of 10/3 px per unit (10 px at the Helion); one-bit marks | the corners at 4 px per dot: ε#5, 34η, 29ι, the Pentad's mark; EARTH: the civil time, bottom centre |
 
 Decisions DESIGN.md left open (only F = 6 was art-directed), made here:
 
@@ -447,6 +479,52 @@ Decisions DESIGN.md left open (only F = 6 was art-directed), made here:
 - **"no band"** (ruling 4) is said on the LENS of every rung outside every
   band (levels 0..12 and 47..62 at the reference interval), in ash. It costs
   the Helion's LENS a second page on the round face in PURE.
+
+- **The 400 x 300 paper face** (design note face-f1 D3; the owner's NOW
+  of 2026-11-24, after seeing the first version on glass: "remove the
+  rings, leave only the wave and place it in the middle; helion top right,
+  preon bottom right, bigger and bolder; epsilon top left, the pentad icon
+  bottom left"). NOW is the WAVE (`fui_i_wave`): the hero's two levels
+  (the same levels nest as on colour: 2, 3, 6, 10, 11), elapsed solid, to
+  come dotted, now a 7 x 7 block in a cleared frame, the inner circle at
+  the bezel's place (0.71 R, inside the inward bulges), the two glyphs as
+  large as it holds at a whole multiple of 10/3 px per unit (10 px at the
+  Helion, 20/3 where the circle is smaller: theta, the nested factors of 5). No counter rings, beads, graduations,
+  quarter ticks, carrier or alidade. `fui_i_ring_prepare` sizes R at each
+  focus so the ink reaches 146 px (R 114 at the Helion, 98 at theta): 126
+  in EARTH, whose civil time ("⊕ 13:57", the dot font at 2 px per dot)
+  takes the bottom centre, 6 rows clear of the wave; the wave is a little
+  smaller in EARTH for it. The corners (`fui_face_mono400.c`), the 5 x 7
+  font at 4 px per dot (28 px capitals, strokes 4 px; no double strike),
+  8 px from the edges: the core's terms of the stamp (`frc_format_date_term`):
+  the Nuclide as the core writes it, an ordinal in its Delta, "ε#5" (the
+  owner wrote "03ε"; the core has no count form for it), the Helion "34η",
+  the Preon "29ι", not shown at a step coarser than the Preon. The Pentad's
+  mark, bottom left: the reference's pentagon (`reference/js` `ui/pentad.js`,
+  its 12-unit box at 60 px, 3 px line) round the core's
+  `FRC_PENTAD_NUMERAL` at 3 px per dot ("I", "II", "III"); the Hypopentad's
+  empty square; nothing when `frc_pentad_at` fails. Without a reading the
+  corners are empty and the centre says why; SCALES' level name and the
+  mode word stand at the centre as before. Cards: the whole panel at 2 px
+  per dot, 3 blank rows between text rows; the SUN card is the colour card
+  at 5/4 (ring r 140); LENS fits one page at the Helion in EARTH; STAMP
+  keeps its majors on the first page, 8 rows below the moment. All lines
+  The owner saw it on glass and asked for "thicker lines and different font
+  maybe": the wave's arcs and the inner circle are 2 px (to come dotted 2
+  pixels of the path on, 3 off), the glyph strokes 3 px (2 px read thin
+  beside the 28 px corners), the block 9 x 9, the circle 2.5 px clear of the
+  arcs' ink. One-bit width comes from the canvas's PEN
+  (`fui_canvas_set_pen`: a square stamped at every pixel of the 1 px path,
+  so no grey; default 1 px, 1 on / 2 off, so nothing else changed). The
+  owner compared three corner types and kept LINE (`fui_font_line`):
+  monoline geometric strokes, the counts and the serifed Pentad numeral at
+  2 px per dot with a 3 px pen (28 px capitals), the Earth time at 1 px per
+  dot with a 1 px pen (14 px); the wave keeps 4 px above the time's cell
+  (122 px from the centre in EARTH). A stroke font is a subset
+  (`!subset 1`, `!kind strokes` in `tools/genfont.py`: digits, `#`, `:`, I,
+  V, ε η ι λ, ⊕), 1.4 kB of flash. Where the inner circle leaves the glyphs
+  less than 4/5 of their room at a 10/3 px step (nested factors of 5 in
+  EARTH) they go by whole pixels per unit.
 
 **Deviations from DESIGN.md, for the owner to confirm** (made on purpose,
 recorded here because the design says otherwise):
@@ -610,6 +688,8 @@ a click, a double click and a long press give). The timing rules are in
 
 **Add a theme** ("tablet", design/README.md): one more `const fui_theme_t` in
 `fui_theme.c`; pass it in `fui_config_t.theme`. No face holds a colour literal.
+A one-bit theme is ground one bit value, every ink the other (`fui_theme_mono`,
+`fui_theme_paper`): which is dark is the panel's.
 
 **A drawing changed on purpose**: `make shots`, look, `make golden`, `make
 pictures`, commit `sim/golden/hashes.txt` and `docs/` with the change.
@@ -621,10 +701,10 @@ pictures`, commit `sim/golden/hashes.txt` and `docs/` with the change.
 | `test_raster` | `fui_isqrt`, `fui_sin`; a one-bit full circle equals the midpoint circle pixel for pixel; 1500 random one-bit arcs: every pixel within half a pixel of the true curve, no gap, 8-connected, thin, dotted = every third pixel, two parts tile the whole; colour arcs against 16 x 16 supersampling (worst pixel ≤ 0.30, mean ≤ 0.05, ink = length x width); lines, discs, strokes against geometry; **discs and rings up to 249 px** (one bit: exactly the pixels whose centre is inside; colour: ink against area and length); clipped drawing = unclipped inside the clip, nothing outside |
 | `test_canvas` | the four memory layouts bit by bit, blending, clip, dirty box, band rendering |
 | `test_font` | 520,265 texts from the core's format functions (all 63 levels, both modes' wordings, every Pentad form, every civil form, date terms, signed counts, spans in Flavons, 3,001 instants across the catalogue; core 0.2.0's `<0.001ν` of either sign and a negative civil year, `−0044`, in every civil form): every code point (115 distinct) has a glyph in both fonts; UTF-8 decoding of damaged input; widths; the missing-glyph box |
-| `test_ui` | the navigation map, timers, vector A in the model, the frame contract (first / idle / wake / never zero sleep), partial redraw = full redraw, bands = whole, time not set, out of catalogue, clock set backwards; **geometry**: no cached arc reaches inside `reach_in` or outside `reach_out` on any colour face at any focus, which levels nest (2, 3, 6, 10, 11), the one-bit quarter ticks are pixels 9..12 on each side of the centre pixel; **cards**: every LENS card (63 levels), SUN and STAMP fits its face and the line table in both modes at vectors A, B, C, time not set and out of catalogue, and EARTH has at least the lines PURE has; **quiet lines**: a UI that sleeps as long as its frame allows shows, at each of 800 Blink boundaries, the lines a UI that looked then would show (LENS levels 0..12 and SUN, both modes, from A, B, C, two minutes before a civil midnight and a random instant), and it does sleep (fewer than 130 wakes where polling takes 800); **words**: the SUN and LENS countdowns at 64 instants on every face: the core's span text stands whole on one row; the last rung names nothing below the ladder and is "made of" nothing; every rung outside every band says "no band" and no other does; **one-bit labels**: every level's name and both mode words in the dot font at 2 px per dot, ink ≤ column 125 and ≥ 2 columns from the ring's |
-| `test_golden` | 138 scenes against `golden/hashes.txt`, among them the review's: the SUN card at Unix 1700000000 (a two-part span), the LENS of the last rung, one-bit "ε NUCLIDE" and "δ#5 ε#2"; since stage 6 the LENS of the Flavon ("1 per 25 Blinks"), of mu in EARTH ("1 per 5 Blinks") and of Alpha in EARTH (a threshold on another day, "⊕ 26 JAN 2028 17:07") |
+| `test_ui` | the navigation map, timers, vector A in the model, the frame contract (first / idle / wake / never zero sleep), partial redraw = full redraw, bands = whole, time not set, out of catalogue, clock set backwards; **geometry**: no cached arc reaches inside `reach_in` or outside `reach_out` on any colour face at any focus, which levels nest (2, 3, 6, 10, 11), the one-bit quarter ticks are pixels 9..12 on each side of the centre pixel; **cards**: every LENS card (63 levels), SUN and STAMP fits its face and the line table in both modes at vectors A, B, C, time not set and out of catalogue, and EARTH has at least the lines PURE has; **quiet lines**: a UI that sleeps as long as its frame allows shows, at each of 800 Blink boundaries, the lines a UI that looked then would show (LENS levels 0..12 and SUN, both modes, from A, B, C, two minutes before a civil midnight and a random instant), and it does sleep (fewer than 130 wakes where polling takes 800); **words**: the SUN and LENS countdowns at 64 instants on every face: the core's span text stands whole on one row; the last rung names nothing below the ladder and is "made of" nothing; every rung outside every band says "no band" and no other does; **one-bit labels**: every level's name and both mode words in the dot font at 2 px per dot, ink ≤ column 125 and ≥ 2 columns from the ring's; **step**: the setter takes 0 and 6..10 only; on every face, at every step level from vectors A, B, C, the instant shown is the cycle's start and each wake its end, 12 boundaries in a row, none between (a unit step redraws the readings at each); no NOW, SUN or STAMP row of any face counts in a unit finer than the step's (focus 0..13, four instants); the paper face's corners at the Preon, the Flavon and the Helion step (no ι at the Helion's), "⊕ 13:57" / "⊕ 13:59:58"; the shim's cut ("7ι" from the step's start, "6ι" / "6ι 43λ" from vector A, "0ι" under a Preon, the Blink unchanged); a label still shows and clears on time and input redraws at once; **wave**: at every focus in both modes and six instants, the paper face's wave is centred at (199.5, 149.5) and reaches its goal (146 px; 122 in EARTH) within a pixel, and every corner's cell, the Pentad's mark and EARTH's time lie more than 2 px outside it; **paper font**: the corners' texts at 2,000 instants have every glyph in the line font; **paper**: the 400 x 300 face in MONO_ROW, every screen and both modes, time not set, out of catalogue: ground all set bits, ink in clear bits, MONO_ROW = MONO_PAGE, 40-row bands = whole, `fui_theme_mono` the exact inverse |
+| `test_golden` | 190 scenes against `golden/hashes.txt` (the 400 x 300 paper face: every scene of the others, focus 0..13, NOW / SCALES / cards at the Preon, the Flavon and kappa step, Pentad III and the Hypopentad), among them the review's: the SUN card at Unix 1700000000 (a two-part span), the LENS of the last rung, one-bit "ε NUCLIDE" and "δ#5 ε#2"; since stage 6 the LENS of the Flavon ("1 per 25 Blinks"), of mu in EARTH ("1 per 5 Blinks") and of Alpha in EARTH (a threshold on another day, "⊕ 26 JAN 2028 17:07") |
 | `test_firmware` | `main/app.c`, `app_console.c`, `app_shot.c` and `fhal_button.c` against the simulated port: an idle hour at the Helion wakes 100..200 times, every wake a deadline and a redraw (whole frame, 40-row bands, wakes 2 ms late); focus 2 does not wake; focus 13 is held to 10 wakes a second; in whole-frame mode the panel model equals the frame buffer after a 15-event session on every face and mode, and band rendering (40 / 16 / 1 rows) leaves the same panel; **each deadline wake comes exactly at the instant the UI named although a whole frame takes 23 ms of simulated bus** (and `late_max_us` reports the port's lateness, 1,700 us when the port is 1.7 ms late); focus 13 starts 590..600 frames a minute; time not set = no wake for an hour, then `time` gives vector A's stamp; `time` refuses instants beyond ±1e11 s (one second after `time 9223372036854` int64 microseconds overflowed) and takes the limit itself; every console command and its refusals; `shot` decodes to the panel's pixels and a damaged copy is refused; ten changes in two seconds are one save after the settle time, a round trip is none, a stored record restores the state; what buffers `app_init` accepts; click, long, double click, bounce, counter wrap |
-| `test_fuzz` | built with `-fsanitize=address,undefined -fno-sanitize-recover=all` over the UI library and the core: 15,000 random canvases (four formats, any origin and clip) with every primitive, sizes up to and past the limits and segments over the whole int16 range: nothing outside the clip changes; 300 random UI sessions on every face, whole and banded, at instants anywhere (catalogue edges, ±int64 ends, not set): sleep is -1 or ≥ 0, the wake instant never lies in the past. Any overflow, negative shift or out-of-bounds access stops it |
+| `test_fuzz` | built with `-fsanitize=address,undefined -fno-sanitize-recover=all` over the UI library and the core: 15,000 random canvases (four formats, any origin and clip) with every primitive, sizes up to and past the limits and segments over the whole int16 range: nothing outside the clip changes; 300 random UI sessions on every face, whole and banded, at instants anywhere (catalogue edges, ±int64 ends, not set), with random steps (valid and refused); the one-bit pen at random widths and dash patterns, out of range too: sleep is -1 or ≥ 0, the wake instant never lies in the past. Any overflow, negative shift or out-of-bounds access stops it |
 | `check-noheap` | no object of the UI library, the application's portable files or the button logic references malloc / calloc / realloc / free |
 
 ## 8. Measured
@@ -703,11 +783,17 @@ high-water marks, the heap (docs/GUIDE.md gives estimates from the maps: about 1
 ## 10. Core requests
 
 What the UI had to work around, and what became of it. Every request of
-stages 1 to 5 has been answered by the core (stage 6, this pass), and every stand-in
-was replaced by the core's call and DELETED: `src/fui_shim.c` no longer
-exists, and neither does the word picker `fui_i_word`. If the core lacks
-something again, add a row here with the exact signature wanted, and only if
-you cannot proceed a stand-in in a new `src/fui_shim.c`.
+stages 1 to 5 has been answered by the core (stage 6), and every stand-in
+was replaced by the core's call and DELETED, as was the word picker
+`fui_i_word`. If the core lacks something again, add a row here with the
+exact signature wanted, and only if you cannot proceed a stand-in in
+`src/fui_shim.c`.
+
+**Open (the step, FACE-1 D4):**
+
+| Wanted | Why | Stand-in until then |
+|---|---|---|
+| `int frc_format_span_to(const frc_span_t *span, uint8_t max_parts, frc_unit_t finest, char *buf, size_t size)`: `frc_format_span` with no part finer than `finest`, the span cut toward zero to whole `finest` units; under one of them `"0"` + its symbol ("0ι"). (Optional with it: `frc_span_next_change_to(cat, t, boundary, max_parts, finest)`, the instants that text changes; a face with a step does not need them, it wakes at the step's boundaries.) | A face that moves once a Preon must not write "6ι 43λ": `frc_format_span` limits the NUMBER of parts, not the finest one; `frc_format_span_in_unit` writes one unit only | `fui_shim_format_span_to` (`src/fui_shim.c`): cuts `span->blinks` to a multiple of `frc_unit_blinks(finest)` (fraction dropped) and lets `frc_format_span` write it (the ladder's units divide one another, so the finer parts are zero and left out); under one unit `frc_format_span_in_unit`; `FRC_UNIT_BLINK` is `frc_format_span` unchanged. Used by `fui_i_add_span_to` (countdowns: the rectangular faces' NOW rows, LENS, SUN) |
 
 | Was wanted | Answered by the core with | Where the UI uses it now |
 |---|---|---|
@@ -748,6 +834,28 @@ Still the UI's own, and not a stand-in for anything the core says:
 in `fui_i_add_civil` and the hand-written minus of the sync number are
 deleted, not bypassed. Every number, name and Earth text on a face is now a
 core call; what the UI still does itself is listed at the end of section 10.
+
+**FACE-1 (2026-11-24): the step and the 400 x 300 paper face** (design note
+`../docs/design/face-f1.md` D3, D4; for the framework's e-paper, ESP-IDF 6.1).
+Added `fui_ui_set_step` / `fui_config_t.step`, `FUI_FACE_MONO400X300` (4;
+`FUI_FACE_COUNT` 5; "mono400x300"), `fui_theme_paper`, one-bit branches in
+the colour instrument, the ring and the SUN card (per-face fields `tiny`,
+`wave_reach`, `wave_reach_earth`, `sun_r`, `sun_u` in `fui_layout_t`), and
+the shim of section 10. The same day the owner saw it on glass and asked
+for the NOW of section 4's decisions (the wave and the corners:
+`fui_i_wave`, `fui_face_mono400.c`, `fui_i_mark`, the ring fitted to its
+room); only that face's 31 NOW-screen golden scenes and 9 pictures changed. Without a step nothing changes
+on the other faces: the 140 golden scenes they had and the 52 pictures in
+`docs/` came out byte for byte the same; the standalone app's page flush
+now ends at the face's last row (a 300-row one-bit face is not whole
+pages). Verified (macOS, Apple silicon), with the thick lines and the line
+font: `make test` (ui 1,980,756 checks, golden 190 scenes, firmware
+1,010, fuzz 22,200 with random steps and pens, no-heap 29 objects; the 140
+golden scenes of the other faces unchanged); the 50 new scenes and the 14 new pictures
+(`docs/mono400x300-*.png`) looked at; the library compiled with ESP-IDF
+6.1's riscv32-esp-elf-gcc 15.2.0 `-std=gnu99 -Wall -Wextra -Werror`, every
+file, no warning. Not verified: anything on glass (line weight, the 7 x 7
+block, the dot font's legibility on paper are the bench's).
 
 **Core 0.2.0 (the core's verification round): what it changed here.**
 Nothing on a face: `make test` passed from clean with every one of the 140

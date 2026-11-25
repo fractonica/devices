@@ -82,7 +82,7 @@ describe('gc9a01_spi (design scale-round-c1 D3, D5)', () => {
     const r = gen(checkout(BENCH));
     const round = r.manifest.caps.find((c) => c.name === 'round')!;
     expect(round).toMatchObject({ cap: 'fr.display', driver: 'gc9a01_spi', config: { rotation: 'r0' } });
-    expect(round.traits).toEqual({ width: 240, height: 240, color: 'rgb565', ui: true, touch: false, round: true });
+    expect(round.traits).toEqual({ width: 240, height: 240, color: 'rgb565', ui: true, touch: false, round: true, epaper: false });
     expect(r.instances.round).toEqual({
       bind: '{sclk: gpio.6, mosi: gpio.7, cs: gpio.10, dc: gpio.2}',
       pins: [6, 7, 10, 2],
@@ -92,7 +92,7 @@ describe('gc9a01_spi (design scale-round-c1 D3, D5)', () => {
     expect(cpp).toContain('fr::drv::Gc9a01Spi driver{kDriverConfig};\nfr::ui::LvglBackend backend;\nfr::DisplayService service{driver, backend, kConfig};');
     expect(cpp).toContain('    c.rst = -1;\n');
     expect(file(r, 'fr_board/CMakeLists.txt')).toMatch(/PRIV_REQUIRES .*gc9a01_spi .*fr_ui\)/);
-    expect(file(r, 'fr_board/include/fr/board.hpp')).toContain('    {3, "round", 240, 240, 0, true, true, 0},');
+    expect(file(r, 'fr_board/include/fr/board.hpp')).toContain('    {3, "round", 240, 240, 0, true, true, 0, false},');
     // No PSRAM on this board: the profile does not turn it on (design D4).
     expect(file(r, 'sdkconfig.board')).not.toContain('CONFIG_SPIRAM=y');
   });

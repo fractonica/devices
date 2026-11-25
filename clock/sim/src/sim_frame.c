@@ -6,7 +6,8 @@
 #include <stdlib.h>
 #include <string.h>
 
-/* One static buffer serves every face: the largest is 240 x 320 RGB565. */
+/* One static buffer serves every face: the largest is 240 x 320 RGB565
+ * (the 400 x 300 one-bit face takes 15,200 bytes of it). */
 static uint16_t frame_buffer[240 * 320];
 static uint16_t band_buffer[240 * 64];
 
@@ -39,6 +40,27 @@ static const char *mode_label(int i)   { return fui_mode_name((fui_mode_t)i); }
 int sim_parse_face(const char *name)   { return lookup(name, face_label, FUI_FACE_COUNT); }
 int sim_parse_screen(const char *name) { return lookup(name, screen_label, FUI_SCREEN_COUNT); }
 int sim_parse_mode(const char *name)   { return lookup(name, mode_label, 2); }
+
+int sim_parse_step(const char *name)
+{
+    static const char *const names[] = { "none", "helion", "theta", "preon", "kappa", "flavon" };
+    static const int levels[] = { FUI_STEP_NONE, FUI_STEP_HELION, FUI_STEP_THETA, FUI_STEP_PREON, FUI_STEP_KAPPA,
+                                  FUI_STEP_FLAVON };
+    char *end;
+    long level;
+    size_t i;
+
+    for (i = 0; i < sizeof names / sizeof names[0]; i++) {
+        if (strcmp(name, names[i]) == 0) {
+            return levels[i];
+        }
+    }
+    level = strtol(name, &end, 10);
+    if (*name != '\0' && *end == '\0' && (level == FUI_STEP_NONE || (level >= FUI_STEP_HELION && level <= FUI_STEP_FLAVON))) {
+        return (int)level;
+    }
+    return -1;
+}
 
 void sim_goto_screen(fui_ui_t *ui, fui_screen_t screen, uint32_t ms)
 {
@@ -161,9 +183,12 @@ uint8_t *sim_frame_rgb(const sim_frame_t *frame, int scale, int *w, int *h)
             uint8_t *out = rgb + ((size_t)y * (size_t)width + (size_t)x) * 3u;
 
             if (info->mono) {
-                /* lit pixels white on a near-black ground; from 3x up the
-                 * last row and column of each pixel are the gap between dots */
-                int gap = scale >= 3 && (x % scale == scale - 1 || y % scale == scale - 1);
+                /* a set bit white, a clear bit near black: an OLED's lit pixel,
+                 * or the paper face's ground (fui_theme_paper: black ink on
+                 * white). On the OLED from 3x up the last row and column of
+                 * each pixel are the gap between dots; paper has none. */
+                int gap = frame->face == FUI_FACE_MONO128 && scale >= 3 &&
+                          (x % scale == scale - 1 || y % scale == scale - 1);
                 uint8_t level = v ? (uint8_t)(gap ? 70 : 255) : (uint8_t)(gap ? 0 : 16);
 
                 out[0] = out[1] = out[2] = level;

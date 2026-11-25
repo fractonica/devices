@@ -186,6 +186,42 @@ bool from_name(std::string_view s, DisplayUiEventKind &out)
     return false;
 }
 
+const char *to_name(DisplayRefreshMode v)
+{
+    switch (v) {
+    case DisplayRefreshMode::auto_:
+        return "auto";
+    case DisplayRefreshMode::partial:
+        return "partial";
+    case DisplayRefreshMode::fast:
+        return "fast";
+    case DisplayRefreshMode::full:
+        return "full";
+    }
+    return nullptr;
+}
+
+bool from_name(std::string_view s, DisplayRefreshMode &out)
+{
+    if (s == "auto") {
+        out = DisplayRefreshMode::auto_;
+        return true;
+    }
+    if (s == "partial") {
+        out = DisplayRefreshMode::partial;
+        return true;
+    }
+    if (s == "fast") {
+        out = DisplayRefreshMode::fast;
+        return true;
+    }
+    if (s == "full") {
+        out = DisplayRefreshMode::full;
+        return true;
+    }
+    return false;
+}
+
 size_t encode(const DisplayUiWidget &v, fr::wire::Writer &w)
 {
     const size_t start = w.size();
@@ -394,6 +430,9 @@ size_t encode(const DisplayTraits &v, fr::wire::Writer &w)
     if (v.round) {
         w.field_bool(6, v.round);
     }
+    if (v.epaper) {
+        w.field_bool(7, v.epaper);
+    }
     return w.size() - start;
 }
 
@@ -421,6 +460,9 @@ std::expected<DisplayTraits, fr::wire::DecodeErr> decode_display_traits(std::spa
         case 6:
             v.round = r.read_bool();
             break;
+        case 7:
+            v.epaper = r.read_bool();
+            break;
         default:
             r.skip();
             break;
@@ -439,7 +481,8 @@ bool operator==(const DisplayTraits &a, const DisplayTraits &b)
            a.color == b.color &&
            a.ui == b.ui &&
            a.touch == b.touch &&
-           a.round == b.round;
+           a.round == b.round &&
+           a.epaper == b.epaper;
 }
 
 bool valid(const DisplayTraits &v)
@@ -971,6 +1014,208 @@ bool valid(const DisplaySnapshotReadResult &)
     return true;
 }
 
+size_t encode(const DisplayBitmapArgs &v, fr::wire::Writer &w)
+{
+    const size_t start = w.size();
+    if (v.x != 0) {
+        w.field_sint(1, v.x);
+    }
+    if (v.y != 0) {
+        w.field_sint(2, v.y);
+    }
+    if (v.w != 0) {
+        w.field_uint(3, v.w);
+    }
+    if (v.h != 0) {
+        w.field_uint(4, v.h);
+    }
+    if (!v.data.empty()) {
+        w.field_bytes(5, v.data);
+    }
+    w.field_uint(6, v.color);
+    if (v.bg != 0) {
+        w.field_uint(7, v.bg);
+    }
+    return w.size() - start;
+}
+
+std::expected<DisplayBitmapArgs, fr::wire::DecodeErr> decode_display_bitmap_args(std::span<const uint8_t> in)
+{
+    DisplayBitmapArgs v{};
+    fr::wire::Reader r(in);
+    while (r.next()) {
+        switch (r.field()) {
+        case 1:
+            v.x = static_cast<int16_t>(r.read_sint(-0x8000, 0x7FFF));
+            break;
+        case 2:
+            v.y = static_cast<int16_t>(r.read_sint(-0x8000, 0x7FFF));
+            break;
+        case 3:
+            v.w = static_cast<uint16_t>(r.read_uint(0xFFFF));
+            break;
+        case 4:
+            v.h = static_cast<uint16_t>(r.read_uint(0xFFFF));
+            break;
+        case 5:
+            v.data = r.read_bytes(1200);
+            break;
+        case 6:
+            v.color = static_cast<uint32_t>(r.read_uint(0xFFFFFFFF));
+            break;
+        case 7:
+            v.bg = static_cast<uint32_t>(r.read_uint(0xFFFFFFFF));
+            break;
+        default:
+            r.skip();
+            break;
+        }
+    }
+    if (!r.ok()) {
+        return std::unexpected(r.error());
+    }
+    return v;
+}
+
+bool operator==(const DisplayBitmapArgs &a, const DisplayBitmapArgs &b)
+{
+    return a.x == b.x &&
+           a.y == b.y &&
+           a.w == b.w &&
+           a.h == b.h &&
+           fr::proto::equal_bytes(a.data, b.data) &&
+           a.color == b.color &&
+           a.bg == b.bg;
+}
+
+bool valid(const DisplayBitmapArgs &)
+{
+    return true;
+}
+
+size_t encode(const DisplayRefreshArgs &v, fr::wire::Writer &w)
+{
+    const size_t start = w.size();
+    if (v.mode != DisplayRefreshMode{}) {
+        w.field_uint(1, std::to_underlying(v.mode));
+    }
+    return w.size() - start;
+}
+
+std::expected<DisplayRefreshArgs, fr::wire::DecodeErr> decode_display_refresh_args(std::span<const uint8_t> in)
+{
+    DisplayRefreshArgs v{};
+    fr::wire::Reader r(in);
+    while (r.next()) {
+        switch (r.field()) {
+        case 1:
+            v.mode = static_cast<DisplayRefreshMode>(r.read_uint(0xFF));
+            break;
+        default:
+            r.skip();
+            break;
+        }
+    }
+    if (!r.ok()) {
+        return std::unexpected(r.error());
+    }
+    return v;
+}
+
+bool operator==(const DisplayRefreshArgs &a, const DisplayRefreshArgs &b)
+{
+    return a.mode == b.mode;
+}
+
+bool valid(const DisplayRefreshArgs &v)
+{
+    return is_known(v.mode);
+}
+
+size_t encode(const DisplayRefreshResult &v, fr::wire::Writer &w)
+{
+    const size_t start = w.size();
+    if (v.mode != DisplayRefreshMode{}) {
+        w.field_uint(1, std::to_underlying(v.mode));
+    }
+    if (v.changed) {
+        w.field_bool(2, v.changed);
+    }
+    return w.size() - start;
+}
+
+std::expected<DisplayRefreshResult, fr::wire::DecodeErr> decode_display_refresh_result(std::span<const uint8_t> in)
+{
+    DisplayRefreshResult v{};
+    fr::wire::Reader r(in);
+    while (r.next()) {
+        switch (r.field()) {
+        case 1:
+            v.mode = static_cast<DisplayRefreshMode>(r.read_uint(0xFF));
+            break;
+        case 2:
+            v.changed = r.read_bool();
+            break;
+        default:
+            r.skip();
+            break;
+        }
+    }
+    if (!r.ok()) {
+        return std::unexpected(r.error());
+    }
+    return v;
+}
+
+bool operator==(const DisplayRefreshResult &a, const DisplayRefreshResult &b)
+{
+    return a.mode == b.mode && a.changed == b.changed;
+}
+
+bool valid(const DisplayRefreshResult &v)
+{
+    return is_known(v.mode);
+}
+
+size_t encode(const DisplayHoldArgs &v, fr::wire::Writer &w)
+{
+    const size_t start = w.size();
+    if (v.ms != 0) {
+        w.field_uint(1, v.ms);
+    }
+    return w.size() - start;
+}
+
+std::expected<DisplayHoldArgs, fr::wire::DecodeErr> decode_display_hold_args(std::span<const uint8_t> in)
+{
+    DisplayHoldArgs v{};
+    fr::wire::Reader r(in);
+    while (r.next()) {
+        switch (r.field()) {
+        case 1:
+            v.ms = static_cast<uint16_t>(r.read_uint(0xFFFF));
+            break;
+        default:
+            r.skip();
+            break;
+        }
+    }
+    if (!r.ok()) {
+        return std::unexpected(r.error());
+    }
+    return v;
+}
+
+bool operator==(const DisplayHoldArgs &a, const DisplayHoldArgs &b)
+{
+    return a.ms == b.ms;
+}
+
+bool valid(const DisplayHoldArgs &v)
+{
+    return v.ms <= 10000;
+}
+
 size_t encode(const DisplayUi &v, fr::wire::Writer &w)
 {
     const size_t start = w.size();
@@ -1022,6 +1267,101 @@ bool valid(const DisplayUi &v)
     return is_known(v.kind);
 }
 
+size_t encode(const DisplayRefreshed &v, fr::wire::Writer &w)
+{
+    const size_t start = w.size();
+    if (v.mode != DisplayRefreshMode{}) {
+        w.field_uint(1, std::to_underlying(v.mode));
+    }
+    if (v.ok) {
+        w.field_bool(2, v.ok);
+    }
+    if (v.ms != 0) {
+        w.field_uint(3, v.ms);
+    }
+    if (v.partials != 0) {
+        w.field_uint(4, v.partials);
+    }
+    if (v.x != 0) {
+        w.field_uint(5, v.x);
+    }
+    if (v.y != 0) {
+        w.field_uint(6, v.y);
+    }
+    if (v.w != 0) {
+        w.field_uint(7, v.w);
+    }
+    if (v.h != 0) {
+        w.field_uint(8, v.h);
+    }
+    if (v.crc != 0) {
+        w.field_uint(9, v.crc);
+    }
+    return w.size() - start;
+}
+
+std::expected<DisplayRefreshed, fr::wire::DecodeErr> decode_display_refreshed(std::span<const uint8_t> in)
+{
+    DisplayRefreshed v{};
+    fr::wire::Reader r(in);
+    while (r.next()) {
+        switch (r.field()) {
+        case 1:
+            v.mode = static_cast<DisplayRefreshMode>(r.read_uint(0xFF));
+            break;
+        case 2:
+            v.ok = r.read_bool();
+            break;
+        case 3:
+            v.ms = static_cast<uint16_t>(r.read_uint(0xFFFF));
+            break;
+        case 4:
+            v.partials = static_cast<uint8_t>(r.read_uint(0xFF));
+            break;
+        case 5:
+            v.x = static_cast<uint16_t>(r.read_uint(0xFFFF));
+            break;
+        case 6:
+            v.y = static_cast<uint16_t>(r.read_uint(0xFFFF));
+            break;
+        case 7:
+            v.w = static_cast<uint16_t>(r.read_uint(0xFFFF));
+            break;
+        case 8:
+            v.h = static_cast<uint16_t>(r.read_uint(0xFFFF));
+            break;
+        case 9:
+            v.crc = static_cast<uint32_t>(r.read_uint(0xFFFFFFFF));
+            break;
+        default:
+            r.skip();
+            break;
+        }
+    }
+    if (!r.ok()) {
+        return std::unexpected(r.error());
+    }
+    return v;
+}
+
+bool operator==(const DisplayRefreshed &a, const DisplayRefreshed &b)
+{
+    return a.mode == b.mode &&
+           a.ok == b.ok &&
+           a.ms == b.ms &&
+           a.partials == b.partials &&
+           a.x == b.x &&
+           a.y == b.y &&
+           a.w == b.w &&
+           a.h == b.h &&
+           a.crc == b.crc;
+}
+
+bool valid(const DisplayRefreshed &v)
+{
+    return is_known(v.mode);
+}
+
 size_t encode_display_brightness_state(uint8_t v, fr::wire::Writer &w)
 {
     const size_t start = w.size();
@@ -1039,6 +1379,93 @@ std::expected<uint8_t, fr::wire::DecodeErr> decode_display_brightness_state(std:
         switch (r.field()) {
         case 1:
             v = static_cast<uint8_t>(r.read_uint(0xFF));
+            break;
+        default:
+            r.skip();
+            break;
+        }
+    }
+    if (!r.ok()) {
+        return std::unexpected(r.error());
+    }
+    return v;
+}
+
+size_t encode_display_partials_state(uint8_t v, fr::wire::Writer &w)
+{
+    const size_t start = w.size();
+    if (v != 0) {
+        w.field_uint(1, v);
+    }
+    return w.size() - start;
+}
+
+std::expected<uint8_t, fr::wire::DecodeErr> decode_display_partials_state(std::span<const uint8_t> in)
+{
+    uint8_t v = 0;
+    fr::wire::Reader r(in);
+    while (r.next()) {
+        switch (r.field()) {
+        case 1:
+            v = static_cast<uint8_t>(r.read_uint(0xFF));
+            break;
+        default:
+            r.skip();
+            break;
+        }
+    }
+    if (!r.ok()) {
+        return std::unexpected(r.error());
+    }
+    return v;
+}
+
+size_t encode_display_shown_crc_state(uint32_t v, fr::wire::Writer &w)
+{
+    const size_t start = w.size();
+    if (v != 0) {
+        w.field_uint(1, v);
+    }
+    return w.size() - start;
+}
+
+std::expected<uint32_t, fr::wire::DecodeErr> decode_display_shown_crc_state(std::span<const uint8_t> in)
+{
+    uint32_t v = 0;
+    fr::wire::Reader r(in);
+    while (r.next()) {
+        switch (r.field()) {
+        case 1:
+            v = static_cast<uint32_t>(r.read_uint(0xFFFFFFFF));
+            break;
+        default:
+            r.skip();
+            break;
+        }
+    }
+    if (!r.ok()) {
+        return std::unexpected(r.error());
+    }
+    return v;
+}
+
+size_t encode_display_refresh_ms_state(uint16_t v, fr::wire::Writer &w)
+{
+    const size_t start = w.size();
+    if (v != 0) {
+        w.field_uint(1, v);
+    }
+    return w.size() - start;
+}
+
+std::expected<uint16_t, fr::wire::DecodeErr> decode_display_refresh_ms_state(std::span<const uint8_t> in)
+{
+    uint16_t v = 0;
+    fr::wire::Reader r(in);
+    while (r.next()) {
+        switch (r.field()) {
+        case 1:
+            v = static_cast<uint16_t>(r.read_uint(0xFFFF));
             break;
         default:
             r.skip();
@@ -1143,6 +1570,37 @@ Status Display::dispatch(uint8_t cmd_id, std::span<const uint8_t> args, Reply &r
         return {};
     }
 #endif
+    case kCmdBitmap: {
+        const auto a = decode_display_bitmap_args(args);
+        if (!a || !fr::cap::valid(*a)) {
+            return std::unexpected(Err::invalid_args);
+        }
+        return bitmap(*a);
+    }
+    case kCmdRefresh: {
+        const auto a = decode_display_refresh_args(args);
+        if (!a || !fr::cap::valid(*a)) {
+            return std::unexpected(Err::invalid_args);
+        }
+        const auto r = refresh(*a);
+        if (!r) {
+            return std::unexpected(r.error());
+        }
+        encode(*r, reply.fields());
+        // Fields beyond the caller's buffer (realtime or bulk): FAILED with no fields, never truncated ones.
+        if (reply.fields().overflow()) {
+            reply.clear();
+            return std::unexpected(Err::failed);
+        }
+        return {};
+    }
+    case kCmdHold: {
+        const auto a = decode_display_hold_args(args);
+        if (!a || !fr::cap::valid(*a)) {
+            return std::unexpected(Err::invalid_args);
+        }
+        return hold(*a);
+    }
     default:
         return std::unexpected(Err::unsupported);
     }
@@ -1150,7 +1608,17 @@ Status Display::dispatch(uint8_t cmd_id, std::span<const uint8_t> args, Reply &r
 
 void Display::report_all()
 {
+    const DisplayTraits t = traits();
     report_brightness(brightness());
+    if (t.epaper) {
+        report_partials(partials());
+    }
+    if (t.epaper) {
+        report_shown_crc(shown_crc());
+    }
+    if (t.epaper) {
+        report_refresh_ms(refresh_ms());
+    }
 }
 
 void Display::encode_traits(fr::wire::Writer &w) const
@@ -1171,6 +1639,17 @@ void Display::emit_ui(const DisplayUi &e, TimeUs at)
     }
 }
 
+void Display::emit_refreshed(const DisplayRefreshed &e, TimeUs at)
+{
+    if (sink_ == nullptr) {
+        return;
+    }
+    uint8_t buf[DisplayRefreshed::kMaxSize];
+    fr::wire::Writer w(buf, sizeof(buf));
+    encode(e, w);
+    sink_->event(port_, kEventRefreshed, Priority::normal, w.bytes(), at, kOrdered);
+}
+
 void Display::report_brightness(uint8_t v, TimeUs at)
 {
     if (sink_ == nullptr) {
@@ -1180,6 +1659,39 @@ void Display::report_brightness(uint8_t v, TimeUs at)
     fr::wire::Writer w(buf, sizeof(buf));
     encode_display_brightness_state(v, w);
     sink_->property(port_, kPropBrightness, w.bytes(), at);
+}
+
+void Display::report_partials(uint8_t v, TimeUs at)
+{
+    if (sink_ == nullptr) {
+        return;
+    }
+    uint8_t buf[kDisplayPartialsStateMaxSize];
+    fr::wire::Writer w(buf, sizeof(buf));
+    encode_display_partials_state(v, w);
+    sink_->property(port_, kPropPartials, w.bytes(), at);
+}
+
+void Display::report_shown_crc(uint32_t v, TimeUs at)
+{
+    if (sink_ == nullptr) {
+        return;
+    }
+    uint8_t buf[kDisplayShownCrcStateMaxSize];
+    fr::wire::Writer w(buf, sizeof(buf));
+    encode_display_shown_crc_state(v, w);
+    sink_->property(port_, kPropShownCrc, w.bytes(), at);
+}
+
+void Display::report_refresh_ms(uint16_t v, TimeUs at)
+{
+    if (sink_ == nullptr) {
+        return;
+    }
+    uint8_t buf[kDisplayRefreshMsStateMaxSize];
+    fr::wire::Writer w(buf, sizeof(buf));
+    encode_display_refresh_ms_state(v, w);
+    sink_->property(port_, kPropRefreshMs, w.bytes(), at);
 }
 
 }  // namespace fr::cap

@@ -1,0 +1,82 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:fractonica:schema:fr.face.set.args",
+  "title": "fr.face.set arguments",
+  "description": "Any of mode, focus, screen, step, utc_offset_min, chime, clicks, power_save; kept in NVS (screen as now). power_save true: INVALID_ARGS without can_sleep, FAILED while neither the wall clock nor the RTC knows the time; answered, then the node restarts into power save.",
+  "type": "object",
+  "properties": {
+    "mode": {
+      "type": "string",
+      "enum": [
+        "pure",
+        "earth"
+      ]
+    },
+    "focus": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 13,
+      "description": "(0..13)"
+    },
+    "screen": {
+      "type": "string",
+      "enum": [
+        "now",
+        "scales",
+        "lens",
+        "sun",
+        "stamp"
+      ]
+    },
+    "step": {
+      "type": "string",
+      "enum": [
+        "helion",
+        "theta",
+        "preon",
+        "kappa",
+        "flavon"
+      ]
+    },
+    "utc_offset_min": {
+      "type": "integer",
+      "minimum": -720,
+      "maximum": 840,
+      "description": "(min; -720..840)"
+    },
+    "power_save": {
+      "type": "boolean"
+    },
+    "chime": {
+      "type": "string",
+      "enum": [
+        "off",
+        "helion",
+        "theta",
+        "preon"
+      ]
+    },
+    "clicks": {
+      "type": "boolean"
+    }
+  },
+  "additionalProperties": false,
+  "examples": [
+    {
+      "mode": "earth"
+    },
+    {
+      "step": "flavon"
+    },
+    {
+      "focus": 8,
+      "step": "preon"
+    },
+    {
+      "chime": "helion"
+    },
+    {
+      "clicks": false
+    }
+  ]
+}

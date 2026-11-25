@@ -15,7 +15,9 @@
  * one-bit face, the two "no reading" states and the labels shown over them,
  * the mode label, the lens on the visible rung and on a level between two
  * units, and one scene for each defect the stage-5 review found (the Sun at
- * focus 0, the Earth hallmark where the bezel is smallest).
+ * focus 0, the Earth hallmark where the bezel is smallest). The 400 x 300
+ * paper face has every focus too, its NOW, SCALES and cards at a step, and
+ * the Pentad's III and the Hypopentad's square.
  * The hashes do not depend on the host: the only float code (arc geometry)
  * is compiled without fused multiply-add (see the Makefile).
  */
@@ -27,7 +29,7 @@
 #include "sim_test.h"
 
 #define GOLDEN_FILE "golden/hashes.txt"
-#define MAX_SCENES 200
+#define MAX_SCENES 256
 
 typedef struct scene {
     char     name[64];
@@ -37,6 +39,7 @@ typedef struct scene {
 static scene_t rendered[MAX_SCENES], golden[MAX_SCENES];
 static int rendered_count, golden_count;
 static sim_frame_t frame;
+static uint8_t scene_step; /* fui_step_t of the next scene (0: none) */
 
 /* Render one scene, remember its hash; returns the frame for a diff picture. */
 static void scene(const char *name, fui_face_t face, fui_screen_t screen, fui_mode_t mode, uint8_t focus,
@@ -52,6 +55,7 @@ static void scene(const char *name, fui_face_t face, fui_screen_t screen, fui_mo
     config.mode = mode;
     config.focus = focus;
     config.utc_offset_s = 7200;
+    config.step = scene_step;
     fui_ui_init(&ui, &config);
     sim_frame_init(&frame, face);
     fui_ui_update(&ui, t, ms);
@@ -67,7 +71,7 @@ static void save_diff(const char *name)
 {
     char path[128];
     int w, h;
-    uint8_t *rgb = sim_frame_rgb(&frame, fui_face_info(frame.face)->mono ? 4 : 2, &w, &h);
+    uint8_t *rgb = sim_frame_rgb(&frame, frame.face == FUI_FACE_MONO128 ? 4 : 2, &w, &h);
 
     mkdir("out", 0777);
     mkdir("out/golden-diff", 0777);
@@ -193,7 +197,35 @@ static void render_all(int check)
             SCENE("mono-delta-epsilon", FUI_FACE_MONO128, FUI_SCREEN_NOW, FUI_MODE_PURE, 3,
                   FRC_TIME_FROM_S(2886085800LL), "");
         }
-        if (face == FUI_FACE_ROUND240 || face == FUI_FACE_MONO128) {
+        if (face == FUI_FACE_MONO400X300) {
+            /* the paper face at the step it is made for (the Preon) and the
+             * finest (the Flavon): the instant of the cycle's start, the
+             * readings down to the step's unit, minutes or seconds */
+            static const struct { const char *name; fui_screen_t screen; fui_mode_t mode; uint8_t step; } STEPS[] = {
+                { "mono400x300-now-pure-preon", FUI_SCREEN_NOW, FUI_MODE_PURE, FUI_STEP_PREON },
+                { "mono400x300-now-earth-preon", FUI_SCREEN_NOW, FUI_MODE_EARTH, FUI_STEP_PREON },
+                { "mono400x300-now-pure-flavon", FUI_SCREEN_NOW, FUI_MODE_PURE, FUI_STEP_FLAVON },
+                { "mono400x300-now-earth-flavon", FUI_SCREEN_NOW, FUI_MODE_EARTH, FUI_STEP_FLAVON },
+                { "mono400x300-now-earth-kappa", FUI_SCREEN_NOW, FUI_MODE_EARTH, FUI_STEP_KAPPA },
+                { "mono400x300-scales-preon", FUI_SCREEN_SCALES, FUI_MODE_PURE, FUI_STEP_PREON },
+                { "mono400x300-lens-earth-preon", FUI_SCREEN_LENS, FUI_MODE_EARTH, FUI_STEP_PREON },
+                { "mono400x300-sun-earth-preon", FUI_SCREEN_SUN, FUI_MODE_EARTH, FUI_STEP_PREON },
+                { "mono400x300-stamp-earth-preon", FUI_SCREEN_STAMP, FUI_MODE_EARTH, FUI_STEP_PREON }
+            };
+            unsigned k;
+
+            for (k = 0; k < sizeof STEPS / sizeof STEPS[0]; k++) {
+                scene_step = STEPS[k].step;
+                SCENE(STEPS[k].name, FUI_FACE_MONO400X300, STEPS[k].screen, STEPS[k].mode, 6, t_a, "");
+            }
+            scene_step = FUI_STEP_PREON;
+            SCENE("mono400x300-pentad3", FUI_FACE_MONO400X300, FUI_SCREEN_NOW, FUI_MODE_PURE, 6,
+                  t_a + FRC_TIME_FROM_S(79200), "");
+            SCENE("mono400x300-hypopentad", FUI_FACE_MONO400X300, FUI_SCREEN_NOW, FUI_MODE_PURE, 6,
+                  t_a + FRC_TIME_FROM_S(172800), "");
+            scene_step = FUI_STEP_NONE;
+        }
+        if (face == FUI_FACE_ROUND240 || face == FUI_FACE_MONO128 || face == FUI_FACE_MONO400X300) {
             for (focus = 0; focus <= FUI_FOCUS_MAX; focus++) {
                 snprintf(name, sizeof name, "%s-focus%d", fname, focus);
                 SCENE(name, (fui_face_t)face, FUI_SCREEN_NOW, FUI_MODE_PURE, (uint8_t)focus, t_a, "");

@@ -103,9 +103,13 @@ static void draw_whole(app_t *app, const fui_rect_t *dirty)
 
     fui_ui_draw(&app->ui, &app->canvas);
     if (info->mono) {
-        /* The SSD1306 takes whole pages of 8 rows; the buffer is laid out so. */
+        /* The SSD1306 takes whole pages of 8 rows; the buffer is laid out so.
+         * (A face whose height is not whole pages ends at its last row.) */
         y0 &= ~7;
         y1 = (y1 + 7) & ~7;
+        if (y1 > info->height) {
+            y1 = info->height;
+        }
         offset = (size_t)(y0 / 8) * app->canvas.stride;
     } else {
         offset = (size_t)y0 * app->canvas.stride;

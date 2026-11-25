@@ -3,6 +3,7 @@
 #
 #   tools/simulate.sh --face round240 --screen now --mode pure --out now.png
 #   tools/simulate.sh --face mono --screen lens --events "N N N" --out lens.png
+#   tools/simulate.sh --face mono400x300 --step preon --mode earth --out paper.png
 #   tools/simulate.sh --info        tools/simulate.sh --bench
 #
 # Every option of sim/src/sim_main.c passes through; see its header comment

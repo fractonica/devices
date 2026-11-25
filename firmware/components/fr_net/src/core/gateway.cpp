@@ -16,6 +16,7 @@
 
 #include "fr/envelope.hpp"
 #include "fr/net/net.hpp"
+#include "fr/wall_clock.hpp"
 #include "fr/wire.hpp"
 #include "messages.hpp"
 #include "net_util.hpp"
@@ -84,6 +85,7 @@ void Net::on_beacon(const EnvelopeView &e, const RxMeta &meta)
     }
     ++state_.gateway.beacons;
     const TimeUs now = core_.now();
+    fr::wall_clock().hub_sample(now, static_cast<int64_t>(b->hub_time_us));  // design face-f1 D1
     update_gateway_gate(now);  // the association's clock starts by the first BEACON at the latest
     GatewaySeen *g = nullptr;
     for (GatewaySeen &x : gateways_) {

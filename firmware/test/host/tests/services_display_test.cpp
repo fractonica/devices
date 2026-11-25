@@ -315,3 +315,38 @@ TEST(display_service_bound_touch_reaches_the_backend)
     std::vector<std::string> want = {"init", "touch 229,299 down", "touch 229,299 up"};
     CHECK(u.backend.log == want);
 }
+
+// Design epaper-e1 D2: bitmap draws on every mono panel and is refused on LVGL ones; refresh and hold only on e-paper.
+TEST(display_service_bitmap_on_mono_and_epaper_commands_refused_elsewhere)
+{
+    MonoRig m;
+    REQUIRE(m.panel.init(m.core, fr::hal::Rotation::r0));
+    REQUIRE(m.svc.init(m.core));
+    CHECK(!m.svc.traits().epaper);
+    fr::cap::StaticReply<fr::cap::Reply::kBulkCapacity> reply;
+    const uint8_t data[] = {0xF0, 0x0F};
+    fr::cap::DisplayBitmapArgs b;
+    b.x = 0;
+    b.y = 0;
+    b.w = 8;
+    b.h = 2;
+    b.data = data;
+    CHECK(m.svc.dispatch(Display::kCmdBitmap, enc(b), reply));
+    CHECK(m.mono.pixel(0, 0));
+    CHECK(!m.mono.pixel(4, 0));
+    CHECK(!m.mono.pixel(0, 1));
+    CHECK(m.mono.pixel(7, 1));
+    const uint8_t odd[] = {0xFF};
+    b.data = odd;
+    CHECK_EQ(m.svc.dispatch(Display::kCmdBitmap, enc(b), reply).error(), fr::Err::invalid_args);
+    CHECK_EQ(m.svc.dispatch(Display::kCmdRefresh, enc(fr::cap::DisplayRefreshArgs{}), reply).error(), fr::Err::unsupported);
+    CHECK_EQ(m.svc.dispatch(Display::kCmdHold, enc(fr::cap::DisplayHoldArgs{.ms = 100}), reply).error(), fr::Err::unsupported);
+    CHECK_EQ(m.svc.partials(), 0);
+    CHECK_EQ(m.svc.shown_crc(), 0u);
+
+    UiRig u;
+    REQUIRE(u.panel.init(u.core, fr::hal::Rotation::r0));
+    REQUIRE(u.svc.init(u.core));
+    b.data = data;
+    CHECK_EQ(u.svc.dispatch(Display::kCmdBitmap, enc(b), reply).error(), fr::Err::unsupported);
+}

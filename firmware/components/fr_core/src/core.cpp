@@ -277,6 +277,25 @@ void report_all_ports()
 }
 
 /** BYE on every hub session (05 §5.11), then the restart once the answers have left. */
+void schedule_reboot(bool bootloader);
+
+}  // namespace
+
+void power_boot();  // src/esp_power.cpp
+
+void restart_soon(bool sleeping)
+{
+    // Design face-f1 D13: power save's restarts, as fr.node reboot's (BYE first, then the restart once answers left).
+    s_net->bye(sleeping ? net::kByeSleep : net::kByeReboot);
+    s_reboot_bootloader = false;
+    if (s_reboot_timer == nullptr) {
+        diag::restart(false);
+    }
+    s_reboot_timer->start(kRebootDelayUs);
+}
+
+namespace {
+
 void schedule_reboot(bool bootloader)
 {
     s_net->bye(bootloader ? net::kByeMaintenance : net::kByeReboot);
@@ -1701,6 +1720,8 @@ Core &start()
         ESP_LOGE(TAG, "nvs_flash_init: %s", esp_err_to_name(err));
     }
     fr_id_load(&s_identity);
+    // Design face-f1 D1, D13-D15: held pins released after a deep sleep, the offline flag, the wall clock's hook.
+    power_boot();
     // Before anything can transmit (05 §5.5): frames only start once the core task runs.
     fr_id_commit_boot_epoch(&s_identity);
     // The MAC ahead of build_hello(): Net seeds its jitter from hello_info() once the air is attached.
@@ -1738,7 +1759,7 @@ Core &start()
     // and bindings from NVS, loaded now: before any capability can emit an event a binding fires on. With the
     // radio off (design m2-c1-hil D6) only the serial link is attached: Net routes nothing towards links that
     // could never come up, and diag `stats` lists none.
-    if (kRadio) {
+    if (kRadio && !offline()) {
         s_net->attach(net::esp::tcp_link());
         s_net->attach(net::esp::udp_link());
         s_net->attach_air(net::esp::air_link());
@@ -1851,8 +1872,10 @@ void run_ports(std::span<const PortEntry> instances, SelftestFn selftest, size_t
         ESP_LOGE(TAG, "no core task: capabilities will not run");
     }
     // 03 §3.5 step 5: the TCP and UDP links come up from here, unless the radio is off (design m2-c1-hil D6).
-    if (kRadio) {
+    if (kRadio && !offline()) {
         start_wifi();
+    } else if (offline()) {
+        ESP_LOGI(TAG, "power save: no Wi-Fi or ESP-NOW this boot (design face-f1 D15)");
     } else {
         ESP_LOGI(TAG, "radio off: no Wi-Fi or ESP-NOW, the hub is reached over serial only");
     }

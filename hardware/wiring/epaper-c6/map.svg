@@ -1,0 +1,36 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="100%" viewBox="0 0 760 460" role="img"><title>Waveshare 4.2inch e-Paper V2 to paper-c6 (ESP32-C6 Super Mini)</title><desc>The e-paper module's 8-pin header to the C6 Super Mini, USB up. Right row: 3V3 to VCC, GND to GND, GPIO19 to CLK, GPIO18 to DIN, GPIO14 to CS. Left row: GPIO3 to DC, GPIO2 to RST, GPIO1 to BUSY. GPIO15 (between 18 and 14) and GPIO20 stay free. The module's BS resistor stays at 0 (4-line SPI).</desc>
+<g class="c-teal"><rect x="40" y="40" width="220" height="380" rx="10" stroke-width="0.8"/>
+<text class="th" x="150" y="68" text-anchor="middle" dominant-baseline="central">paper-c6</text>
+<text class="ts" x="150" y="88" text-anchor="middle" dominant-baseline="central">ESP32-C6 Super Mini, USB up</text>
+<text class="th" x="248" y="130" text-anchor="end" dominant-baseline="central">3V3</text>
+<text class="th" x="248" y="170" text-anchor="end" dominant-baseline="central">GND</text>
+<text class="th" x="248" y="210" text-anchor="end" dominant-baseline="central">GPIO19</text>
+<text class="th" x="248" y="250" text-anchor="end" dominant-baseline="central">GPIO18</text>
+<text class="th" x="248" y="290" text-anchor="end" dominant-baseline="central">GPIO14</text>
+<text class="th" x="248" y="330" text-anchor="end" dominant-baseline="central">GPIO3 (left row)</text>
+<text class="th" x="248" y="370" text-anchor="end" dominant-baseline="central">GPIO2 (left row)</text>
+<text class="th" x="248" y="404" text-anchor="end" dominant-baseline="central">GPIO1 (left row)</text></g>
+<g class="c-purple"><rect x="500" y="40" width="220" height="380" rx="10" stroke-width="0.8"/>
+<text class="th" x="610" y="68" text-anchor="middle" dominant-baseline="central">4.2" e-Paper V2</text>
+<text class="ts" x="610" y="88" text-anchor="middle" dominant-baseline="central">8-pin header, BS at 0</text>
+<text class="th" x="512" y="130" dominant-baseline="central">VCC</text>
+<text class="th" x="512" y="170" dominant-baseline="central">GND</text>
+<text class="th" x="512" y="210" dominant-baseline="central">CLK</text>
+<text class="th" x="512" y="250" dominant-baseline="central">DIN</text>
+<text class="th" x="512" y="290" dominant-baseline="central">CS</text>
+<text class="th" x="512" y="330" dominant-baseline="central">DC</text>
+<text class="th" x="512" y="370" dominant-baseline="central">RST</text>
+<text class="th" x="512" y="404" dominant-baseline="central">BUSY</text></g>
+<path d="M260 130 H500" fill="none" stroke="#D85A30" stroke-width="1.5"/>
+<path d="M260 170 H500" fill="none" stroke="var(--s)" stroke-width="1.5"/>
+<path d="M260 210 H500" fill="none" stroke="#1D9E75" stroke-width="1.5"/>
+<path d="M260 250 H500" fill="none" stroke="#7F77DD" stroke-width="1.5"/>
+<path d="M260 290 H500" fill="none" stroke="#BA7517" stroke-width="1.5"/>
+<path d="M260 330 H500" fill="none" stroke="#378ADD" stroke-width="1.5"/>
+<path d="M260 370 H500" fill="none" stroke="#D4537E" stroke-width="1.5"/>
+<path d="M260 404 H500" fill="none" stroke="#639922" stroke-width="1.5"/>
+<text class="ts" x="380" y="118" text-anchor="middle">3.3 V</text>
+<text class="ts" x="380" y="198" text-anchor="middle">SPI clock</text>
+<text class="ts" x="380" y="238" text-anchor="middle">SPI data</text>
+<text class="ts" x="380" y="392" text-anchor="middle">BUSY: an input on the board</text>
+</svg>

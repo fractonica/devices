@@ -27,10 +27,25 @@ namespace fr {
  * (or the lockout's end, for a change the re-sample found); click and long_press the time the gesture
  * was decided, which is when its timer fired, or the release that completed it.
  */
+/** Design face-f1 D6: the gestures on the node itself (a face's button), besides the fr.button events. */
+class ButtonListener
+{
+public:
+    virtual void on_button_down(TimeUs at) = 0;
+    virtual void on_button_up(uint32_t held_ms, TimeUs at) = 0;
+    virtual void on_button_click(uint8_t count, TimeUs at) = 0;
+
+protected:
+    ~ButtonListener() = default;
+};
+
 class ButtonService final : public cap::Button, private hal::ButtonSink
 {
 public:
     ButtonService(hal::ButtonSource &src, const cap::ButtonConfig &cfg);
+
+    /** One listener on the node (the face); called on the core task beside each down, up and click. */
+    void set_listener(ButtonListener *l) { listener_ = l; }
 
     Status init(Core &core);
     hal::Selftest selftest();
@@ -58,6 +73,7 @@ private:
 
     hal::ButtonSource &src_;
     cap::ButtonConfig cfg_;
+    ButtonListener *listener_ = nullptr;
     cap::ButtonTraits traits_;
     Core *core_ = nullptr;
     Timer *lockout_ = nullptr;

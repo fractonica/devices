@@ -2,7 +2,7 @@
 //
 //   node tools/host-test.mjs --fleet                                   # once: builds build/host-fleet/fr_fleet
 //   pnpm -C packages/dashboard build                                   # or `vite build --watch` in another shell
-//   node --conditions=@fractonica/source tools/dash-dev.ts [--nodes 5] [--url-file <file>] [--camera [--no-card]] [--stepper]
+//   node --conditions=@fractonica/source tools/dash-dev.ts [--nodes 5] [--url-file <file>] [--camera [--no-card]] [--stepper] [--epaper]
 //
 // It starts fr_fleet (tests/sim/lib/fleet.ts) with a few nodes, one of them on USB through the fleet's serial bridge
 // and one spare that is provisioned but never powered (so the registry shows an offline device), and a private hub
@@ -24,6 +24,10 @@
 // solenoid `kick` and the vibration motor `buzz` (fr.haptic 1.1, tools/fake-haptic.ts: tap trains, patterns, the
 // budget, done and cut, the capacitor's dip and charge). SIGUSR2 draws the capacitor down to 3.0 V and holds its charger
 // off for 30 s, for the haptic panel's BUSY and cut (with --camera too, it also cuts the camera's link as above).
+// --epaper adds paper-c6, a fake e-paper board (tools/fake-epaper.ts, design epaper-e1 D11: c6e-paper's boot, status and
+// its 400 x 300 `paper`, fr.display 1.3: frames, refreshes in the vendor's times, the ghost budget, refreshed events),
+// so display_image, display_text and the dashboard's e-paper block work without a board. SIGUSR1 also makes its next
+// refresh time out (refreshed ok false).
 //
 // It prints one JSON line {"url": ..., "home": ...} (and writes the URL to --url-file), then runs until SIGINT or
 // SIGTERM, when it stops the fleet and the hub and removes the temp home.
@@ -41,6 +45,7 @@ import { startPrivateHub } from '../tests/sim/lib/private-hub.ts';
 import { type FakeCamera, startFakeCamera } from './fake-camera.ts';
 import { BUZZER_CONFIG, BUZZER_TRAITS } from './fake-buzzer.ts';
 import { BUZZ_CONFIG, HAPTIC_TRAITS, KICK_CONFIG, LIC_CONFIG, LIC_TRAITS } from './fake-haptic.ts';
+import { type FakePaper, PAPER_CONFIG, PAPER_TRAITS, startFakePaper } from './fake-epaper.ts';
 import { C3S_STEPPER_CONFIG, type FakeStepper, startFakeStepper } from './fake-stepper.ts';
 
 const args = process.argv.slice(2);
@@ -53,11 +58,14 @@ const urlFile = opt('url-file');
 const camera = args.includes('--camera');
 const noCard = args.includes('--no-card');
 const stepper = args.includes('--stepper');
+const epaper = args.includes('--epaper');
 /** The fake boards' MACs: outside the fleet's simMac range. */
 const CAM_MAC = '02cafe000001';
 const STEP_MAC = '02cafe000002';
+const PAPER_MAC = '02cafe000003';
 const CAM_IMAGE = randomBytes(256);
 const STEP_IMAGE = randomBytes(256);
+const PAPER_IMAGE = randomBytes(256);
 const NET = 42;
 /** Generic place names, so screenshots read like a small lab; the last one is the spare (never powered: offline). */
 const NAMES = ['desk-pad', 'hall-pad', 'porch-analog', 'shelf-pad', 'bench-analog', 'door-pad', 'window-pad', 'roof-analog', 'stair-pad', 'garden-analog', 'gate-pad', 'lamp-pad'];
@@ -113,6 +121,7 @@ const spec: FleetSpec = {
 const fakes = [
   ...(camera ? [{ mac: CAM_MAC, alias: 'cam-esp32', profile: 'e32a-cam', board: 'aithinker-esp32-cam', chip: 'esp32', image: CAM_IMAGE }] : []),
   ...(stepper ? [{ mac: STEP_MAC, alias: 'stepper-c3', profile: 'c3s-stepper', board: 'esp32c3-supermini', chip: 'esp32c3', image: STEP_IMAGE }] : []),
+  ...(epaper ? [{ mac: PAPER_MAC, alias: 'paper-c6', profile: 'c6e-paper', board: 'esp32c6-supermini', chip: 'esp32c6', image: PAPER_IMAGE }] : []),
 ];
 
 const fleet = await Fleet.spawn(spec, { specPath: join(dir, 'fleet-spec.json') });
@@ -163,6 +172,7 @@ function identity(mac: string) {
 
 let cam: FakeCamera | null = null;
 let motor: FakeStepper | null = null;
+let paper: FakePaper | null = null;
 try {
   if (camera) {
     giveManifestCaps(hub.home, 'e32a-cam', [
@@ -184,6 +194,15 @@ try {
     ]);
     motor = await startFakeStepper({ ...identity(STEP_MAC), hub: hub.node });
   }
+  if (epaper) {
+    // Design epaper-e1 D11: c6e-paper's boot, status and its 400 x 300 e-paper.
+    giveManifestCaps(hub.home, 'c6e-paper', [
+      { name: 'boot', port: 1, cap: 'fr.button', cap_id: 1, version: '1.0', driver: 'button_gpio', config: {}, traits: { long_press: true, multi_press_max: 2 } },
+      { name: 'status', port: 2, cap: 'fr.led', cap_id: 2, version: '1.0', driver: 'led_ws2812', config: { max_brightness: 32 }, traits: { color: 'rgb', dimmable: true } },
+      { name: 'paper', port: 3, cap: 'fr.display', cap_id: 3, version: '1.3', driver: 'ssd1683_spi', config: { ...PAPER_CONFIG }, traits: { ...PAPER_TRAITS } },
+    ]);
+    paper = await startFakePaper({ ...identity(PAPER_MAC), hub: hub.node });
+  }
 } catch (e) {
   await cam?.stop().catch(() => {});
   await fleet.quit().catch(() => {});
@@ -194,7 +213,7 @@ try {
 if (urlFile) {
   writeFileSync(urlFile, `${hub.url}\n`);
 }
-console.log(JSON.stringify({ url: hub.url, home: hub.home, nodes: N, spare: alias(N), ...(camera ? { camera: 'cam-esp32' } : {}), ...(stepper ? { stepper: 'stepper-c3' } : {}) }));
+console.log(JSON.stringify({ url: hub.url, home: hub.home, nodes: N, spare: alias(N), ...(camera ? { camera: 'cam-esp32' } : {}), ...(stepper ? { stepper: 'stepper-c3' } : {}), ...(epaper ? { epaper: 'paper-c6' } : {}) }));
 
 let stopping = false;
 async function stop(): Promise<void> {
@@ -204,6 +223,7 @@ async function stop(): Promise<void> {
   stopping = true;
   await cam?.stop().catch(() => {});
   await motor?.stop().catch(() => {});
+  await paper?.stop().catch(() => {});
   await fleet.quit().catch(() => {});
   await hub.stop().catch(() => {});
   rmSync(dir, { recursive: true, force: true });
@@ -222,6 +242,9 @@ process.on('SIGUSR2', () => {
     void cam.node.connect(10_000).catch(() => {});
   }
 });
-process.on('SIGUSR1', () => motor?.fault());
+process.on('SIGUSR1', () => {
+  motor?.fault();
+  paper?.sim.failNext(); // design epaper-e1 D11: the next refresh does not finish
+});
 process.on('SIGINT', () => void stop());
 process.on('SIGTERM', () => void stop());

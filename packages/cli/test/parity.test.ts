@@ -43,6 +43,7 @@ const TOOL_PREFIX = 'mcp__plugin_fractonica_fractonica__';
 interface CliCommand {
   path: string[];
   action: boolean;
+  aliases: string[];
 }
 
 let work = '';
@@ -62,7 +63,7 @@ const { Command } = await import(pathToFileURL(createRequire(${JSON.stringify(MA
 Command.prototype.parseAsync = async function () {
   const walk = (cmd, path) => cmd.commands.flatMap((c) => {
     const p = [...path, c.name()];
-    return [{ path: p, action: Boolean(c._actionHandler) }, ...walk(c, p)];
+    return [{ path: p, action: Boolean(c._actionHandler), aliases: c.aliases() }, ...walk(c, p)];
   });
   process.stdout.write(JSON.stringify(walk(this, [])));
   process.exit(0);
@@ -95,6 +96,11 @@ describe('every op on every surface (09 §9.1)', () => {
 
   it('has an MCP tool for exactly the ops', () => {
     expect(buildTools().map((t) => t.name)).toEqual(OP_NAMES);
+  });
+
+  it('keeps `fr clock` as an alias of `fr rtc` (design face-f1 D11)', () => {
+    expect(commands.find((c) => c.path.join(' ') === 'rtc')?.aliases).toEqual(['clock']);
+    expect(commands.filter((c) => c.path[0] === 'clock')).toEqual([]);
   });
 
   it('has a CLI command with an action at every op path', () => {

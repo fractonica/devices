@@ -67,7 +67,7 @@ static void reading_row(fui_painter_t *p, int y)
         return;
     }
     fui_i_str_init(&s, text, sizeof text);
-    fui_i_add_date_terms(&s, &date, FRC_UNIT_NUCLIDE, FRC_UNIT_BLINK);
+    fui_i_add_date_terms(&s, &date, FRC_UNIT_NUCLIDE, fui_i_finest_unit(ui)); /* (a step's unit) */
     fui_i_text(p, &style, p->lay->info.width / 2, y, FUI_ALIGN_CENTER, text, (size_t)-1, FUI_LINE_LIVE);
 }
 
@@ -98,6 +98,11 @@ static void earth_row(fui_painter_t *p, int y)
 
     fui_i_str_init(&s, text, sizeof text);
     fui_i_add_civil(&s, p->ui->t, p->ui->utc_offset_s, FUI_CIVIL_NOW);
+    if (!fui_i_civil_seconds(p->ui)) {
+        /* a step coarser than the Flavon: "⊕ 2026-10-08 14:00" */
+        fui_i_str_init(&s, text, sizeof text);
+        fui_i_add_civil(&s, p->ui->t, p->ui->utc_offset_s, FUI_CIVIL_DAY);
+    }
     fui_i_text(p, &style, p->lay->info.width / 2, y, FUI_ALIGN_CENTER, text, (size_t)-1,
                FUI_LINE_LIVE | FUI_LINE_SECONDS);
 }
